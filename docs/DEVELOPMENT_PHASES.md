@@ -2,7 +2,7 @@
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Repository inspection and foundation | In progress |
+| 0 | Repository inspection and foundation | Complete |
 | 1 | Branding and design system | Not started |
 | 2 | Authentication and database | Not started |
 | 3 | Discovery and wallpaper library | Not started |
