@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/wallora/logo";
@@ -65,7 +67,20 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { data: session, isPending } = authClient.useSession();
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isPending && !session) {
+      router.push("/login");
+    }
+  }, [isPending, session, router]);
+
+  if (isPending) {
+    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
+  }
+  if (!session) return null;
 
   return (
     <div className="flex min-h-screen bg-background">

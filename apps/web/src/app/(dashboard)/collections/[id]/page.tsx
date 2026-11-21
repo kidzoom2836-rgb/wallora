@@ -3,7 +3,7 @@ export default async function CollectionDetailPage({ params }: { params: Promise
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Collection #{id}</h1>
-      <p className="text-sm text-muted-foreground">Collection items arrive in Phase 8.</p>
+      <p className="text-sm text-muted-foreground">Collection items will appear here.</p>
     </div>
   );
 }

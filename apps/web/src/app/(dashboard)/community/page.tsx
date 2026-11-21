@@ -14,13 +14,13 @@ export default function CommunityPage() {
           <TabsTrigger value="creators">Creators</TabsTrigger>
         </TabsList>
         <TabsContent value="feed" className="mt-4">
-          <EmptyState icon={Users} title="No posts yet" description="Community features arrive in Phase 8." />
+          <EmptyState icon={Users} title="No posts yet" description="Community posts will appear here." />
         </TabsContent>
         <TabsContent value="challenges" className="mt-4">
-          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Creative challenges arrive in Phase 8.</CardContent></Card>
+          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Challenges will appear here.</CardContent></Card>
         </TabsContent>
         <TabsContent value="creators" className="mt-4">
-          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Creator discovery arrives in Phase 8.</CardContent></Card>
+          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Creators will appear here.</CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>

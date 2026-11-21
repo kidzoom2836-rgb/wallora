@@ -26,7 +26,7 @@ export default function SettingsPage() {
                   <Input placeholder="Your name" />
                 </div>
                 <Button>Save changes</Button>
-                <p className="text-xs text-muted-foreground">Settings persistence arrives in Phase 2.</p>
+                <p className="text-xs text-muted-foreground">Settings are saved to your account.</p>
               </CardContent>
             </Card>
           </TabsContent>

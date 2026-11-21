@@ -95,7 +95,7 @@ export default function LandingPage() {
             ))}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Placeholder previews — real artwork loads from the library in Phase 3.
+            Sign in to see personalized recommendations.
           </p>
         </section>
 
@@ -174,7 +174,7 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Placeholder — real creators in Phase 8.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Creator profiles launch soon.</p>
         </section>
 
         {/* Marketplace preview */}

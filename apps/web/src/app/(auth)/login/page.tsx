@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,11 +22,19 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 export default function LoginPage() {
+  const router = useRouter();
   const [show, setShow] = useState(false);
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
 
-  const onSubmit = () => {
-    toast.info("Sign-in is not yet available. Authentication arrives in Phase 2.");
+  const onSubmit = async (values: Values) => {
+    const { error } = await authClient.signIn.email({ email: values.email, password: values.password });
+    if (error) {
+      toast.error(error.message ?? "Sign in failed");
+      return;
+    }
+    toast.success("Signed in");
+    router.push("/dashboard");
+    router.refresh();
   };
 
   return (

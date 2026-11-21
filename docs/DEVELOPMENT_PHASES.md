@@ -4,12 +4,12 @@
 |---|---|---|
 | 0 | Repository inspection and foundation | Complete |
 | 1 | Branding and design system | Complete |
-| 2 | Authentication and database | Not started |
+| 2 | Authentication and database | In progress (combined prototype) |
 | 3 | Discovery and wallpaper library | Not started |
 | 4 | Cloudflare media system | Not started |
-| 5 | WALLORA AI conversation engine | Not started |
-| 6 | AI Studio and generation | Not started |
-| 7 | Creative projects and studios | Not started |
+| 5 | WALLORA AI conversation engine | In progress (combined prototype) |
+| 6 | AI Studio and generation | In progress (combined prototype) |
+| 7 | Creative projects and studios | In progress (combined prototype) |
 | 8 | Community | Not started |
 | 9 | Marketplace | Not started |
 | 10 | PWA | Not started |

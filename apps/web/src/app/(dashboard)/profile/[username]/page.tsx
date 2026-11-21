@@ -12,7 +12,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
           </Avatar>
           <div>
             <h1 className="text-xl font-semibold">{username}</h1>
-            <p className="text-sm text-muted-foreground">Profile details arrive in Phase 8.</p>
+            <p className="text-sm text-muted-foreground">Profile details will appear here.</p>
           </div>
         </CardContent>
       </Card>

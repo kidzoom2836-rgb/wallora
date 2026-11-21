@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,13 +27,27 @@ const schema = z
 type Values = z.infer<typeof schema>;
 
 export default function RegisterPage() {
+  const router = useRouter();
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: { displayName: "", username: "", email: "", password: "", confirm: "", terms: false },
   });
 
-  const onSubmit = () => {
-    toast.info("Registration is not yet available. Authentication arrives in Phase 2.");
+  const onSubmit = async (values: Values) => {
+    const { error } = await authClient.signUp.email({
+      email: values.email,
+      password: values.password,
+      name: values.displayName,
+      // @ts-expect-error extra fields
+      username: values.username,
+    });
+    if (error) {
+      toast.error(error.message ?? "Registration failed");
+      return;
+    }
+    toast.success("Account created");
+    router.push("/onboarding");
+    router.refresh();
   };
 
   return (

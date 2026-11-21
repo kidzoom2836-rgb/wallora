@@ -18,14 +18,29 @@ export default function AiChatPage() {
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [mode, setMode] = useState(modes[0]);
 
-  const send = () => {
-    if (!input.trim()) return;
+  const [loading, setLoading] = useState(false);
+  const send = async () => {
+    if (!input.trim() || loading) return;
     const userMsg = input.trim();
-    setMessages((m) => [...m, { role: "user", content: userMsg }]);
+    const next = [...messages, { role: "user" as const, content: userMsg }];
+    setMessages(next);
     setInput("");
-    setTimeout(() => {
-      setMessages((m) => [...m, { role: "assistant", content: "AI responses are wired up in Phase 5. This is a UI preview." }]);
-    }, 400);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/v1/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next, mode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Request failed");
+      setMessages((m) => [...m, { role: "assistant", content: data.content }]);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Request failed";
+      setMessages((m) => [...m, { role: "assistant", content: `Error: ${msg}` }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -81,7 +96,7 @@ export default function AiChatPage() {
                 placeholder="Message WALLORA AI…"
                 className="min-h-[44px] resize-none"
               />
-              <Button onClick={send} size="icon" aria-label="Send">
+              <Button onClick={send} size="icon" aria-label="Send" disabled={loading}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>

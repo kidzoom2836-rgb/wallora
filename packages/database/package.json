@@ -7,14 +7,18 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "generate": "echo 'drizzle generate (configure in Phase 2)'",
-    "migrate": "echo 'drizzle migrate (configure in Phase 2)'",
-    "studio": "echo 'drizzle studio (configure in Phase 2)'"
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.4"
+    "@neondatabase/serverless": "^1.2.1",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/node": "^22.7.4",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^5.6.3"
   }
 }
