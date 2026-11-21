@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <ShieldCheck className="h-4 w-4 text-primary" />
             <span className="font-medium">Administration</span>
           </div>
-          <Button variant="outline" size="sm" render={<Link href="/dashboard" />}>Back to app</Button>
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/dashboard" />}>Back to app</Button>
         </header>
         <main className="flex-1 p-6">{children}</main>
       </div>

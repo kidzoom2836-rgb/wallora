@@ -27,7 +27,7 @@ export default function DashboardPage() {
             placeholder="A futuristic luxury bedroom with golden lighting…"
             className="flex-1 rounded-full border border-border bg-background px-4 py-2.5 text-sm outline-none ring-primary/40 focus:ring-2"
           />
-          <Button render={<Link href="/ai" />}>Ask AI</Button>
+          <Button nativeButton={false} render={<Link href="/ai" />}>Ask AI</Button>
         </div>
       </div>
 

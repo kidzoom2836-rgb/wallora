@@ -13,7 +13,7 @@ export default function VerifyEmailPage() {
         <p className="text-sm text-muted-foreground">
           Email verification is wired up in Phase 2. For now this is a preview screen.
         </p>
-        <Button render={<Link href="/login" />}>Continue to sign in</Button>
+        <Button nativeButton={false} render={<Link href="/login" />}>Continue to sign in</Button>
       </CardContent>
     </Card>
   );

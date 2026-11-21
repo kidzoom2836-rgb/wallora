@@ -84,7 +84,7 @@ export default function OnboardingPage() {
           {step < 2 ? (
             <Button onClick={() => setStep((s) => s + 1)}>Continue</Button>
           ) : (
-            <Button render={<Link href="/dashboard" />}>Enter WALLORA</Button>
+            <Button nativeButton={false} render={<Link href="/dashboard" />}>Enter WALLORA</Button>
           )}
         </div>
         <button

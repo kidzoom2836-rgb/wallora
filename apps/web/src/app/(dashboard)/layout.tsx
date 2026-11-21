@@ -129,10 +129,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Button variant="ghost" size="sm" className="hidden gap-1 sm:inline-flex">
               <Coins className="h-4 w-4 text-primary" /> 0 credits
             </Button>
-            <Button variant="ghost" size="icon" render={<Link href="/notifications" />}>
+            <Button variant="ghost" size="icon" nativeButton={false} render={<Link href="/notifications" />}>
               <Bell className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" render={<Link href="/profile/me" />}>
+            <Button variant="ghost" size="icon" nativeButton={false} render={<Link href="/profile/me" />}>
               <User className="h-5 w-5" />
             </Button>
           </div>

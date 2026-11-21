@@ -25,10 +25,10 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" className="hidden md:inline-flex" render={<Link href="/login" />}>
+          <Button variant="ghost" className="hidden md:inline-flex" nativeButton={false} render={<Link href="/login" />}>
             Sign in
           </Button>
-          <Button render={<Link href="/register" />}>Get started</Button>
+          <Button nativeButton={false} render={<Link href="/register" />}>Get started</Button>
         </div>
       </div>
     </header>

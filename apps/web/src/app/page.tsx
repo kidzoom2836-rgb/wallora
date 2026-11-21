@@ -61,10 +61,10 @@ export default function LandingPage() {
                 Discover inspiring visuals, talk to AI, create original artwork and build your creative world.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Button size="lg" render={<Link href="/register" />}>
+                <Button size="lg" nativeButton={false} render={<Link href="/register" />}>
                     Start creating <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                <Button size="lg" variant="outline" render={<Link href="/discover" />}>Explore artwork</Button>
+                <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/discover" />}>Explore artwork</Button>
               </div>
               <div className="mt-10 flex items-center justify-center gap-3">
                 <input
@@ -125,7 +125,7 @@ export default function LandingPage() {
                   Turn a sentence into a visual. Choose a style, set an aspect ratio, and generate
                   original artwork using NVIDIA NIM hosted models.
                 </p>
-                <Button className="mt-6" render={<Link href="/studio" />}>Open Studio</Button>
+                <Button className="mt-6" nativeButton={false} render={<Link href="/studio" />}>Open Studio</Button>
               </div>
               <div className="aspect-video rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-muted" />
             </div>
@@ -235,7 +235,7 @@ export default function LandingPage() {
         {/* CTA */}
         <section className="mx-auto max-w-7xl px-4 py-16 text-center md:px-6">
           <h2 className="text-3xl font-semibold">Ready to create?</h2>
-          <Button size="lg" className="mt-6" render={<Link href="/register" />}>Start creating</Button>
+          <Button size="lg" className="mt-6" nativeButton={false} render={<Link href="/register" />}>Start creating</Button>
         </section>
       </main>
       <SiteFooter />
