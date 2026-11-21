@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getAuthSession } from "@/lib/auth-helpers";
 import { getSite } from "@/lib/sites/store";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const site = await getSite(id);
   if (!site) {
     return NextResponse.json({ error: { code: "not_found", message: "Site not found." } }, { status: 404 });
+  }
+  const session = await getAuthSession();
+  if (!site.published && session?.user?.id !== site.ownerId) {
+    return NextResponse.json({ error: { code: "forbidden", message: "This site is private." } }, { status: 403 });
   }
   return new NextResponse(site.html, {
     headers: {

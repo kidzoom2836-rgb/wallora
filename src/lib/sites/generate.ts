@@ -1,5 +1,5 @@
-import { getConfiguredAIProvider } from "@/lib/ai/provider";
 import { getAIConfig } from "@/lib/ai/admin-config";
+import { getConfiguredAIProvider } from "@/lib/ai/provider";
 
 /**
  * WALLORA site generation.
@@ -20,29 +20,30 @@ export const SITE_STAGES = [
 
 const SYSTEM_PROMPT = `You are the WALLORA Builder, an expert full-stack web engineer and product designer. You build complete, production-quality websites from a short description.
 
-Output ONE complete, self-contained HTML document and NOTHING else. No markdown fences, no explanations, no commentary before or after.
+Output ONE complete, self-contained HTML document and NOTHING else. No markdown fences, no explanations, no commentary before or after. Start with <!DOCTYPE html> and end with </html>.
 
 Hard requirements:
-- Start with <!DOCTYPE html> and end with </html>.
-- All CSS inside a single <style> tag in <head>. All JavaScript inside a single <script> tag before </body>.
-- No external fonts, CDNs, libraries, images from the internet, or network requests. Use system font stacks, inline SVG icons, CSS gradients and emoji-free vector shapes.
+- Complete document with inline <style> in <head> and inline <script> before </body>.
+- No external fonts, CDNs, libraries, images from the internet, or network requests. Use system font stacks, inline SVG icons, CSS gradients.
 - Responsive layout that works on mobile and desktop. Use CSS variables for colors and spacing.
 - Dark, premium visual direction by default unless the user asks for light.
 - Real interactions: navigation, buttons, forms with validation, modals/toasts, tabs, filters, and localStorage persistence where it makes sense. The result must feel like a working app, not a static mockup.
-- Include a small "Built with WALLORA" badge fixed in a corner, styled subtly.
-- Accessibility: semantic HTML, labels on inputs, visible focus states, aria-labels on icon buttons.
-- Keep the document under 900 lines. It must parse and run standalone in an iframe sandbox.
+- Keep the document under 350 lines and under 7000 characters so it finishes reliably.
+- Accessibility: semantic HTML, labels on inputs, visible focus states.
+- Do not use emoji anywhere.
 
-You are building a real product. Make design decisions instead of asking questions. Prioritize a polished, coherent result.`;
+Make design decisions instead of asking questions. Prioritize a polished, coherent result.`;
+
+const FAST_SITE_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 function extractHtml(raw: string): string {
   let text = raw.trim();
-  // Strip markdown fences if the model ignored the instruction.
   text = text.replace(/^```(?:html|htm|xml)?\s*\n/i, "").replace(/\n```\s*$/i, "");
   const start = text.search(/<!DOCTYPE html>/i);
   if (start > 0) text = text.slice(start);
   const end = text.toLowerCase().lastIndexOf("</html>");
   if (end !== -1) text = text.slice(0, end + "</html>".length);
+  else if (text.toLowerCase().includes("<html")) text += "\n</body></html>";
   return text.trim();
 }
 
@@ -55,32 +56,76 @@ function deriveTitle(prompt: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : "WALLORA Site";
 }
 
+/** The general chat model is often too slow for long HTML output. Use the
+ * verified-fast NVIDIA model for site generation when a key is configured. */
+async function fastGenerate(input: {
+  systemPrompt: string;
+  userContent: string;
+}): Promise<string | null> {
+  const key = process.env.NVIDIA_API_KEY?.trim();
+  if (!key) return null;
+  const config = await getAIConfig();
+  try {
+    const res = await fetch(`${config.nvidiaBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: FAST_SITE_MODEL,
+        messages: [
+          { role: "system", content: input.systemPrompt },
+          { role: "user", content: input.userContent },
+        ],
+        temperature: Math.min(config.temperature, 0.5),
+        max_tokens: 8192,
+        stream: false,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(50000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const msg = json?.choices?.[0]?.message ?? {};
+    return (msg.content || msg.reasoning_content || "").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateSiteHtml(input: {
   prompt: string;
   currentHtml?: string;
   instruction?: string;
 }): Promise<{ html: string; title: string; model: string }> {
-  const provider = await getConfiguredAIProvider();
-  const config = await getAIConfig();
-
   const userContent = input.currentHtml
-    ? `Edit the existing site below according to this instruction:\n\nINSTRUCTION: ${input.instruction ?? input.prompt}\n\nEXISTING HTML:\n${input.currentHtml.slice(0, 60000)}`
+    ? `Edit the existing site below according to this instruction:\n\nINSTRUCTION: ${input.instruction ?? input.prompt}\n\nEXISTING HTML:\n${input.currentHtml.slice(0, 14000)}`
     : `Build a complete website for this brief:\n\n${input.prompt}`;
 
-  const result = await provider.generateText({
-    systemPrompt: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userContent }],
-    maxTokens: 8192,
-  });
+  let content = await fastGenerate({ systemPrompt: SYSTEM_PROMPT, userContent });
+  let model = FAST_SITE_MODEL;
 
-  const html = extractHtml(result.content);
+  if (!content) {
+    const provider = await getConfiguredAIProvider();
+    const config = await getAIConfig();
+    const result = await provider.generateText({
+      systemPrompt: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
+      maxTokens: 8192,
+    });
+    content = result.content;
+    model = config.textModel;
+  }
+
+  const html = extractHtml(content);
   if (!html.toLowerCase().includes("<html") || !html.toLowerCase().includes("</html>")) {
-    throw new Error("The model did not return a complete HTML document. Try again or use a different text model.");
+    throw new Error("The model did not return a complete HTML document. Try again.");
   }
 
   return {
     html,
     title: input.currentHtml ? deriveTitle(input.instruction ?? input.prompt) : deriveTitle(input.prompt),
-    model: config.textModel,
+    model,
   };
 }
