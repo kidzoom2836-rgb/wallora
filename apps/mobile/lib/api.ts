@@ -12,8 +12,12 @@ const SESSION_STORE_KEY = "wallora_session_cookie";
 
 let jar: Record<string, string> = {};
 
-function parseSetCookie(raw: string | null): void {
+function parseSetCookie(raw: string | string[] | null | undefined): void {
   if (!raw) return;
+  if (Array.isArray(raw)) {
+    raw.forEach(parseSetCookie);
+    return;
+  }
   // Split a possibly-combined Set-Cookie header without breaking Expires dates.
   const parts = raw.split(/,\s*(?=[^;,=\s]+=)/);
   for (const part of parts) {
@@ -27,7 +31,12 @@ function parseSetCookie(raw: string | null): void {
 }
 
 function capture(res: Response): void {
-  parseSetCookie(res.headers.get("set-cookie"));
+  const h = res.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof h.getSetCookie === "function") {
+    parseSetCookie(h.getSetCookie());
+  } else {
+    parseSetCookie(h.get("set-cookie"));
+  }
 }
 
 function cookieHeader(): string {
@@ -57,6 +66,22 @@ export function isAuthenticated(): boolean {
   return !!jar[SESSION_COOKIE];
 }
 
+/** Debug helper: the names of cookies currently held in the in-memory jar. */
+export function cookieNames(): string[] {
+  return Object.keys(jar);
+}
+
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/** Registered by AuthProvider so a 401 anywhere can clear the stale session. */
+export function onUnauthorized(handler: UnauthorizedHandler): () => void {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
 interface ApiFetchInit extends RequestInit {
   /** Skip JSON content-type (used by the form-encoded NextAuth callback). */
   rawBody?: boolean;
@@ -71,7 +96,10 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}): Promise<R
   }
   const cookie = cookieHeader();
   if (cookie) h.set("Cookie", cookie);
-  const res = await fetch(`${API_BASE}${path}`, { ...rest, headers: h });
+  // Let the native layer keep its own cookie store too (iOS NSHTTPCookieStorage /
+  // Android OkHttp). This is a fallback in case a platform strips our manual
+  // Cookie header or does not expose Set-Cookie to JavaScript.
+  const res = await fetch(`${API_BASE}${path}`, { ...rest, headers: h, credentials: "include" });
   capture(res);
   return res;
 }
@@ -87,6 +115,7 @@ export async function apiJson<T = any>(path: string, init?: ApiFetchInit): Promi
     // Non-JSON response — fall through with an empty object.
   }
   if (!res.ok) {
+    if (res.status === 401 && unauthorizedHandler) unauthorizedHandler();
     const err: any = new Error(
       json?.error?.message ?? json?.message ?? `Request failed (${res.status})`,
     );

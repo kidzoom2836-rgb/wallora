@@ -6,6 +6,7 @@ import {
   clearSession,
   getCsrfToken,
   initSession,
+  onUnauthorized,
   persistSession,
   signInBody,
 } from "./api";
@@ -69,23 +70,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // A 401 from any screen means the stored session is stale. Clear it so the
+    // user is sent back to sign-in instead of seeing repeated auth errors.
+    return onUnauthorized(async () => {
+      await clearSession();
+      await SecureStore.deleteItemAsync(USER_STORE_KEY).catch(() => {});
+      setUser(null);
+    });
+  }, []);
+
+  useEffect(() => {
     (async () => {
       try {
         const saved = await initSession();
         if (saved) {
           await loadUser();
         } else {
-          const cached = await SecureStore.getItemAsync(USER_STORE_KEY);
-          if (cached) {
-            try {
-              setUser(JSON.parse(cached));
-            } catch {
-              /* ignore malformed cache */
-            }
-          }
+          // Never restore a cached user without a session cookie — that would
+          // leave the app looking signed in while every API call returns 401.
+          await SecureStore.deleteItemAsync(USER_STORE_KEY).catch(() => {});
+          setUser(null);
         }
       } catch {
         await clearSession();
+        await SecureStore.deleteItemAsync(USER_STORE_KEY).catch(() => {});
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -105,7 +114,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: "Invalid email or password." };
       }
       await persistSession();
-      await loadUser();
+      try {
+        await loadUser();
+      } catch {
+        return { error: "Signed in, but the session could not be verified. Please try again." };
+      }
       return {};
     } catch (e: any) {
       return { error: messageOf(e, "Could not sign in. Check your connection.") };
