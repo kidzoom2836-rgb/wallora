@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ImageCard } from "@/components/wallora/image-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
 import { Search, SlidersHorizontal } from "lucide-react";
 
-const categories = ["All", "Nature", "Technology", "Architecture", "Minimalism", "Luxury", "Abstract"];
+interface Wallpaper { id: string; title: string; imageUrl: string; thumbnailUrl: string | null; likes: number; downloads: number; likedByMe: boolean; }
 
 export default function DiscoverPage() {
-  const [cat, setCat] = useState("All");
+  const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+
+  useEffect(() => {
+    fetch("/api/v1/wallpapers").then((r) => r.json()).then((d) => { setWallpapers(d.wallpapers ?? []); setLoading(false); });
+  }, []);
+
+  const filtered = wallpapers.filter((w) => w.title.toLowerCase().includes(q.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -28,35 +34,20 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {categories.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCat(c)}
-            className={`rounded-full border px-3 py-1.5 text-sm transition ${
-              cat === c ? "border-primary bg-primary/15 text-primary" : "border-border bg-card text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <span>Sort:</span>
-        {["Trending", "Latest", "Most liked", "Most downloaded"].map((s) => (
-          <button key={s} className="rounded-full border border-border px-2.5 py-1 hover:text-foreground">{s}</button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <ImageCard key={i} title={`Wallpaper ${i + 1}`} creator={`creator${i + 1}`} src="" />
-        ))}
-      </div>
-      <p className="text-center text-xs text-muted-foreground">
-        Placeholder grid — real library arrives in Phase 3.
-      </p>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No wallpapers yet. Run seed to add samples.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+          {filtered.map((w) => (
+            <a key={w.id} href={`/wallpapers/${w.id}`} className="no-underline">
+              <ImageCard title={w.title} creator="creator" src={w.thumbnailUrl || w.imageUrl} />
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+EOF
