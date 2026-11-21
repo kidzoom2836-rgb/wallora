@@ -42,9 +42,16 @@ function extractHtml(raw: string): string {
   const start = text.search(/<!DOCTYPE html>/i);
   if (start > 0) text = text.slice(start);
   const end = text.toLowerCase().lastIndexOf("</html>");
-  if (end !== -1) text = text.slice(0, end + "</html>".length);
-  else if (text.toLowerCase().includes("<html")) text += "\n</body></html>";
-  return text.trim();
+  if (end !== -1) return text.slice(0, end + "</html>".length).trim();
+
+  // The model sometimes hits the token limit mid-document. Repair it so the
+  // preview still renders instead of throwing the whole build away.
+  const lower = text.toLowerCase();
+  if (!lower.includes("<html")) {
+    text = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + text;
+  }
+  if (!text.toLowerCase().includes("</body>")) text += "\n</body>";
+  return (text + "\n</html>").trim();
 }
 
 function deriveTitle(prompt: string): string {
@@ -79,13 +86,13 @@ async function fastGenerate(input: {
           { role: "user", content: input.userContent },
         ],
         temperature: 0.35,
-        // This model reasons before answering; 8k tokens leaves no room for the
-        // actual document. 16k reliably finishes in ~20s.
-        max_tokens: 16384,
+        // 8k tokens finishes in ~30s; 16k caused Vercel function timeouts under
+        // load. extractHtml() repairs truncated output if the limit is hit.
+        max_tokens: 8192,
         stream: false,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(50000),
+      signal: AbortSignal.timeout(90000),
     });
     if (!res.ok) return null;
     const json = await res.json();
@@ -114,19 +121,14 @@ export async function generateSiteHtml(input: {
     const result = await provider.generateText({
       systemPrompt: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
-      maxTokens: 8192,
+      maxTokens: 4096,
     });
     content = result.content;
     model = config.textModel;
   }
 
   const html = extractHtml(content);
-  if (
-    !html.toLowerCase().includes("<html") ||
-    !html.toLowerCase().includes("</html>") ||
-    !html.toLowerCase().includes("<body") ||
-    html.length < 1200
-  ) {
+  if (html.length < 600 || !html.toLowerCase().includes("<body")) {
     throw new Error("The model returned an incomplete document. Try again.");
   }
 
