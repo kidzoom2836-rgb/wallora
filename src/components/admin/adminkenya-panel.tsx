@@ -686,7 +686,25 @@ function AITab() {
   });
 
   const [draft, setDraft] = useState<Partial<AIConfig> | null>(null);
+  const [testResult, setTestResult] = useState<{
+    keyConfigured: boolean;
+    models: string[];
+    modelTest: { model: string; ok: boolean; detail: string };
+  } | null>(null);
   const config = { ...(query.data?.data ?? ({} as AIConfig)), ...(draft ?? {}) } as AIConfig;
+
+  const test = useMutation({
+    mutationFn: () =>
+      jsonFetch<{ data: typeof testResult }>("/api/v1/admin/ai-config/test", {
+        method: "POST",
+      }),
+    onSuccess: (payload) => {
+      setTestResult(payload.data);
+      if (payload.data?.modelTest?.ok) toast.success("NVIDIA connection OK");
+      else toast.error("NVIDIA test failed", { description: payload.data?.modelTest?.detail });
+    },
+    onError: (e: Error) => toast.error("Test failed", { description: e.message }),
+  });
 
   const save = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -750,6 +768,35 @@ function AITab() {
             onChange={(e) => set({ nvidiaBaseUrl: e.target.value })}
           />
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={test.isPending || !config.nvidiaKeyConfigured}
+            onClick={() => { setTestResult(null); test.mutate(); }}
+          >
+            {test.isPending ? <Loader2 className="size-4 animate-spin" /> : <Activity className="size-4" />}
+            Test connection
+          </Button>
+          {testResult && (
+            <Badge variant={testResult.modelTest.ok ? "default" : "destructive"}>
+              {testResult.modelTest.ok ? "Working" : "Failed"}
+            </Badge>
+          )}
+        </div>
+        {testResult && (
+          <div className="mt-3 space-y-1 rounded-xl border border-border bg-raised p-3 text-xs text-secondary-text">
+            <p>
+              <span className="text-foreground">Model:</span> {testResult.modelTest.model}
+            </p>
+            <p className="break-words">
+              <span className="text-foreground">Result:</span> {testResult.modelTest.detail}
+            </p>
+            <p>
+              <span className="text-foreground">Available models:</span> {testResult.models.length}
+            </p>
+          </div>
+        )}
       </Panel>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -810,7 +857,7 @@ function AITab() {
           </div>
         </Panel>
 
-        <Panel title="Image generation" subtitle="Powers the AI Studio image outputs.">
+        <Panel title="Image generation" subtitle="Powers the AI Studio image outputs. NVIDIA NIM currently has no image endpoint on this key, so images stay on ZAI.">
           <div className="space-y-4">
             <ModelSelect
               label="Image provider"

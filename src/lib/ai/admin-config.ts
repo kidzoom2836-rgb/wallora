@@ -35,30 +35,63 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   updatedBy: null,
 };
 
+/**
+ * Verified against https://integrate.api.nvidia.com/v1/models on 2026-11-21.
+ * Older model IDs (llama-3.3, deepseek-r1, qwen3-235b, nemotron-super-49b)
+ * have reached end-of-life and return HTTP 410/404 — never offer them.
+ */
 export const TEXT_MODELS = [
   { id: "zai:auto", provider: "zai", label: "ZAI Web Dev SDK (default)", note: "Current provider" },
-  { id: "meta/llama-3.3-70b-instruct", provider: "nvidia", label: "Llama 3.3 70B", note: "NVIDIA NIM" },
-  { id: "meta/llama-3.1-405b-instruct", provider: "nvidia", label: "Llama 3.1 405B", note: "NVIDIA NIM" },
-  { id: "nvidia/llama-3.3-nemotron-super-49b-v1", provider: "nvidia", label: "Nemotron Super 49B", note: "NVIDIA NIM" },
-  { id: "deepseek-ai/deepseek-r1", provider: "nvidia", label: "DeepSeek R1", note: "NVIDIA NIM" },
-  { id: "qwen/qwen3-235b-a22b", provider: "nvidia", label: "Qwen3 235B", note: "NVIDIA NIM" },
+  { id: "minimaxai/minimax-m3.1-flash", provider: "nvidia", label: "MiniMax M3.1 Flash", note: "Fast · verified" },
+  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", provider: "nvidia", label: "Nemotron 3.5 Lightning 30B", note: "Reasoning · verified" },
+  { id: "mistralai/mistral-large-4-1t-a52b", provider: "nvidia", label: "Mistral Large 4", note: "Reasoning · verified" },
 ] as const;
 
+/**
+ * The configured NVIDIA endpoint does not expose a text-to-image model
+ * (all images/generations and text-to-image calls return 404).
+ * Image generation therefore stays on ZAI until an NVIDIA image endpoint is
+ * actually provisioned for this key.
+ */
 export const IMAGE_MODELS = [
-  { id: "zai:auto", provider: "zai", label: "ZAI Web Dev SDK (default)", note: "Current provider" },
-  { id: "stabilityai/stable-diffusion-3-medium", provider: "nvidia", label: "Stable Diffusion 3 Medium", note: "NVIDIA NIM" },
-  { id: "black-forest-labs/flux.1-dev", provider: "nvidia", label: "FLUX.1 dev", note: "NVIDIA NIM" },
-  { id: "nvidia/flux.1-schnell", provider: "nvidia", label: "FLUX.1 schnell", note: "NVIDIA NIM" },
+  { id: "zai:auto", provider: "zai", label: "ZAI Web Dev SDK", note: "Only available image provider" },
 ] as const;
+
+/** Models that used to be offered but are now dead. Auto-migrated on read. */
+const DEPRECATED_TEXT_MODELS: Record<string, string> = {
+  "meta/llama-3.3-70b-instruct": "minimaxai/minimax-m3.1-flash",
+  "meta/llama-3.1-405b-instruct": "minimaxai/minimax-m3.1-flash",
+  "nvidia/llama-3.3-nemotron-super-49b-v1": "minimaxai/minimax-m3.1-flash",
+  "deepseek-ai/deepseek-r1": "minimaxai/minimax-m3.1-flash",
+  "qwen/qwen3-235b-a22b": "minimaxai/minimax-m3.1-flash",
+};
+
+const DEPRECATED_IMAGE_MODELS = new Set([
+  "stabilityai/stable-diffusion-3-medium",
+  "black-forest-labs/flux.1-dev",
+  "nvidia/flux.1-schnell",
+]);
 
 function sanitize(input: Partial<AIConfig> | null | undefined): AIConfig {
   if (!input || typeof input !== "object") return { ...DEFAULT_AI_CONFIG };
-  const textModel = typeof input.textModel === "string" ? input.textModel : DEFAULT_AI_CONFIG.textModel;
-  const imageModel = typeof input.imageModel === "string" ? input.imageModel : DEFAULT_AI_CONFIG.imageModel;
-  const textProvider: AIProviderId =
+
+  let textModel = typeof input.textModel === "string" ? input.textModel : DEFAULT_AI_CONFIG.textModel;
+  textModel = DEPRECATED_TEXT_MODELS[textModel] ?? textModel;
+
+  let imageModel = typeof input.imageModel === "string" ? input.imageModel : DEFAULT_AI_CONFIG.imageModel;
+  if (DEPRECATED_IMAGE_MODELS.has(imageModel)) imageModel = "zai:auto";
+
+  let textProvider: AIProviderId =
     input.textProvider === "nvidia" || textModel.includes("/") ? "nvidia" : "zai";
-  const imageProvider: AIProviderId =
+  let imageProvider: AIProviderId =
     input.imageProvider === "nvidia" || imageModel.includes("/") ? "nvidia" : "zai";
+
+  // No working NVIDIA image endpoint — force image generation onto ZAI.
+  if (imageProvider === "nvidia") {
+    imageProvider = "zai";
+    imageModel = "zai:auto";
+  }
+
   return {
     textProvider,
     textModel,

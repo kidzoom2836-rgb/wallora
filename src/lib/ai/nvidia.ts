@@ -72,8 +72,11 @@ export class NvidiaProvider implements AIProvider {
       max_tokens: config.maxTokens,
       stream: false,
     });
-    const content: string = json?.choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) throw new Error("NVIDIA returned an empty response. Please try again.");
+    const message = json?.choices?.[0]?.message ?? {};
+    // Reasoning models often put the final answer in `content` but can finish
+    // on the reasoning channel when max_tokens is low. Handle both.
+    const content: string = message.content || message.reasoning_content || "";
+    if (!content.trim()) throw new Error("NVIDIA returned an empty response. Try a higher Max Tokens value.");
     const tokens: number =
       typeof json?.usage?.total_tokens === "number"
         ? json.usage.total_tokens
@@ -99,7 +102,8 @@ export class NvidiaProvider implements AIProvider {
       max_tokens: 512,
       stream: false,
     });
-    const enhanced: string = json?.choices?.[0]?.message?.content?.trim() ?? request.prompt;
+    const msg = json?.choices?.[0]?.message ?? {};
+    const enhanced: string = (msg.content || msg.reasoning_content || "").trim() || request.prompt;
     return { enhanced };
   }
 
@@ -122,8 +126,8 @@ export class NvidiaProvider implements AIProvider {
       max_tokens: 512,
       stream: false,
     });
-    const description: string =
-      json?.choices?.[0]?.message?.content ?? "Could not analyze the image.";
+    const msg = json?.choices?.[0]?.message ?? {};
+    const description: string = msg.content || msg.reasoning_content || "Could not analyze the image.";
     return { description };
   }
 }
@@ -160,4 +164,65 @@ export async function generateNvidiaImage(params: {
   }
 
   throw new Error("NVIDIA image generation returned no image data.");
+}
+
+/**
+ * Diagnostic used by /adminkenya. Returns the live model list and whether the
+ * currently selected text model actually accepts a chat completion.
+ */
+export async function testNvidiaConnection(): Promise<{
+  keyConfigured: boolean;
+  models: string[];
+  modelTest: { model: string; ok: boolean; detail: string };
+}> {
+  const keyConfigured = nvidiaKeyConfigured();
+  if (!keyConfigured) {
+    return {
+      keyConfigured: false,
+      models: [],
+      modelTest: { model: "", ok: false, detail: "NVIDIA_API_KEY is not set." },
+    };
+  }
+
+  const config = await getAIConfig();
+  let models: string[] = [];
+  try {
+    const res = await fetch(`${config.nvidiaBaseUrl}/models`, {
+      headers: { Authorization: `Bearer ${requireKey()}` },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const json = await res.json();
+      models = Array.isArray(json?.data)
+        ? json.data.map((m: { id?: string }) => m.id).filter(Boolean)
+        : [];
+    }
+  } catch {
+    /* model list is best-effort */
+  }
+
+  let modelTest: { model: string; ok: boolean; detail: string };
+  try {
+    const json = await nvidiaFetch(config.nvidiaBaseUrl, "/chat/completions", {
+      model: config.textModel,
+      messages: [{ role: "user", content: "Reply with OK" }],
+      max_tokens: 512,
+      stream: false,
+    });
+    const msg = json?.choices?.[0]?.message ?? {};
+    const content = (msg.content || msg.reasoning_content || "").trim();
+    modelTest = {
+      model: config.textModel,
+      ok: !!content,
+      detail: content ? `Responded: ${content.slice(0, 60)}` : "Empty response",
+    };
+  } catch (err) {
+    modelTest = {
+      model: config.textModel,
+      ok: false,
+      detail: err instanceof Error ? err.message.slice(0, 300) : "Request failed",
+    };
+  }
+
+  return { keyConfigured, models, modelTest };
 }
