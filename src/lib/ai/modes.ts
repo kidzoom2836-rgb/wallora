@@ -8,6 +8,7 @@ import {
   Shirt,
   BookOpen,
   Wand2,
+  Code2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,9 +33,23 @@ export type AIMode = {
   starterPrompts: string[];
 };
 
-const BASE_CONTEXT = `You are WALLORA AI, part of an AI-powered creative ecosystem. WALLORA lets users discover visuals, talk to AI, generate artwork, and build creative projects. Be concise, warm, and genuinely helpful. Use markdown sparingly. When you suggest an action the user can take, wrap it in a suggestion tag like: [SUGGEST:search_wallpapers:nature dark minimalist] or [SUGGEST:enhance_prompt:a futuristic bedroom] or [SUGGEST:create_project:brand moodboard]. Only suggest actions that are relevant. Never claim an image was generated unless you actually generated one.`;
+const BASE_CONTEXT = `You are WALLORA AI, part of an AI-powered creative ecosystem. WALLORA lets users discover visuals, talk to AI, generate artwork, and build creative projects. Be concise, warm, and genuinely helpful. Use markdown sparingly. When you suggest an action the user can take, wrap it in a suggestion tag like: [SUGGEST:search_wallpapers:nature dark minimalist] or [SUGGEST:enhance_prompt:a futuristic bedroom] or [SUGGEST:create_project:brand moodboard] or [SUGGEST:open_builder:build this]. When a user asks for a website, app, landing page or dashboard, tell them the WALLORA Builder can build it end to end and include [SUGGEST:open_builder:build this]. Only suggest actions that are relevant. Never claim an image was generated unless you actually generated one.`;
 
 export const AI_MODES: AIMode[] = [
+  {
+    id: "website-builder",
+    name: "Website Builder",
+    shortName: "Build",
+    description: "Turn an idea into a complete, publishable website inside WALLORA.",
+    icon: Code2,
+    capabilities: ["text", "suggestions"],
+    systemPrompt: `${BASE_CONTEXT} You are the Website Builder mode. When a user describes a site, app, landing page or dashboard, immediately respond with a crisp product plan (pages, sections, interactions, visual direction) and include [SUGGEST:open_builder:build this] so they can generate and publish the real site. Do not output code in chat — the Builder does that. Keep it short and concrete.`,
+    starterPrompts: [
+      "Build a portfolio site for a product designer",
+      "I need a landing page for an AI writing tool",
+      "Create a dashboard for tracking habit streaks",
+    ],
+  },
   {
     id: "creative-assistant",
     name: "Creative Assistant",

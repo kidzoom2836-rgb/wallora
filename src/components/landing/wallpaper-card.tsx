@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Heart, Bookmark, ArrowUpRight, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { VerifiedTick } from "@/components/brand/verified-badge";
 import { useAuthDialog } from "@/stores/auth-dialog";
 import { useDiscovery } from "@/stores/discovery";
 
@@ -213,7 +214,7 @@ export function WallpaperCard({ wallpaper, index = 0 }: WallpaperCardProps) {
           <p className="truncate text-xs text-secondary-text">
             @{wallpaper.creator.username ?? "wallora"}
             {wallpaper.creator.verified && (
-              <span className="ml-1 text-primary">✓</span>
+              <span className="ml-1 inline-flex align-middle"><VerifiedTick /></span>
             )}
           </p>
         </div>

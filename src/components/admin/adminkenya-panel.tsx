@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Crown,
   Cpu,
   Eye,
   FileClock,
@@ -134,12 +135,13 @@ type AIConfig = {
   imageModels: { id: string; provider: string; label: string; note: string }[];
 };
 
-type TabId = "overview" | "uploads" | "people" | "ai" | "audit";
+type TabId = "overview" | "uploads" | "verification" | "people" | "ai" | "audit";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutDashboard; hint: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, hint: "Platform pulse" },
   { id: "uploads", label: "Uploads", icon: UploadCloud, hint: "Moderation queue" },
-  { id: "people", label: "People & Verification", icon: BadgeCheck, hint: "Roles & official tick" },
+  { id: "verification", label: "Verification", icon: BadgeCheck, hint: "Badge applications" },
+  { id: "people", label: "People & Roles", icon: Users, hint: "Roles & official tick" },
   { id: "ai", label: "AI & Models", icon: Cpu, hint: "NVIDIA / text / image" },
   { id: "audit", label: "Audit Log", icon: FileClock, hint: "Admin actions" },
 ];
@@ -254,6 +256,7 @@ export function AdminKenyaPanel({ user }: { user: { name: string; email: string 
         <main className="min-w-0 flex-1">
           {tab === "overview" && <OverviewTab query={statsQuery} />}
           {tab === "uploads" && <UploadsTab />}
+          {tab === "verification" && <VerificationTab />}
           {tab === "people" && <PeopleTab />}
           {tab === "ai" && <AITab />}
           {tab === "audit" && <AuditTab />}
@@ -396,8 +399,24 @@ function UploadsTab() {
       toast.success(`Wallpaper ${v.next}`);
       qc.invalidateQueries({ queryKey: ["ak-wallpapers"] });
       qc.invalidateQueries({ queryKey: ["ak-stats"] });
+      // Publish immediately for anyone with Discover already open.
+      qc.invalidateQueries({ queryKey: ["wallpapers"] });
+      qc.invalidateQueries({ queryKey: ["categories"] });
     },
     onError: (e: Error) => toast.error("Moderation failed", { description: e.message }),
+  });
+
+  const repair = useMutation({
+    mutationFn: () =>
+      jsonFetch<{ data: { repaired: number } }>("/api/v1/admin/maintenance/repair-uploads", {
+        method: "POST",
+      }),
+    onSuccess: (payload) => {
+      toast.success(`Repaired ${payload.data?.repaired ?? 0} approved upload(s)`);
+      qc.invalidateQueries({ queryKey: ["ak-wallpapers"] });
+      qc.invalidateQueries({ queryKey: ["wallpapers"] });
+    },
+    onError: (e: Error) => toast.error("Repair failed", { description: e.message }),
   });
 
   const items = query.data?.data.items ?? [];
@@ -423,6 +442,15 @@ function UploadsTab() {
         ))}
         <Button size="sm" variant="ghost" onClick={() => query.refetch()}>
           <RefreshCw className="size-3.5" /> Refresh
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={repair.isPending}
+          onClick={() => repair.mutate()}
+          title="Publish older approvals that were approved before this bug was fixed"
+        >
+          <RefreshCw className={cn("size-3.5", repair.isPending && "animate-spin")} /> Repair old approvals
         </Button>
       </div>
 
@@ -507,7 +535,127 @@ function UploadsTab() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* People & verification                                                      */
+/* Verification applications                                                  */
+/* -------------------------------------------------------------------------- */
+
+type VerificationRequest = {
+  id: string;
+  userId: string;
+  tier: "verified" | "premium";
+  reason: string;
+  portfolio: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  note: string | null;
+  email: string | null;
+  username: string | null;
+  displayName: string | null;
+};
+
+function VerificationTab() {
+  const qc = useQueryClient();
+  const query = useQuery<{ data: { requests: VerificationRequest[] } }>({
+    queryKey: ["ak-verification"],
+    queryFn: () => jsonFetch("/api/v1/admin/verification"),
+  });
+
+  const review = useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: "approved" | "rejected" }) =>
+      jsonFetch(`/api/v1/admin/verification/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      }),
+    onSuccess: (_d, v) => {
+      toast.success(`Application ${v.decision}`);
+      qc.invalidateQueries({ queryKey: ["ak-verification"] });
+      qc.invalidateQueries({ queryKey: ["ak-users"] });
+    },
+    onError: (e: Error) => toast.error("Review failed", { description: e.message }),
+  });
+
+  const requests = query.data?.data.requests ?? [];
+  const pending = requests.filter((r) => r.status === "pending").length;
+
+  if (query.isLoading) return <LoadingBlock label="Loading verification applications…" />;
+  if (query.isError) return <ErrorBlock message="Could not load applications." onRetry={() => query.refetch()} />;
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle
+        title="Verification applications"
+        subtitle="Real review queue. Approving grants the blue tick or premium gold badge instantly."
+      />
+      <div className="flex items-center gap-2">
+        <Badge variant="default">{pending} pending</Badge>
+        <Badge variant="secondary">{requests.length} total</Badge>
+        <Button size="sm" variant="ghost" onClick={() => query.refetch()}>
+          <RefreshCw className="size-3.5" /> Refresh
+        </Button>
+      </div>
+
+      {requests.length === 0 ? (
+        <Panel title="No applications yet">
+          <p className="text-sm text-secondary-text">
+            Users can apply at <code className="text-primary">/verification</code>. Requests will appear here.
+          </p>
+        </Panel>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((r) => (
+            <div key={r.id} className="rounded-xl border border-border bg-surface p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold">
+                    {r.tier === "premium" ? <Crown className="size-4 text-[#D7B879]" /> : <BadgeCheck className="size-4 text-[#3B9EFF]" />}
+                    {r.displayName || r.username || r.email || "Applicant"}
+                    <Badge
+                      variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}
+                    >
+                      {r.status}
+                    </Badge>
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-secondary-text">
+                    @{r.username || "unknown"} · {r.email} · applied {new Date(r.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                {r.status === "pending" && (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ id: r.id, decision: "approved" })}
+                    >
+                      <Check className="size-3.5" /> Approve {r.tier}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ id: r.id, decision: "rejected" })}
+                    >
+                      <X className="size-3.5" /> Reject
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-secondary-text">
+                <span className="text-foreground">Why:</span> {r.reason}
+              </p>
+              <p className="mt-1 break-all text-xs text-secondary-text">
+                <span className="text-foreground">Work:</span> {r.portfolio}
+              </p>
+              {r.note && <p className="mt-2 text-xs text-muted-foreground">Review note: {r.note}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* People & roles                                                             */
 /* -------------------------------------------------------------------------- */
 
 function PeopleTab() {

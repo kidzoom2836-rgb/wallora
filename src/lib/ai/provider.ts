@@ -20,6 +20,8 @@ export type TextGenerationRequest = {
   messages: ChatMessage[];
   /** The WALLORA AI mode system prompt (sent as the first assistant message). */
   systemPrompt: string;
+  /** Optional per-request override (site generation needs long outputs). */
+  maxTokens?: number;
 };
 
 export type TextGenerationResult = {
@@ -90,6 +92,7 @@ export class ZAIProvider implements AIProvider {
     const completion = await zai.chat.completions.create({
       messages,
       thinking: { type: "disabled" },
+      ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),
     });
 
     const content = completion.choices[0]?.message?.content ?? "";

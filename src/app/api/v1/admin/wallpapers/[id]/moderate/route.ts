@@ -74,7 +74,13 @@ export async function PATCH(
 
   const updated = await db.wallpaper.update({
     where: { id },
-    data: { status: nextStatus },
+    // Approving must publish the upload. Uploads are created with BOTH
+    // status:"pending" and isPublic:false — flipping only `status` left
+    // approved uploads invisible in every public read path.
+    data: {
+      status: nextStatus,
+      isPublic: nextStatus === "approved",
+    },
     select: {
       id: true,
       slug: true,

@@ -843,6 +843,8 @@ function ModerationTab() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin-wallpapers"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["wallpapers"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
     onError: (err: Error) => {
       toast.error("Moderation failed", { description: err.message });

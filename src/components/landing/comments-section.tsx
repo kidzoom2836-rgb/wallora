@@ -10,6 +10,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthDialog } from "@/stores/auth-dialog";
+import { VerifiedTick } from "@/components/brand/verified-badge";
 import { cn } from "@/lib/utils";
 
 /**
@@ -285,9 +286,7 @@ function CommentRow({ comment }: { comment: CommentItem }) {
             {displayName}
           </span>
           {comment.author.verified && (
-            <span className="text-[11px] text-primary" aria-label="Verified">
-              ✓
-            </span>
+            <VerifiedTick className="size-3.5" />
           )}
           {comment.author.username && (
             <span className="truncate text-xs text-secondary-text">

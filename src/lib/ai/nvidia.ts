@@ -69,7 +69,7 @@ export class NvidiaProvider implements AIProvider {
       model: config.textModel,
       messages,
       temperature: config.temperature,
-      max_tokens: config.maxTokens,
+      max_tokens: request.maxTokens ?? config.maxTokens,
       stream: false,
     });
     const message = json?.choices?.[0]?.message ?? {};

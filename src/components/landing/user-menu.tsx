@@ -10,6 +10,7 @@ import {
   ChevronDown,
   FolderKanban,
   LayoutDashboard,
+  BadgeCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -124,6 +125,10 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem onClick={comingSoon("Your profile")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <UserIcon className="mr-2 h-4 w-4" />
           Your profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/verification")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <BadgeCheck className="mr-2 h-4 w-4" />
+          Get verified
         </DropdownMenuItem>
         <DropdownMenuItem onClick={comingSoon("Settings")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <Settings className="mr-2 h-4 w-4" />

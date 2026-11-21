@@ -26,6 +26,7 @@ import {
   DashboardIcon,
   MenuIcon,
   UploadIcon,
+  CodeIcon,
 } from "@/components/icons/wallora-icons";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,7 @@ const NAV_LINKS = [
   { href: "/discover", label: "Discover", icon: SearchIcon },
   { href: "/ai", label: "AI Chat", icon: ChatIcon },
   { href: "/studio", label: "Studio", icon: SparklesIcon },
+  { href: "/builder", label: "Builder", icon: CodeIcon },
   { href: "/marketplace", label: "Marketplace", icon: StoreIcon },
   { href: "/projects", label: "Projects", icon: FolderIcon },
 ];

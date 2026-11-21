@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { VerifiedTick } from "@/components/brand/verified-badge";
 import {
   Dialog,
   DialogContent,
@@ -258,7 +259,7 @@ export function WallpaperDetailDialog() {
                     <p className="truncate text-sm font-medium text-foreground">
                       {wallpaper.creator.displayName ?? "WALLORA"}
                       {wallpaper.creator.verified && (
-                        <span className="ml-1 text-primary">✓</span>
+                        <span className="ml-1 inline-flex align-middle"><VerifiedTick /></span>
                       )}
                     </p>
                     <p className="truncate text-xs text-secondary-text">

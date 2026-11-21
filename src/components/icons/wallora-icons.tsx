@@ -238,6 +238,15 @@ export function LoaderIcon({ className, size, strokeWidth }: IconProps) {
   );
 }
 
+export function CodeIcon({ className, size, strokeWidth }: IconProps) {
+  return (
+    <svg {...base(size, strokeWidth)} className={className}>
+      <path d="m16 18 6-6-6-6" />
+      <path d="m8 6-6 6 6 6" />
+    </svg>
+  );
+}
+
 export function EyeIcon({ className, size, strokeWidth }: IconProps) {
   return (
     <svg {...base(size, strokeWidth)} className={className}>
