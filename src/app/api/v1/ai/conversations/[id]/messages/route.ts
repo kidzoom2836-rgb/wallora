@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
-import { getAIProvider } from "@/lib/ai/provider";
+import { getConfiguredAIProvider } from "@/lib/ai/provider";
 import { getMode } from "@/lib/ai/modes";
 import { checkQuota, recordUsage } from "@/lib/quota";
 
@@ -121,7 +121,7 @@ export async function POST(
   // Call the AI provider
   let aiResult;
   try {
-    const provider = getAIProvider();
+    const provider = await getConfiguredAIProvider();
     aiResult = await provider.generateText({
       messages: chatMessages,
       systemPrompt: mode.systemPrompt,

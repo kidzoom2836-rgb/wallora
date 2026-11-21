@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth-helpers";
-import { getAIProvider } from "@/lib/ai/provider";
+import { getConfiguredAIProvider } from "@/lib/ai/provider";
 import { checkQuota, recordUsage } from "@/lib/quota";
 
 /**
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const provider = getAIProvider();
+    const provider = await getConfiguredAIProvider();
     const result = await provider.enhancePrompt!({
       prompt: parsed.data.prompt,
       style: parsed.data.style,

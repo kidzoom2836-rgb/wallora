@@ -6,7 +6,8 @@ import { requireUser } from "@/lib/auth-helpers";
 import { checkQuota, recordUsage } from "@/lib/quota";
 import { generateImage, getGenerationCost } from "@/lib/ai/image-generation";
 import { getSizeForAspect, type AspectRatio } from "@/lib/ai/presets";
-import { getAIProvider } from "@/lib/ai/provider";
+import { getConfiguredAIProvider } from "@/lib/ai/provider";
+import { getAIConfig } from "@/lib/ai/admin-config";
 
 /**
  * POST /api/v1/ai/generations
@@ -81,11 +82,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Read the admin-selected AI provider/model for metadata + enhancement.
+  const aiConfig = await getAIConfig();
+
   // Optionally enhance the prompt first
   let enhancedPrompt: string | null = null;
   if (enhance) {
     try {
-      const provider = getAIProvider();
+      const provider = await getConfiguredAIProvider();
       const enhanced = await provider.enhancePrompt!({ prompt });
       enhancedPrompt = enhanced.enhanced;
     } catch {
@@ -106,6 +110,8 @@ export async function POST(request: NextRequest) {
       size,
       status: "processing",
       creditsUsed: cost,
+      provider: aiConfig.imageProvider,
+      model: aiConfig.imageModel,
     },
   });
 
@@ -135,6 +141,8 @@ export async function POST(request: NextRequest) {
         width: result.width,
         height: result.height,
         fileSize: result.fileSize,
+        provider: result.provider,
+        model: result.model,
       },
       select: {
         id: true,

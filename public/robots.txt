@@ -1,14 +1,23 @@
+User-agent: *
+Disallow: /adminkenya
+Disallow: /admin
+
 User-agent: Googlebot
 Allow: /
+Disallow: /adminkenya
+Disallow: /admin
 
 User-agent: Bingbot
 Allow: /
+Disallow: /adminkenya
+Disallow: /admin
 
 User-agent: Twitterbot
 Allow: /
+Disallow: /adminkenya
+Disallow: /admin
 
 User-agent: facebookexternalhit
 Allow: /
-
-User-agent: *
-Allow: /
+Disallow: /adminkenya
+Disallow: /admin

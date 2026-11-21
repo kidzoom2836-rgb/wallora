@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import {
   LogOut,
   User as UserIcon,
@@ -23,7 +24,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useProjects } from "@/stores/projects";
-import { useAdminPanel } from "@/stores/admin";
 import { cn } from "@/lib/utils";
 
 type UserMenuProps = {
@@ -44,9 +44,9 @@ function initials(name?: string | null) {
 
 export function UserMenu({ user }: UserMenuProps) {
   const role = user.role ?? "user";
-  const isAdmin = role === "admin" || role === "super_admin";
+  const isSuperAdmin = role === "super_admin";
+  const router = useRouter();
   const openProjects = useProjects((s) => s.openPanel);
-  const openAdmin = useAdminPanel((s) => s.openAdmin);
 
   const handleSignOut = async () => {
     toast.info("Signing out…");
@@ -129,12 +129,15 @@ export function UserMenu({ user }: UserMenuProps) {
           <Settings className="mr-2 h-4 w-4" />
           Settings
         </DropdownMenuItem>
-        {isAdmin && (
+        {isSuperAdmin && (
           <>
             <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem onClick={openAdmin} className="text-primary focus:text-primary cursor-pointer">
+            <DropdownMenuItem
+              onClick={() => router.push("/adminkenya")}
+              className="text-primary focus:text-primary cursor-pointer"
+            >
               <LayoutDashboard className="mr-2 h-4 w-4" />
-              Admin Dashboard
+              Control Room
             </DropdownMenuItem>
           </>
         )}

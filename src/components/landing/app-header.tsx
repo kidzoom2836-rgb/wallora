@@ -45,14 +45,14 @@ export function AppHeader() {
   const { scrollY } = useScroll();
   const { data: session, status } = useSession();
   const authenticated = status === "authenticated" && !!session?.user;
-  const isAdmin = session?.user?.role === "admin" || session?.user?.role === "super_admin";
+  const isSuperAdmin = session?.user?.role === "super_admin";
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     setScrolled(latest > 12);
   });
 
-  const allLinks = isAdmin
-    ? [...NAV_LINKS, { href: "/admin", label: "Admin", icon: DashboardIcon }]
+  const allLinks = isSuperAdmin
+    ? [...NAV_LINKS, { href: "/adminkenya", label: "Control Room", icon: DashboardIcon }]
     : NAV_LINKS;
 
   return (

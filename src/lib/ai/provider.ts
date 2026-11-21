@@ -161,3 +161,19 @@ export function getAIProvider(): AIProvider {
   }
   return cachedProvider;
 }
+
+/**
+ * Resolves the text provider chosen in the hidden /adminkenya control panel.
+ * Falls back to ZAI for any unknown configuration.
+ */
+export async function getConfiguredAIProvider(): Promise<AIProvider> {
+  const { getAIConfig } = await import("./admin-config");
+  const config = await getAIConfig();
+  const useNvidia =
+    config.textProvider === "nvidia" ||
+    config.textModel === "nvidia" ||
+    config.textModel.includes("/");
+  if (!useNvidia) return getAIProvider();
+  const { NvidiaProvider } = await import("./nvidia");
+  return new NvidiaProvider();
+}
