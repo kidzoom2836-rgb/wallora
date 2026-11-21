@@ -6,6 +6,8 @@ import { apiJson } from "../../lib/api";
 
 const C = { bg: "#0B0C0F", card: "#14161B", raised: "#1C1F26", text: "#F7F7F5", muted: "#9296A1", accent: "#D7B879", border: "#292C33", error: "#E46F75" };
 
+const THINKING_STAGES = ["Understanding your request", "Thinking", "Writing the response", "Almost there"];
+
 interface Mode {
   id: string;
   name: string;
@@ -24,6 +26,7 @@ export default function AiScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [stage, setStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
@@ -60,6 +63,16 @@ export default function AiScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }, [messages, sending]);
 
+  // Visible progress while a response is generated.
+  useEffect(() => {
+    if (!sending) {
+      setStage(0);
+      return;
+    }
+    const timer = setInterval(() => setStage((s) => (s + 1) % THINKING_STAGES.length), 1900);
+    return () => clearInterval(timer);
+  }, [sending]);
+
   const switchMode = async (id: string) => {
     if (id === mode || sending) return;
     setMode(id);
@@ -85,12 +98,15 @@ export default function AiScreen() {
     setInput("");
     setError(null);
     setSending(true);
+    setStage(0);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
     const optimistic: Message = { id: `temp-${Date.now()}`, role: "user", content };
     setMessages((m) => [...m, optimistic]);
     try {
       const data = await apiJson<{ userMessage: Message; assistantMessage: Message; error?: string; tokensUsed?: number }>(
         `/api/v1/ai/conversations/${conversation.id}/messages`,
-        { method: "POST", body: JSON.stringify({ content }) },
+        { method: "POST", body: JSON.stringify({ content }), signal: controller.signal },
       );
       setMessages((m) => [
         ...m.filter((x) => x.id !== optimistic.id),
@@ -100,8 +116,13 @@ export default function AiScreen() {
       if (data.error) setError(data.error);
     } catch (e: any) {
       setMessages((m) => m.filter((x) => x.id !== optimistic.id));
-      setError(e?.message ?? "Could not reach WALLORA AI.");
+      setError(
+        controller.signal.aborted
+          ? "That request took too long. Please try again."
+          : e?.message ?? "Could not reach WALLORA AI.",
+      );
     } finally {
+      clearTimeout(timeout);
       setSending(false);
     }
   };
@@ -161,8 +182,9 @@ export default function AiScreen() {
           ))
         )}
         {sending && (
-          <View style={[styles.bubble, styles.aiBubble]}>
+          <View style={[styles.bubble, styles.aiBubble, styles.thinkingBubble]}>
             <ActivityIndicator color={C.accent} size="small" />
+            <Text style={styles.thinkingText}>{THINKING_STAGES[stage]}…</Text>
           </View>
         )}
       </ScrollView>
@@ -214,6 +236,8 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: "86%", borderRadius: 16, padding: 12 },
   userBubble: { alignSelf: "flex-end", backgroundColor: C.accent, borderBottomRightRadius: 4 },
   aiBubble: { alignSelf: "flex-start", backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderBottomLeftRadius: 4, flexDirection: "row", gap: 7 },
+  thinkingBubble: { alignItems: "center", paddingVertical: 10 },
+  thinkingText: { color: C.muted, fontSize: 13 },
   bubbleIcon: { marginTop: 2 },
   bubbleText: { color: C.text, fontSize: 14, lineHeight: 20, flex: 1 },
   composer: { flexDirection: "row", gap: 9, alignItems: "flex-end", padding: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg },
