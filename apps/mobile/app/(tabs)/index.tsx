@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../lib/auth";
 
 const C = {
   bg: "#0B0C0F",
@@ -14,6 +15,8 @@ const C = {
 };
 
 export default function HomeScreen() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -22,14 +25,17 @@ export default function HomeScreen() {
             <View style={styles.logo}>
               <Text style={styles.logoText}>W</Text>
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.title}>WALLORA</Text>
               <Text style={styles.tagline}>Discover. Chat. Imagine. Create. Share. Earn.</Text>
             </View>
+            <Pressable onPress={async () => { await signOut(); router.replace("/auth/login"); }} style={styles.signOutBtn}>
+              <Ionicons name="log-out-outline" size={22} color={C.muted} />
+            </Pressable>
           </View>
         </View>
 
-        <Text style={styles.hero}>Your imagination deserves a place to live.</Text>
+        <Text style={styles.hero}>Welcome back{user?.name ? `, ${user.name}` : ""}</Text>
         <Text style={styles.sub}>Discover inspiring visuals, talk to AI, create original artwork and build your creative world.</Text>
 
         <View style={styles.actions}>
@@ -99,6 +105,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 40 },
   header: { marginBottom: 20 },
   logoWrap: { flexDirection: "row", alignItems: "center", gap: 12 },
+  signOutBtn: { padding: 8 },
   logo: { width: 44, height: 44, borderRadius: 12, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" },
   logoText: { fontSize: 22, fontWeight: "bold", color: C.bg },
   title: { fontSize: 20, fontWeight: "bold", color: C.text, letterSpacing: 2 },
