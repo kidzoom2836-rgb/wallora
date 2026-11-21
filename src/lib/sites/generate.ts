@@ -78,8 +78,10 @@ async function fastGenerate(input: {
           { role: "system", content: input.systemPrompt },
           { role: "user", content: input.userContent },
         ],
-        temperature: Math.min(config.temperature, 0.5),
-        max_tokens: 8192,
+        temperature: 0.35,
+        // This model reasons before answering; 8k tokens leaves no room for the
+        // actual document. 16k reliably finishes in ~20s.
+        max_tokens: 16384,
         stream: false,
       }),
       cache: "no-store",
@@ -119,8 +121,13 @@ export async function generateSiteHtml(input: {
   }
 
   const html = extractHtml(content);
-  if (!html.toLowerCase().includes("<html") || !html.toLowerCase().includes("</html>")) {
-    throw new Error("The model did not return a complete HTML document. Try again.");
+  if (
+    !html.toLowerCase().includes("<html") ||
+    !html.toLowerCase().includes("</html>") ||
+    !html.toLowerCase().includes("<body") ||
+    html.length < 1200
+  ) {
+    throw new Error("The model returned an incomplete document. Try again.");
   }
 
   return {

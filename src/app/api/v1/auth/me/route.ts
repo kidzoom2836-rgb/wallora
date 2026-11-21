@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { getAuthSession, requireUser } from "@/lib/auth-helpers";
+import { getTier } from "@/lib/verification/store";
 
 /**
  * GET /api/v1/auth/me
@@ -53,7 +54,8 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ data: user });
+  const verificationTier = await getTier(userId);
+  return NextResponse.json({ data: { ...user, verificationTier } });
 }
 
 /**
