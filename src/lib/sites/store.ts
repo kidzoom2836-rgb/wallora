@@ -28,9 +28,9 @@ function key(id: string) {
   return `${PREFIX}${id}`;
 }
 
-function decode(data: Buffer): SiteRecord | null {
+function decode(data: Buffer | Uint8Array): SiteRecord | null {
   try {
-    return JSON.parse(data.toString("utf8")) as SiteRecord;
+    return JSON.parse(Buffer.from(data).toString("utf8")) as SiteRecord;
   } catch {
     return null;
   }
@@ -97,7 +97,7 @@ export async function getSite(id: string): Promise<SiteRecord | null> {
 export async function getSiteBySlug(slug: string): Promise<SiteRecord | null> {
   const index = await db.storedBlob.findUnique({ where: { key: `${SLUG_PREFIX}${slug}` } });
   if (!index) return null;
-  return getSite(index.data.toString("utf8").trim());
+  return getSite(Buffer.from(index.data).toString("utf8").trim());
 }
 
 export async function listSites(ownerId?: string): Promise<SiteRecord[]> {
@@ -132,7 +132,7 @@ export async function listProUsers(): Promise<string[]> {
   const blob = await db.storedBlob.findUnique({ where: { key: PRO_KEY } });
   if (!blob) return [];
   try {
-    const parsed = JSON.parse(blob.data.toString("utf8"));
+    const parsed = JSON.parse(Buffer.from(blob.data).toString("utf8"));
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];

@@ -41,7 +41,7 @@ async function read<T>(key: string, fallback: T): Promise<T> {
   const blob = await db.storedBlob.findUnique({ where: { key } });
   if (!blob) return fallback;
   try {
-    return JSON.parse(blob.data.toString("utf8")) as T;
+    return JSON.parse(Buffer.from(blob.data).toString("utf8")) as T;
   } catch {
     return fallback;
   }
