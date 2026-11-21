@@ -1,0 +1,2408 @@
+# WALLORA — COMPLETE PRODUCT REQUIREMENTS, TECHNICAL ARCHITECTURE & MASTER AI DEVELOPMENT PROMPT
+
+**Product:** WALLORA  
+**Product category:** AI-powered creative ecosystem and visual social platform  
+**Tagline:** Discover. Chat. Imagine. Create. Share. Earn.  
+**Target platforms:** Web, Progressive Web App (PWA), Android  
+**Development approach:** Full-stack, modular, production-oriented, phased implementation  
+**Primary AI provider:** NVIDIA NIM, using eligible free hosted models where available  
+**Database:** Neon PostgreSQL  
+**ORM:** Drizzle ORM  
+**Authentication:** Better Auth  
+**Frontend hosting:** Vercel  
+**Image storage:** Cloudflare R2  
+**CDN:** Cloudflare  
+**Mobile:** Expo + React Native  
+**Repository:** GitHub  
+**Project name:** WALLORA
+
+---
+
+# PART 1 — YOUR ROLE AS THE DEVELOPMENT AGENT
+
+You are acting as a complete senior software development organization.
+
+Your responsibilities include:
+
+1. Principal software architect.
+2. Senior frontend developer.
+3. Senior backend developer.
+4. Database architect.
+5. UI/UX designer.
+6. AI integration engineer.
+7. NVIDIA model integration specialist.
+8. React and Next.js specialist.
+9. Expo and React Native developer.
+10. PWA engineer.
+11. Cloud infrastructure engineer.
+12. Security engineer.
+13. QA and testing engineer.
+14. DevOps engineer.
+15. Product designer.
+
+You are responsible for planning, designing, implementing, testing and documenting WALLORA.
+
+Do not behave like a code generator that creates several files without understanding the application.
+
+Think about the entire system before implementing each feature.
+
+## Permanent development rules
+
+These rules apply throughout the project:
+
+- Inspect the existing repository before making changes.
+- Preserve existing working code.
+- Do not overwrite working configurations without a reason.
+- Build one development phase at a time.
+- Never skip phases.
+- Do not begin the next phase without approval.
+- Use strict TypeScript.
+- Avoid unnecessary dependencies.
+- Use reusable components and modular architecture.
+- Do not hardcode production data.
+- Do not create fake AI generation functionality.
+- Do not use static arrays to simulate real backend functionality.
+- Do not create decorative buttons that do nothing.
+- Every visible interaction must have a real implementation or a clearly marked unavailable state.
+- Never expose secret keys in frontend or mobile code.
+- Do not trust frontend roles or permissions.
+- Validate all API inputs.
+- Add database migrations for schema changes.
+- Test every important feature.
+- Maintain consistent web and mobile API contracts.
+- Add loading, error, empty and success states.
+- Make the application responsive.
+- Keep accessibility in mind.
+- Document every environment variable.
+- Never claim an incomplete feature is finished.
+- Create Git checkpoints after each completed phase.
+- Stop and wait for approval after each phase.
+
+If a required external service has not been configured, create a clean integration interface and explain what configuration is missing. Never pretend the integration works.
+
+---
+
+# PART 2 — PRODUCT VISION
+
+WALLORA is not simply a wallpaper application.
+
+It is an AI-powered creative platform where users can discover visual content, communicate with AI, generate artwork, edit images, build projects, interact with creators, publish digital creations and monetize their work.
+
+The product should combine the best ideas behind:
+
+- Pinterest: visual discovery and inspiration.
+- ChatGPT: conversational AI assistance.
+- Canva: accessible creative tools.
+- Instagram: profiles and community.
+- Creative marketplaces: digital products and creator monetization.
+- AI image studios: image generation and editing.
+- Personalization applications: wallpapers, collections and digital aesthetics.
+
+These are product references, not instructions to copy their branding, interfaces or proprietary designs.
+
+## Core product promise
+
+A user should be able to enter WALLORA with an idea and leave with something they have created, discovered, organized, shared or purchased.
+
+Example:
+
+A user opens WALLORA and types:
+
+"I want to create a futuristic luxury bedroom design with black walls, golden lighting, a gaming setup and a large window overlooking Nairobi."
+
+WALLORA AI should understand the request, help refine it, select a suitable creative tool, generate a visual concept using an available model, display the result, and allow the user to save it inside a project.
+
+Another user might ask:
+
+"Give me five wallpapers that match my dark minimalist phone setup."
+
+WALLORA should understand the request and search the approved wallpaper library.
+
+---
+
+# PART 3 — TECHNOLOGY STACK
+
+Use this technology stack unless a genuine technical incompatibility is discovered and explained before changing it.
+
+## Frontend — Web
+
+- Next.js App Router.
+- React.
+- TypeScript.
+- Tailwind CSS.
+- Shadcn UI.
+- Lucide icons.
+- Framer Motion.
+- Zustand.
+- TanStack Query.
+- React Hook Form.
+- Zod.
+
+## Frontend — Android
+
+- Expo.
+- React Native.
+- Expo Router.
+- TypeScript.
+- NativeWind or well-structured React Native styles.
+- React Native Reanimated.
+- TanStack Query.
+- Zustand.
+- Expo Image Picker.
+- Expo File System.
+- Expo Notifications.
+- Expo Sharing.
+- Expo Secure Store.
+
+The Android application must be a genuine native Expo application, not a WebView wrapper.
+
+## PWA
+
+The Next.js website must be installable as a Progressive Web App.
+
+Implement:
+
+- Web app manifest.
+- App icons.
+- Installability.
+- Service worker.
+- Offline application shell.
+- Offline saved content where technically and legally permitted.
+- Cache strategies.
+- Update detection.
+- Install instructions.
+- Network failure handling.
+- Responsive mobile layouts.
+- Standalone display mode.
+- Theme colors.
+- Splash screen configuration where supported.
+
+Do not cache private user data or private image URLs insecurely.
+
+The PWA and Android application must share backend contracts and business logic where practical.
+
+## Backend
+
+- Next.js server-side API.
+- Route Handlers.
+- Server-side service layer.
+- Drizzle ORM.
+- Neon PostgreSQL.
+- Better Auth.
+- Zod validation.
+- Background job architecture.
+- Cloudflare R2 integration.
+- NVIDIA NIM integration.
+
+Use versioned endpoints under `/api/v1`.
+
+## Infrastructure
+
+| Service | Responsibility |
+|---|---|
+| Vercel | Next.js hosting and supported API functions |
+| Neon | PostgreSQL database |
+| Cloudflare R2 | Image and media object storage |
+| Cloudflare | CDN and media delivery |
+| NVIDIA NIM | Hosted AI inference |
+| GitHub | Source control |
+| Background worker | Asynchronous processing |
+
+Heavy AI tasks and image processing must not rely on a long-running Vercel request. Create a separate worker architecture.
+
+During local development, the worker may run locally.
+
+Choose a production worker hosting and queue solution only after checking its current capabilities, cost and compatibility. Keep it configurable.
+
+---
+
+# PART 4 — BRAND IDENTITY AND DESIGN SYSTEM
+
+Create a visually distinctive premium product.
+
+WALLORA should feel like a modern creative technology company, not a generic AI dashboard.
+
+## Visual direction
+
+Primary theme: Premium dark.
+
+Suggested colors:
+
+- Background: #0B0C0F
+- Surface: #14161B
+- Raised surface: #1C1F26
+- Foreground: #F7F7F5
+- Secondary text: #9296A1
+- Primary accent: #D7B879
+- Border: #292C33
+- Success: #43B581
+- Error: #E46F75
+
+Use CSS variables and shared design tokens.
+
+## Design principles
+
+1. Image-first design.
+2. Premium typography.
+3. Strong visual hierarchy.
+4. Spacious layouts.
+5. Smooth but restrained animations.
+6. High-quality image presentation.
+7. Elegant dark surfaces.
+8. Subtle gradients.
+9. Consistent border radii.
+10. Accessible contrast.
+11. Responsive layouts.
+12. Consistent icons.
+13. Thoughtful empty states.
+14. Excellent mobile navigation.
+
+Avoid:
+
+- Generic AI-generated dashboard designs.
+- Excessive gold gradients.
+- Overcrowded interfaces.
+- Excessive glassmorphism.
+- Too many borders.
+- Random colors.
+- Inconsistent button styles.
+- Unnecessary animation.
+- Oversized headings everywhere.
+- Fake statistics and fake social activity.
+
+Create a proper design system before building all application screens.
+
+## Typography
+
+Use a modern font system such as Inter, Geist or another suitable licensed font.
+
+Use consistent typography tokens for:
+
+- Display headings.
+- Page headings.
+- Section headings.
+- Body text.
+- Small labels.
+- Buttons.
+- Metadata.
+
+## Responsive requirements
+
+Support:
+
+- Small Android phones.
+- Large Android phones.
+- Tablets.
+- Small laptops.
+- Standard desktops.
+- Large desktop displays.
+
+Design mobile-first, then expand for desktop.
+
+---
+
+# PART 5 — COMPLETE FRONTEND SCREEN SPECIFICATION
+
+Do not build only a homepage.
+
+Implement the complete user-facing application.
+
+Every page must have real navigation, appropriate state, loading states, error states and responsive behavior.
+
+## 5.1 Public landing page
+
+Route: `/`
+
+Sections:
+
+1. Premium navigation.
+2. WALLORA logo and brand identity.
+3. Hero section.
+4. Main AI creation input.
+5. Featured artwork.
+6. Explore categories.
+7. AI Studio introduction.
+8. Creative tools showcase.
+9. Trending creators.
+10. Featured collections.
+11. Marketplace preview.
+12. How WALLORA works.
+13. Free and premium plans.
+14. Testimonials only when real testimonials exist.
+15. FAQ.
+16. Footer.
+
+Hero message:
+
+"Your imagination deserves a place to live."
+
+Supporting message:
+
+"Discover inspiring visuals, talk to AI, create original artwork and build your creative world."
+
+Primary actions:
+
+- Start creating.
+- Explore artwork.
+
+Landing page requirements:
+
+- High-quality visual presentation.
+- Responsive navigation.
+- Functional CTA buttons.
+- Proper SEO metadata.
+- Open Graph metadata.
+- Fast image loading.
+- PWA installation support.
+
+## 5.2 Authentication
+
+Routes:
+
+- `/login`
+- `/register`
+- `/forgot-password`
+- `/reset-password`
+- `/verify-email`
+
+Login screen:
+
+- WALLORA branding.
+- Email.
+- Password.
+- Show/hide password.
+- Remember session where appropriate.
+- Forgot password.
+- Sign in.
+- Registration link.
+- OAuth options only when configured.
+- Loading and validation states.
+- Authentication errors.
+
+Registration:
+
+- Display name.
+- Username.
+- Email.
+- Password.
+- Password confirmation.
+- Terms acceptance.
+- Privacy acceptance.
+- Validation.
+- Email verification.
+
+Do not create insecure custom authentication.
+
+Use Better Auth and its documented database schema and supported features.
+
+## 5.3 Onboarding
+
+Route: `/onboarding`
+
+After registration, introduce users to WALLORA.
+
+Collect:
+
+- Username.
+- Display name.
+- Profile image, optional.
+- Creative interests.
+- Favourite visual categories.
+- Preferred image styles.
+- Device type.
+- Optional notification preferences.
+
+Possible interests:
+
+- Nature.
+- Technology.
+- Cars.
+- Anime-inspired original artwork.
+- Gaming.
+- Architecture.
+- Minimalism.
+- Luxury.
+- Abstract art.
+- Photography.
+- Fashion.
+- Interior design.
+- Digital illustration.
+
+Allow users to skip optional steps.
+
+Save onboarding preferences in the database.
+
+Use the preferences for recommendations.
+
+## 5.4 Main application dashboard
+
+Route: `/dashboard`
+
+This is the central authenticated application.
+
+Desktop layout:
+
+- Left navigation sidebar.
+- Main content area.
+- Optional right contextual panel.
+- Header with search, credits and notifications.
+- User profile menu.
+
+Mobile layout:
+
+- Compact header.
+- Bottom navigation.
+- Scrollable content.
+- Floating AI action where appropriate.
+
+Dashboard sections:
+
+1. Personalized welcome.
+2. Main AI prompt box.
+3. Continue recent projects.
+4. Recommended artwork.
+5. Trending visuals.
+6. New creator uploads.
+7. Popular categories.
+8. Daily creative challenge.
+9. Recommended creators.
+10. Recently saved content.
+
+Do not show fake user-specific information.
+
+## 5.5 Discover page
+
+Route: `/discover`
+
+Features:
+
+- Visual masonry grid.
+- Search.
+- Category filters.
+- Trending.
+- Latest.
+- Featured.
+- Recommended.
+- Creator filter.
+- Orientation filter.
+- Color filter where available.
+- Free and premium filter.
+- Sort options.
+
+Cards must include:
+
+- Image.
+- Title.
+- Creator.
+- Like action.
+- Save action.
+- Content type.
+- Relevant metadata.
+
+Use pagination or infinite scrolling.
+
+Use responsive image variants.
+
+Do not load original 4K/8K images in the discovery grid.
+
+## 5.6 Wallpaper detail page
+
+Route: `/wallpapers/[id]`
+
+Features:
+
+- Large preview.
+- Creator information.
+- Description.
+- Resolution.
+- Dimensions.
+- File format.
+- File size.
+- License.
+- Like.
+- Save.
+- Download.
+- Share.
+- Report.
+- Related images.
+- Comments.
+- Creator profile link.
+
+Download behavior:
+
+- Verify permissions.
+- Verify license and purchase requirements.
+- Generate authorized download URL.
+- Record download event.
+- Update relevant analytics safely.
+
+## 5.7 WALLORA AI Chat
+
+Route: `/ai`
+
+This is a flagship feature.
+
+Create a premium conversational interface.
+
+Layout:
+
+Desktop:
+- Conversation history sidebar.
+- Main conversation area.
+- AI mode selector.
+- Input composer.
+- Optional right-side creative context panel.
+
+Mobile:
+- Conversation header.
+- Chat messages.
+- Composer at the bottom.
+- Attachment button.
+- Voice input button where supported.
+- Tool and mode selection.
+
+Chat features:
+
+- Create new conversation.
+- Rename conversation.
+- Delete conversation.
+- Search history.
+- Continue existing conversation.
+- Send text.
+- Upload images.
+- Voice input.
+- Streaming responses where supported.
+- Retry failed messages.
+- Stop generation.
+- Regenerate response.
+- Copy response.
+- Save response.
+- Turn an idea into a project.
+- Attach generated images to conversations.
+- Show generation progress.
+
+Conversation records must belong to the authenticated user.
+
+Never expose another user's conversations.
+
+### AI modes
+
+Implement configurable modes:
+
+1. Creative Assistant.
+2. Wallpaper Expert.
+3. Graphic Designer.
+4. Photo Editor.
+5. Brand Consultant.
+6. Interior Designer.
+7. Fashion Assistant.
+8. Story Creator.
+9. Visual Inspiration Assistant.
+
+Modes should configure tools, system instructions, model preferences and output schemas.
+
+Do not create nine unrelated AI systems.
+
+Use a shared conversation engine with configurable capabilities.
+
+### AI tool calling
+
+The assistant should be able to request supported application actions:
+
+- Search wallpaper library.
+- Recommend artwork.
+- Generate image.
+- Analyze uploaded image.
+- Enhance prompt.
+- Create design concept.
+- Create project.
+- Save generated asset.
+- Retrieve user collections.
+- Suggest color palette.
+- Search creators.
+
+Tool execution must happen on the server.
+
+Validate all tool arguments using Zod.
+
+Check user authorization and quotas before executing tools.
+
+Do not allow AI output to bypass permissions.
+
+The AI must distinguish between:
+
+- A suggestion.
+- A requested action.
+- An accepted action.
+- A successfully completed action.
+
+Never tell users an image was generated unless the backend confirms success.
+
+## 5.8 AI Studio
+
+Route: `/studio`
+
+Create a professional creative workspace.
+
+Main tools:
+
+- Text-to-image.
+- Image-to-image when supported.
+- Prompt enhancement.
+- Style presets.
+- Aspect ratio.
+- Resolution options.
+- Number of outputs.
+- Negative prompt where supported.
+- Seed where supported.
+- Generation history.
+- Variations.
+- Saved outputs.
+- Download.
+- Send to project.
+
+Style presets:
+
+- Cinematic.
+- Minimalist.
+- Luxury.
+- Cyberpunk.
+- Nature.
+- Futuristic.
+- Abstract.
+- Architecture.
+- Photography.
+- Digital illustration.
+- Anime-inspired original art.
+
+Generation states:
+
+- Queued.
+- Processing.
+- Completed.
+- Failed.
+- Cancelled.
+- Refunded or reconciled where applicable.
+
+Show estimated credit usage before generation.
+
+Do not invent resolution capabilities.
+
+Only expose controls that the selected model supports.
+
+## 5.9 Other creative studios
+
+Routes:
+
+- `/studio/design`
+- `/studio/photo`
+- `/studio/brand`
+- `/studio/interior`
+- `/studio/fashion`
+- `/studio/story`
+- `/studio/music-visuals`
+
+### Design Studio
+
+Create:
+
+- Posters.
+- Flyers.
+- Event invitations.
+- Social media artwork.
+- Business promotions.
+- Digital banners.
+- Cover art.
+
+### Photo Studio
+
+Create:
+
+- Image enhancement.
+- Background removal.
+- Image resizing.
+- Supported image editing.
+- Image restoration.
+- Color correction.
+- Cropping.
+
+### Brand Studio
+
+Create:
+
+- Brand concepts.
+- Logo concepts.
+- Brand colors.
+- Typography suggestions.
+- Brand moodboards.
+- Business card designs.
+- Product mockup concepts.
+
+### Interior Studio
+
+Create:
+
+- Bedroom concepts.
+- Living room concepts.
+- Gaming setups.
+- Office concepts.
+- Color palettes.
+- Furniture inspiration.
+
+### Fashion Studio
+
+Create:
+
+- Outfit inspiration.
+- Fashion moodboards.
+- Style concepts.
+- Color combinations.
+- Original fashion illustrations.
+
+### Story Studio
+
+Create:
+
+- Original characters.
+- Storyboards.
+- Scene concepts.
+- Comic concepts.
+- Visual storytelling.
+
+### Music Visual Studio
+
+Create:
+
+- Album covers.
+- Mixtape covers.
+- Music posters.
+- Artist promotional graphics.
+- Music visual concepts.
+
+Important:
+
+Do not promise features unsupported by the selected AI provider.
+
+A studio may launch initially with concept generation and compatible tools, then receive more editing capabilities later.
+
+## 5.10 Creative Projects
+
+Route: `/projects`
+
+This is the user's creative workspace.
+
+Features:
+
+- Create project.
+- Rename project.
+- Delete project.
+- Project cover.
+- Project description.
+- Add AI conversations.
+- Add images.
+- Add design concepts.
+- Add notes.
+- Add prompt versions.
+- Duplicate project.
+- Export project where supported.
+- Private and public project visibility.
+
+Project detail:
+
+`/projects/[id]`
+
+Each project must maintain ownership and access control.
+
+## 5.11 My Space
+
+Route: `/my-space`
+
+Personal library:
+
+- Saved wallpapers.
+- Favourites.
+- Downloads.
+- Generated images.
+- Collections.
+- Recent activity.
+- Personal visual preferences.
+- Offline saved content.
+
+## 5.12 Collections
+
+Routes:
+
+- `/collections`
+- `/collections/[id]`
+
+Features:
+
+- Create collection.
+- Add and remove items.
+- Reorder items.
+- Public or private.
+- Collection cover.
+- Share collection.
+- Follow public collections where appropriate.
+
+## 5.13 Community
+
+Route: `/community`
+
+Features:
+
+- Creator feed.
+- Follow creators.
+- Like posts.
+- Comment.
+- Share.
+- Save.
+- Report.
+- Creative challenges.
+- Community guidelines.
+- Moderation.
+
+Routes:
+
+- `/community`
+- `/community/challenges`
+- `/community/challenges/[id]`
+- `/creators/[username]`
+
+Avoid building private messaging until the core community features are stable.
+
+## 5.14 Marketplace
+
+Routes:
+
+- `/marketplace`
+- `/marketplace/[productId]`
+- `/creator/dashboard`
+- `/creator/products`
+- `/creator/earnings`
+
+Features:
+
+- Digital wallpaper packs.
+- Premium artwork.
+- Creator storefronts.
+- Product details.
+- License information.
+- Purchase flow.
+- Download entitlements.
+- Reviews where supported.
+- Sales statistics.
+- Creator earnings ledger.
+
+Never mark a purchase successful based only on frontend state.
+
+Use payment provider webhooks and idempotency.
+
+## 5.15 Notifications
+
+Route: `/notifications`
+
+Types:
+
+- AI generation complete.
+- New follower.
+- New comment.
+- New like.
+- Purchase.
+- Creator payout status.
+- Moderation decision.
+- Security alert.
+
+Allow notification preferences.
+
+## 5.16 Profile
+
+Route: `/profile/[username]`
+
+Features:
+
+- Avatar.
+- Cover image.
+- Username.
+- Display name.
+- Bio.
+- Social links.
+- Published creations.
+- Collections.
+- Followers.
+- Following.
+- Verified status.
+- Creator status.
+
+## 5.17 Settings
+
+Route: `/settings`
+
+Sections:
+
+- Account.
+- Profile.
+- Security.
+- Password.
+- Sessions.
+- Notifications.
+- Appearance.
+- Privacy.
+- AI preferences.
+- Credits and usage.
+- Subscription.
+- Connected accounts.
+- Data export.
+- Account deletion.
+
+Account deletion must have a proper confirmation and backend process.
+
+---
+
+# PART 6 — ADMIN DASHBOARD
+
+Route: `/admin`
+
+Admin must be a protected application area.
+
+Only server-authorized admin roles can access it.
+
+Create these screens:
+
+1. Overview.
+2. User management.
+3. Creator management.
+4. Wallpaper management.
+5. Upload moderation.
+6. AI generations.
+7. AI providers.
+8. AI models.
+9. AI usage and costs.
+10. Plans and subscriptions.
+11. Payments.
+12. Creator earnings.
+13. Reports.
+14. Community moderation.
+15. Categories and tags.
+16. Notifications.
+17. Analytics.
+18. Feature flags.
+19. Application settings.
+20. Audit logs.
+
+Admin overview metrics should come from actual database queries.
+
+Do not display fabricated statistics.
+
+### Admin permissions
+
+- Moderator: content and community moderation.
+- Admin: operational management.
+- Super admin: sensitive platform configuration and role management.
+
+Never let users grant themselves elevated roles.
+
+Admin actions must be recorded in audit logs.
+
+### AI management
+
+Admin should be able to:
+
+- Enable and disable providers.
+- Enable and disable models.
+- Configure model capabilities.
+- Set model priorities.
+- Set generation limits.
+- Configure quotas.
+- View failed jobs.
+- Retry eligible jobs.
+- Monitor token/image usage where available.
+- Review provider errors.
+- Configure user entitlements.
+
+Store provider credentials securely in server environment variables or a suitable secret manager. Never return API keys to the browser.
+
+---
+
+# PART 7 — NVIDIA AI INTEGRATION
+
+NVIDIA NIM is the primary AI provider for eligible hosted model endpoints.
+
+Do not assume every NVIDIA model supports every capability.
+
+At the beginning of AI development:
+
+1. Inspect NVIDIA's current model catalogue.
+2. Verify hosted endpoint availability.
+3. Verify request and response formats.
+4. Verify free-tier limitations.
+5. Verify image generation capabilities.
+6. Verify supported image sizes and formats.
+7. Verify commercial usage and licensing terms.
+8. Document the verified models.
+
+Official sources:
+
+- https://build.nvidia.com/
+- https://docs.api.nvidia.com/nim/
+- https://developer.nvidia.com/nim
+
+## AI provider abstraction
+
+Implement interfaces similar to:
+
+```ts
+interface AIProvider {
+  id: string;
+  name: string;
+
+  getCapabilities(): Promise<ModelCapability[]>;
+
+  generateText(
+    request: TextGenerationRequest
+  ): Promise<TextGenerationResult>;
+
+  analyzeImage?(
+    request: ImageAnalysisRequest
+  ): Promise<ImageAnalysisResult>;
+
+  generateImage?(
+    request: ImageGenerationRequest
+  ): Promise<ImageGenerationResult>;
+
+  getJobStatus?(
+    jobId: string
+  ): Promise<GenerationJobStatus>;
+}
+```
+
+Use capability-based routing.
+
+Do not assume an OpenAI-compatible endpoint supports image generation merely because it supports chat completions.
+
+## AI capabilities
+
+Separate these operations:
+
+- Text conversation.
+- Prompt enhancement.
+- Image understanding.
+- Text-to-image.
+- Image-to-image.
+- Embeddings.
+- Content moderation.
+- Image upscaling.
+
+A provider can support some capabilities without supporting all of them.
+
+## Free usage management
+
+Create a configurable credit system.
+
+Possible example:
+
+- Free users: limited daily AI operations.
+- Plus users: larger monthly allowance.
+- Pro creators: higher configurable limits.
+
+Do not hardcode prices or limits.
+
+Use an admin-configurable entitlement system.
+
+Reserve credits atomically before executing expensive work.
+
+Refund or reconcile credits for failed operations.
+
+Prevent duplicate charging during retries.
+
+## AI chat memory
+
+Implement:
+
+- Conversation history.
+- Conversation summaries when appropriate.
+- User-configurable creative preferences.
+- Project-specific context.
+- User-controlled deletion.
+
+Do not send unnecessary personal data to AI providers.
+
+---
+
+# PART 8 — BACKEND ARCHITECTURE
+
+Use modular service architecture.
+
+Suggested modules:
+
+```text
+src/
+├── modules/
+│   ├── auth/
+│   ├── users/
+│   ├── profiles/
+│   ├── wallpapers/
+│   ├── categories/
+│   ├── search/
+│   ├── uploads/
+│   ├── downloads/
+│   ├── favorites/
+│   ├── collections/
+│   ├── community/
+│   ├── creators/
+│   ├── marketplace/
+│   ├── payments/
+│   ├── subscriptions/
+│   ├── ai/
+│   ├── conversations/
+│   ├── projects/
+│   ├── notifications/
+│   ├── moderation/
+│   ├── admin/
+│   └── analytics/
+├── lib/
+├── middleware/
+├── db/
+├── services/
+└── app/
+```
+
+Keep domain logic separate from route handlers.
+
+Do not put all application logic in a single API file.
+
+## API conventions
+
+Use:
+
+`/api/v1`
+
+Examples:
+
+```text
+POST   /api/v1/auth/*
+GET    /api/v1/profiles/me
+PATCH  /api/v1/profiles/me
+
+GET    /api/v1/wallpapers
+GET    /api/v1/wallpapers/:id
+POST   /api/v1/uploads/presign
+POST   /api/v1/uploads/complete
+
+GET    /api/v1/search
+
+GET    /api/v1/favorites
+POST   /api/v1/favorites
+DELETE /api/v1/favorites/:id
+
+GET    /api/v1/collections
+POST   /api/v1/collections
+PATCH  /api/v1/collections/:id
+DELETE /api/v1/collections/:id
+
+POST   /api/v1/wallpapers/:id/download
+POST   /api/v1/wallpapers/:id/like
+DELETE /api/v1/wallpapers/:id/like
+
+GET    /api/v1/creators/:username
+
+POST   /api/v1/ai/generations
+GET    /api/v1/ai/generations/:id
+
+POST   /api/v1/ai/conversations
+GET    /api/v1/ai/conversations
+GET    /api/v1/ai/conversations/:id
+POST   /api/v1/ai/conversations/:id/messages
+
+GET    /api/v1/projects
+POST   /api/v1/projects
+
+GET    /api/v1/notifications
+POST   /api/v1/reports
+
+GET    /api/v1/subscriptions/me
+
+GET    /api/v1/admin/*
+```
+
+API requirements:
+
+- Zod validation.
+- Authentication.
+- Authorization.
+- Ownership checks.
+- Rate limiting.
+- Pagination.
+- Request IDs.
+- Consistent error responses.
+- Idempotency for payment and generation operations.
+- Structured logging.
+- Safe server-side error messages.
+
+---
+
+# PART 9 — DATABASE ARCHITECTURE
+
+Use Neon PostgreSQL with Drizzle ORM.
+
+Before creating tables, inspect the Better Auth schema requirements for the selected installed version.
+
+Use matching user ID types.
+
+Do not blindly assume all IDs are UUIDs.
+
+## Main database entities
+
+Authentication:
+
+- user
+- session
+- account
+- verification
+
+Profiles:
+
+- profiles
+- user_roles
+- user_settings
+- user_devices
+
+Content:
+
+- categories
+- tags
+- wallpapers
+- wallpaper_assets
+- wallpaper_tags
+- wallpaper_categories
+
+Interactions:
+
+- wallpaper_likes
+- wallpaper_downloads
+- favorites
+- collections
+- collection_items
+- follows
+- comments
+- reports
+
+AI:
+
+- ai_providers
+- ai_models
+- ai_conversations
+- ai_messages
+- ai_generations
+- ai_generation_jobs
+- usage_ledger
+
+Creative workspace:
+
+- creative_projects
+- project_assets
+- project_conversations
+- project_notes
+
+Marketplace:
+
+- creator_profiles
+- products
+- product_assets
+- purchases
+- subscriptions
+- payments
+- creator_earnings
+- creator_payouts
+
+Notifications:
+
+- notifications
+- notification_preferences
+
+Administration:
+
+- moderation_queue
+- audit_logs
+- app_settings
+- feature_flags
+
+## Database requirements
+
+- Proper foreign keys.
+- Unique constraints.
+- Check constraints.
+- Useful indexes.
+- Timestamps.
+- Soft deletion where appropriate.
+- Referential integrity.
+- Migration history.
+- Transaction-safe operations.
+- Pagination-friendly indexes.
+
+Use object storage keys in database records, not binary image files.
+
+Create migrations and test them.
+
+Neon is PostgreSQL, not Supabase.
+
+Do not copy Supabase Auth or assume Supabase automatic RLS behavior.
+
+Use Better Auth for sessions and explicit server-side authorization.
+
+If using PostgreSQL RLS, design the database role and session context carefully.
+
+---
+
+# PART 10 — CLOUDFLARE R2 MEDIA SYSTEM
+
+Create a secure media architecture.
+
+Logical object prefixes:
+
+```text
+wallora-originals/
+wallora-public-assets/
+wallora-user-uploads/
+wallora-generated/
+wallora-avatars/
+wallora-private/
+wallora-thumbnails/
+```
+
+Do not store files directly in PostgreSQL.
+
+## Upload workflow
+
+1. Authenticate user.
+2. Validate file size and allowed file type.
+3. Validate actual file signature.
+4. Create pending upload record.
+5. Generate short-lived signed upload URL.
+6. Upload directly to R2.
+7. Verify uploaded object.
+8. Send job to worker.
+9. Process image using Sharp.
+10. Extract image dimensions.
+11. Remove sensitive EXIF metadata where appropriate.
+12. Generate image variants.
+13. Run moderation.
+14. Save asset metadata.
+15. Publish only after approval.
+
+## Image variants
+
+Where supported by original dimensions:
+
+- Thumbnail.
+- Grid preview.
+- Detail preview.
+- Mobile.
+- Desktop.
+- Original.
+
+Never claim an image is genuine 4K or 8K if its source dimensions do not support that claim.
+
+Use responsive image delivery.
+
+Use caching and versioned asset keys.
+
+Private images must not be accessible through predictable public URLs.
+
+---
+
+# PART 11 — PROGRESSIVE WEB APP
+
+The web application must work as a genuine PWA.
+
+Implement:
+
+1. `manifest.webmanifest`.
+2. Service worker.
+3. App icons.
+4. Installability.
+5. Standalone display.
+6. Theme color.
+7. Offline fallback page.
+8. Offline application shell.
+9. Cache strategy.
+10. Update notification.
+11. Network status handling.
+12. Safe image caching.
+13. Responsive touch controls.
+14. Install guidance.
+
+The service worker should use sensible caching:
+
+- Cache static application assets.
+- Cache selected public image previews.
+- Avoid caching private API responses.
+- Avoid caching authentication responses.
+- Never expose private user files through shared caches.
+
+Support offline viewing of content that users have explicitly saved and that is permitted for offline storage.
+
+Test PWA installation on supported browsers.
+
+Do not claim PWA support is complete merely because a manifest exists.
+
+---
+
+# PART 12 — ANDROID APPLICATION
+
+Use Expo and React Native.
+
+The mobile application should provide:
+
+- Splash screen.
+- Onboarding.
+- Login and registration.
+- Discover feed.
+- Wallpaper detail.
+- AI chat.
+- AI Studio.
+- Creative projects.
+- Collections.
+- Profile.
+- Marketplace.
+- Downloads.
+- Offline library.
+- Settings.
+- Push notifications.
+- Deep links.
+- Image picker.
+- Share sheet.
+- Native file storage.
+
+Use secure token storage.
+
+Use native Android capabilities where available.
+
+Implement actual wallpaper application through supported Android APIs where possible, with a clear manual fallback.
+
+Test on a physical Android device.
+
+Do not use Android Studio as a required development workflow if Expo tooling can handle the task.
+
+---
+
+# PART 13 — PAYMENTS AND MONETIZATION
+
+Create a provider-independent payment architecture.
+
+Possible integrations should be researched before implementation.
+
+For the Kenyan market, investigate supported M-Pesa and Paystack payment workflows, including their current merchant availability and requirements.
+
+Do not assume an integration is available until verified.
+
+Plans:
+
+- Free.
+- WALLORA Plus.
+- WALLORA Creator Pro.
+
+Possible revenue:
+
+- Premium subscriptions.
+- AI credits.
+- Premium wallpaper packs.
+- Marketplace commissions.
+- Creator memberships.
+- Optional advertisements.
+
+Requirements:
+
+- Server-side entitlements.
+- Verified webhooks.
+- Idempotency.
+- Transaction history.
+- Refund handling.
+- Subscription renewal.
+- Grace periods.
+- Creator earnings ledger.
+- Payout verification.
+
+Do not let frontend state determine whether a user has paid.
+
+Do not create artificial earnings.
+
+---
+
+# PART 14 — SEARCH AND DISCOVERY
+
+Create a scalable search system.
+
+Search should cover:
+
+- Wallpapers.
+- Creators.
+- Categories.
+- Collections.
+- Marketplace products.
+- Creative projects belonging to the user.
+
+Start with PostgreSQL full-text search and indexed filters.
+
+Use pg_trgm or another appropriate PostgreSQL extension for typo-tolerant search if supported by the database environment.
+
+Evaluate vector search separately if AI embeddings become useful.
+
+Search results should support:
+
+- Relevance.
+- Newest.
+- Trending.
+- Most downloaded.
+- Most liked.
+- Category.
+- Orientation.
+- Color.
+- Creator.
+
+Do not create a complex external search infrastructure before there is a genuine need.
+
+---
+
+# PART 15 — SECURITY, PRIVACY AND CONTENT MODERATION
+
+Implement:
+
+- Secure authentication.
+- Password and session protections.
+- Server-side role checks.
+- Authorization on every protected resource.
+- Input validation.
+- SQL injection prevention.
+- XSS protection.
+- CSRF protections where applicable.
+- Rate limits.
+- Upload validation.
+- Signed media access.
+- Webhook verification.
+- Audit logs.
+- Secure secret handling.
+- Account deletion.
+- Data export.
+- Backup and recovery documentation.
+
+Roles:
+
+- guest
+- user
+- creator
+- moderator
+- admin
+- super_admin
+
+Do not let the client grant roles.
+
+## Content moderation
+
+Every public upload must have a moderation status.
+
+Implement:
+
+- Pending.
+- Approved.
+- Rejected.
+- Flagged.
+- Removed.
+
+Allow reporting of:
+
+- Copyright violations.
+- Inappropriate content.
+- Spam.
+- Harassment.
+- Impersonation.
+- Other policy violations.
+
+Create admin review tools.
+
+Keep a record of moderation decisions.
+
+Provide a copyright complaint and appeal workflow.
+
+AI moderation should be treated as an aid, not infallible authority.
+
+---
+
+# PART 16 — PERFORMANCE AND SCALABILITY
+
+Requirements:
+
+- Responsive image loading.
+- Lazy loading.
+- Pagination.
+- Caching.
+- Database indexes.
+- Query optimization.
+- Background image processing.
+- Job retry policies.
+- Generation concurrency limits.
+- CDN delivery.
+- Efficient React rendering.
+- Code splitting.
+- Error boundaries.
+- Performance monitoring.
+
+Do not load full-resolution originals in discovery cards.
+
+Do not run heavy image transformations inside ordinary user-facing requests.
+
+Use background jobs for long-running operations.
+
+---
+
+# PART 17 — TESTING AND QUALITY ASSURANCE
+
+Use:
+
+- Vitest.
+- React Testing Library.
+- Playwright.
+- API integration tests.
+- Database integration tests.
+- Maestro for mobile E2E testing.
+
+Test:
+
+Authentication:
+- Registration.
+- Login.
+- Logout.
+- Session expiration.
+- Password reset.
+- Unauthorized access.
+
+Library:
+- Upload.
+- Validation.
+- Moderation.
+- Search.
+- Download permissions.
+
+AI:
+- Valid request.
+- Invalid request.
+- Quota exhaustion.
+- Provider timeout.
+- Failed generation.
+- Retry.
+- Credit reconciliation.
+- Duplicate requests.
+
+Community:
+- Follow.
+- Like.
+- Comment.
+- Report.
+- Moderation.
+
+Marketplace:
+- Purchase.
+- Failed payment.
+- Duplicate webhook.
+- Refund.
+- Entitlement verification.
+
+PWA:
+- Installation.
+- Offline fallback.
+- Cache correctness.
+- Update behavior.
+
+Mobile:
+- Navigation.
+- Login.
+- Image picker.
+- Downloads.
+- Sharing.
+- Offline library.
+
+Never mark a phase complete without reporting test results.
+
+---
+
+# PART 18 — ENVIRONMENT VARIABLES
+
+Create `.env.example` with placeholders only.
+
+Initial variables may include:
+
+```env
+NODE_ENV=development
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+DATABASE_URL=
+
+BETTER_AUTH_SECRET=
+BETTER_AUTH_URL=http://localhost:3000
+
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+R2_PUBLIC_BASE_URL=
+
+NVIDIA_API_KEY=
+
+WORKER_DATABASE_URL=
+WORKER_SECRET=
+
+EMAIL_PROVIDER_API_KEY=
+
+PAYMENT_PROVIDER=
+PAYMENT_SECRET_KEY=
+PAYMENT_WEBHOOK_SECRET=
+```
+
+Add additional variables only when the actual integration requires them.
+
+Do not put server secrets in `NEXT_PUBLIC_` variables.
+
+For mobile, use the correct public API base URL and secure session storage. Never embed NVIDIA, Neon or R2 secret keys inside the mobile app.
+
+Document local and production configuration separately.
+
+---
+
+# PART 19 — COMPLETE REPOSITORY STRUCTURE
+
+Use pnpm workspaces.
+
+Recommended structure:
+
+```text
+wallora/
+│
+├── apps/
+│   ├── web/
+│   │   ├── app/
+│   │   │   ├── (marketing)/
+│   │   │   ├── (auth)/
+│   │   │   ├── (onboarding)/
+│   │   │   ├── (dashboard)/
+│   │   │   ├── admin/
+│   │   │   └── api/
+│   │   ├── components/
+│   │   ├── features/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── public/
+│   │   └── styles/
+│   │
+│   ├── mobile/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── features/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   └── assets/
+│   │
+│   └── worker/
+│       ├── jobs/
+│       ├── processors/
+│       ├── providers/
+│       └── lib/
+│
+├── packages/
+│   ├── database/
+│   ├── auth/
+│   ├── shared/
+│   ├── validation/
+│   ├── api-client/
+│   ├── design-tokens/
+│   └── domain/
+│
+├── docs/
+│   ├── PRD.md
+│   ├── ARCHITECTURE.md
+│   ├── DATABASE.md
+│   ├── API.md
+│   ├── SECURITY.md
+│   ├── AI_SYSTEM.md
+│   ├── PWA.md
+│   ├── MOBILE.md
+│   └── DEVELOPMENT_PHASES.md
+│
+├── .env.example
+├── package.json
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+└── README.md
+```
+
+Adjust this structure when necessary, but maintain clear boundaries.
+
+---
+
+# PART 20 — PHASED DEVELOPMENT PLAN
+
+This is the most important instruction.
+
+DO NOT BUILD THE ENTIRE APPLICATION IN ONE RESPONSE.
+
+Build and test one phase at a time.
+
+After completing a phase, stop and wait for approval.
+
+## PHASE 0 — REPOSITORY INSPECTION AND FOUNDATION
+
+Tasks:
+
+1. Inspect the existing repository.
+2. Inspect installed Node.js and pnpm versions.
+3. Inspect Git status.
+4. Identify existing application code.
+5. Plan the monorepo.
+6. Create pnpm workspace.
+7. Create Next.js application.
+8. Create Expo application.
+9. Create worker package.
+10. Configure TypeScript strict mode.
+11. Configure linting and formatting.
+12. Configure environment examples.
+13. Create documentation structure.
+14. Configure basic CI.
+15. Add basic health checks.
+
+Acceptance:
+
+- Web starts locally.
+- Mobile starts locally.
+- Worker starts locally.
+- Shared packages compile.
+- Type checking passes.
+- Lint passes.
+- README explains setup.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 1 — BRANDING AND COMPLETE DESIGN SYSTEM
+
+Create the WALLORA visual identity.
+
+Design and implement:
+
+- Logo treatment.
+- Typography.
+- Colors.
+- Spacing.
+- Buttons.
+- Inputs.
+- Cards.
+- Dialogs.
+- Dropdowns.
+- Navigation.
+- Image cards.
+- Loading skeletons.
+- Empty states.
+- Error states.
+- Toast notifications.
+- Mobile navigation.
+- Desktop navigation.
+
+Design the landing page.
+
+Design login, registration and onboarding.
+
+Create the authenticated application shell.
+
+Use genuine design assets or clearly marked development placeholders.
+
+Do not build fake backend functionality.
+
+Acceptance:
+
+- Responsive design.
+- Consistent components.
+- Functional navigation.
+- Accessible controls.
+- No major layout overflow.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 2 — AUTHENTICATION AND DATABASE
+
+Tasks:
+
+1. Configure Neon.
+2. Configure Drizzle.
+3. Configure migrations.
+4. Integrate Better Auth.
+5. Create profiles.
+6. Create user roles.
+7. Create settings.
+8. Implement protected routes.
+9. Implement authorization.
+10. Add integration tests.
+
+Acceptance:
+
+- Registration works.
+- Login works.
+- Logout works.
+- Sessions work.
+- User profiles persist.
+- Unauthorized requests are rejected.
+- Admin access is server-controlled.
+- Migrations execute successfully.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 3 — DISCOVERY AND WALLPAPER LIBRARY
+
+Tasks:
+
+- Categories.
+- Tags.
+- Wallpaper records.
+- Asset metadata.
+- Search.
+- Discovery feed.
+- Wallpaper detail.
+- Likes.
+- Favorites.
+- Downloads.
+- Pagination.
+- Responsive image cards.
+
+Acceptance:
+
+- Real database-backed library.
+- Working search.
+- Correct authorization.
+- Correct image metadata.
+- No fake production records.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 4 — CLOUDFLARE MEDIA SYSTEM
+
+Tasks:
+
+- R2 configuration.
+- Signed uploads.
+- Upload records.
+- File validation.
+- Sharp processing.
+- Worker architecture.
+- Thumbnail generation.
+- Image metadata extraction.
+- Moderation status.
+- Authorized downloads.
+
+Acceptance:
+
+- Real upload.
+- Real storage.
+- Real image processing.
+- Secure download.
+- Proper error handling.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 5 — WALLORA AI CONVERSATION ENGINE
+
+Tasks:
+
+- NVIDIA provider adapter.
+- Model capability catalogue.
+- AI conversation database.
+- Message history.
+- Streaming where supported.
+- AI modes.
+- Prompt enhancement.
+- Image analysis where supported.
+- Tool calling.
+- Rate limiting.
+- Quota system.
+- Error handling.
+
+Acceptance:
+
+- Real NVIDIA endpoint configured.
+- Real AI responses.
+- Conversations persist.
+- Tool calls are validated.
+- No exposed provider secrets.
+- Usage is recorded.
+- Unsupported model capabilities are not advertised.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 6 — AI STUDIO AND GENERATION
+
+Tasks:
+
+- Model selector.
+- Image-generation provider adapter.
+- Prompt editor.
+- Style presets.
+- Aspect ratio options.
+- Generation jobs.
+- Background processing.
+- R2 output storage.
+- Progress updates.
+- Variations.
+- Retry handling.
+- Credit reservation and refund.
+
+Acceptance:
+
+- Actual compatible generation endpoint.
+- Real output image.
+- Job status tracking.
+- Correct credit accounting.
+- Secure generated-image storage.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 7 — CREATIVE PROJECTS AND STUDIOS
+
+Implement:
+
+- Projects.
+- Project assets.
+- Project notes.
+- Project conversations.
+- Design Studio.
+- Photo Studio.
+- Brand Studio.
+- Interior Studio.
+- Fashion Studio.
+- Story Studio.
+- Music Visual Studio.
+
+Implement only real, supported operations.
+
+Acceptance:
+
+- Users can save and reopen projects.
+- Assets persist.
+- Project access is secure.
+- Tool capabilities are accurately represented.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 8 — COMMUNITY
+
+Implement:
+
+- Creator profiles.
+- Follows.
+- Likes.
+- Comments.
+- Public collections.
+- Creator feed.
+- Reports.
+- Moderation.
+- Creative challenges.
+
+Acceptance:
+
+- Correct ownership.
+- Abuse prevention.
+- Working moderation.
+- Pagination.
+- Real interactions.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 9 — MARKETPLACE
+
+Implement:
+
+- Products.
+- Creator storefronts.
+- Premium content.
+- Product licenses.
+- Purchases.
+- Entitlements.
+- Payments.
+- Creator earnings.
+- Payout records.
+
+Verify payment provider availability before integration.
+
+Acceptance:
+
+- Verified payment workflow.
+- Idempotent webhooks.
+- Entitlement checks.
+- Creator earnings records.
+- No fake payments.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 10 — PWA
+
+Implement:
+
+- Manifest.
+- Service worker.
+- Offline shell.
+- Installation.
+- Icons.
+- Cache strategies.
+- Update notifications.
+- Offline saved content.
+- Network failure states.
+
+Test installability and actual offline behavior.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 11 — NATIVE ANDROID
+
+Implement:
+
+- Expo Router.
+- Authentication.
+- Discover.
+- AI chat.
+- AI Studio.
+- Projects.
+- Library.
+- Downloads.
+- Offline access.
+- Notifications.
+- Deep links.
+- Sharing.
+- Native wallpaper functionality where supported.
+
+Test on an actual Android device.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 12 — ADMIN DASHBOARD
+
+Implement:
+
+- Overview.
+- Users.
+- Creators.
+- Content.
+- Moderation.
+- AI providers.
+- AI models.
+- Usage.
+- Plans.
+- Payments.
+- Creator earnings.
+- Reports.
+- Settings.
+- Audit logs.
+
+Acceptance:
+
+- Server-controlled roles.
+- Real analytics.
+- Secure administration.
+- Complete audit trail.
+
+STOP AND REQUEST APPROVAL.
+
+## PHASE 13 — FINAL QUALITY, SECURITY AND RELEASE
+
+Tasks:
+
+- Unit testing.
+- Integration testing.
+- E2E testing.
+- Mobile testing.
+- PWA testing.
+- Security checks.
+- Performance optimization.
+- Database backups.
+- Monitoring.
+- Logging.
+- Privacy policy.
+- Terms of service.
+- Copyright policy.
+- Account deletion.
+- Production environment.
+- Domain and HTTPS.
+- Release documentation.
+
+Do not claim production readiness until the critical acceptance checks pass.
+
+STOP AND PRESENT A COMPLETE RELEASE REPORT.
+
+---
+
+# PART 21 — REQUIRED DOCUMENTATION
+
+Maintain these documents throughout development:
+
+`README.md`
+- Project introduction.
+- Prerequisites.
+- Installation.
+- Development commands.
+- Environment setup.
+- Troubleshooting.
+
+`docs/PRD.md`
+- Product requirements.
+- User roles.
+- User journeys.
+- Feature definitions.
+
+`docs/ARCHITECTURE.md`
+- System architecture.
+- Module boundaries.
+- Infrastructure.
+- Data flows.
+
+`docs/DATABASE.md`
+- Tables.
+- Relationships.
+- Indexes.
+- Constraints.
+- Migration instructions.
+
+`docs/API.md`
+- Routes.
+- Request schemas.
+- Response schemas.
+- Error codes.
+- Authorization requirements.
+
+`docs/SECURITY.md`
+- Authentication.
+- Permissions.
+- Secrets.
+- Media access.
+- Threat considerations.
+
+`docs/AI_SYSTEM.md`
+- NVIDIA integration.
+- Provider adapters.
+- Models.
+- Capabilities.
+- Quotas.
+- AI job lifecycle.
+
+`docs/PWA.md`
+- Manifest.
+- Service worker.
+- Caching.
+- Offline support.
+
+`docs/MOBILE.md`
+- Expo configuration.
+- Development.
+- Android testing.
+- Build process.
+
+`docs/DEVELOPMENT_PHASES.md`
+- Phase status.
+- Acceptance criteria.
+- Remaining tasks.
+
+---
+
+# PART 22 — DEFINITION OF DONE
+
+A feature is complete only when:
+
+1. Its frontend exists.
+2. Its backend exists where required.
+3. Database changes are migrated.
+4. Authentication is implemented where required.
+5. Authorization is implemented.
+6. Validation exists.
+7. Loading state exists.
+8. Error state exists.
+9. Empty state exists where relevant.
+10. Tests pass.
+11. Documentation is updated.
+12. No important console errors remain.
+13. No fake functionality is presented as working.
+
+## Required phase completion report
+
+At the end of every phase, provide:
+
+```text
+PHASE:
+STATUS:
+
+FEATURES COMPLETED:
+
+FRONTEND FILES CREATED/UPDATED:
+
+BACKEND FILES CREATED/UPDATED:
+
+DATABASE CHANGES:
+
+PACKAGES INSTALLED:
+
+ENVIRONMENT VARIABLES REQUIRED:
+
+TESTS EXECUTED:
+
+TEST RESULTS:
+
+KNOWN LIMITATIONS:
+
+REMAINING TASKS:
+
+HOW TO RUN LOCALLY:
+
+GIT CHECKPOINT:
+
+NEXT PHASE:
+```
+
+Do not proceed automatically.
+
+---
+
+# PART 23 — FIRST EXECUTION INSTRUCTION
+
+Begin with PHASE 0 only.
+
+Before coding:
+
+1. Inspect the repository.
+2. Understand its current structure.
+3. Check the available development environment.
+4. Identify whether this is a new project or an existing project.
+5. Report your findings.
+6. Present the Phase 0 implementation plan.
+7. Begin Phase 0 only if the repository is ready and the user has authorized it.
+
+If a project already exists, preserve it.
+
+If the environment cannot support a requested package or tool, explain the issue and suggest a compatible solution.
+
+Do not begin Phase 1 until Phase 0 has been tested and approved.
+
+# FINAL PRODUCT STANDARD
+
+WALLORA must feel like a professionally engineered creative technology platform.
+
+It must not be a static template, a simple wallpaper downloader, a generic chatbot or a collection of disconnected pages.
+
+It must have:
+
+- A complete and polished frontend.
+- A functioning backend.
+- A well-designed PostgreSQL database.
+- Secure authentication.
+- Real AI integrations.
+- A functional creative workspace.
+- Real image storage and delivery.
+- A genuine PWA.
+- A native Android application.
+- A working community.
+- A scalable marketplace architecture.
+- A functional admin dashboard.
+- Proper testing and documentation.
+
+**Build WALLORA as one unified creative ecosystem. Start with Phase 0. Work carefully, verify every feature, and wait for approval before each next phase.**

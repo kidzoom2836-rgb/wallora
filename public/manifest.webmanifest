@@ -1,0 +1,21 @@
+{
+  "name": "WALLORA",
+  "short_name": "WALLORA",
+  "description": "AI-powered creative ecosystem. Discover. Chat. Imagine. Create. Share. Earn.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0B0C0F",
+  "theme_color": "#0B0C0F",
+  "categories": ["creative", "graphics", "lifestyle", "productivity"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/wallora-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

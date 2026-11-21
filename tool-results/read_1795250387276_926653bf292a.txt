@@ -1,0 +1,1160 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { useSession } from "next-auth/react";
+     5→import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+     6→import { AnimatePresence, motion } from "framer-motion";
+     7→import {
+     8→  X,
+     9→  Users as UsersIcon,
+    10→  Image as ImageIcon,
+    11→  MessageSquare,
+    12→  Sparkles,
+    13→  MessageCircle,
+    14→  ShoppingBag,
+    15→  ShoppingCart,
+    16→  Mail,
+    17→  Loader2,
+    18→  Shield,
+    19→  CheckCircle2,
+    20→  XCircle,
+    21→  Flag,
+    22→  ChevronLeft,
+    23→  ChevronRight,
+    24→  TrendingUp,
+    25→  CalendarDays,
+    26→  Eye,
+    27→  ThumbsUp,
+    28→  Download,
+    29→  Lock,
+    30→  LayoutDashboard,
+    31→  Clock,
+    32→} from "lucide-react";
+    33→import { toast } from "sonner";
+    34→
+    35→import { Button } from "@/components/ui/button";
+    36→import { Badge } from "@/components/ui/badge";
+    37→import { WalloraLogo } from "@/components/brand/wallora-logo";
+    38→import { useAdminPanel } from "@/stores/admin";
+    39→import { cn } from "@/lib/utils";
+    40→
+    41→// ---------------------------------------------------------------------------
+    42→// Types
+    43→// ---------------------------------------------------------------------------
+    44→
+    45→type Stats = {
+    46→  totalUsers: number;
+    47→  totalWallpapers: number;
+    48→  pendingWallpapers: number;
+    49→  totalConversations: number;
+    50→  totalMessages: number;
+    51→  totalGenerations: number;
+    52→  totalComments: number;
+    53→  totalProducts: number;
+    54→  totalPurchases: number;
+    55→  totalWaitlistEntries: number;
+    56→  todayAiUsage: number;
+    57→  todayNewUsers: number;
+    58→  todayNewWallpapers: number;
+    59→  wallpapersByStatus: {
+    60→    approved: number;
+    61→    pending: number;
+    62→    rejected: number;
+    63→    flagged: number;
+    64→  };
+    65→  topCategories: Array<{
+    66→    id: string;
+    67→    slug: string;
+    68→    name: string;
+    69→    icon: string | null;
+    70→    wallpaperCount: number;
+    71→  }>;
+    72→};
+    73→
+    74→type AdminUser = {
+    75→  id: string;
+    76→  email: string;
+    77→  name: string | null;
+    78→  image: string | null;
+    79→  role: string;
+    80→  status: string;
+    81→  createdAt: string;
+    82→  profile: {
+    83→    username: string;
+    84→    displayName: string | null;
+    85→    verified: boolean;
+    86→    creatorStatus: string;
+    87→    avatarUrl: string | null;
+    88→  } | null;
+    89→  wallpaperCount: number;
+    90→  conversationCount: number;
+    91→};
+    92→
+    93→type AdminWallpaper = {
+    94→  id: string;
+    95→  slug: string;
+    96→  title: string;
+    97→  description: string | null;
+    98→  status: string;
+    99→  license: string;
+   100→  orientation: string;
+   101→  dominantColor: string | null;
+   102→  sourceType: string;
+   103→  isPublic: boolean;
+   104→  viewCount: number;
+   105→  likeCount: number;
+   106→  downloadCount: number;
+   107→  favoriteCount: number;
+   108→  createdAt: string;
+   109→  category: { slug: string; name: string } | null;
+   110→  creator: {
+   111→    id: string;
+   112→    email: string;
+   113→    username: string | null;
+   114→    displayName: string | null;
+   115→    verified: boolean;
+   116→    avatarUrl: string | null;
+   117→  };
+   118→  asset: {
+   119→    variant: string;
+   120→    objectKey: string;
+   121→    width: number;
+   122→    height: number;
+   123→  } | null;
+   124→  tags: Array<{ slug: string; name: string }>;
+   125→};
+   126→
+   127→type TabId = "overview" | "users" | "moderation";
+   128→
+   129→// ---------------------------------------------------------------------------
+   130→// Role helper
+   131→// ---------------------------------------------------------------------------
+   132→
+   133→const ADMIN_ROLES = new Set(["admin", "super_admin"]);
+   134→
+   135→function isAdminRole(role?: string) {
+   136→  return !!role && ADMIN_ROLES.has(role);
+   137→}
+   138→
+   139→// Higher-level moderation role set used for read access on stats/users/wallpapers
+   140→const MOD_ROLES = new Set(["moderator", "admin", "super_admin"]);
+   141→
+   142→// ---------------------------------------------------------------------------
+   143→// Main component
+   144→// ---------------------------------------------------------------------------
+   145→
+   146→export function AdminPanel() {
+   147→  const { open, setOpen } = useAdminPanel();
+   148→  const { data: session, status } = useSession();
+   149→  const [tab, setTab] = React.useState<TabId>("overview");
+   150→
+   151→  // Block rendering for non-admin sessions even if the store says open.
+   152→  const role = session?.user?.role;
+   153→  const canRead = status === "authenticated" && MOD_ROLES.has(role ?? "");
+   154→  const canModerate = status === "authenticated" && isAdminRole(role);
+   155→
+   156→  // Lock body scroll while open.
+   157→  React.useEffect(() => {
+   158→    if (!open) return;
+   159→    const prev = document.body.style.overflow;
+   160→    document.body.style.overflow = "hidden";
+   161→    const onKey = (e: KeyboardEvent) => {
+   162→      if (e.key === "Escape") setOpen(false);
+   163→    };
+   164→    window.addEventListener("keydown", onKey);
+   165→    return () => {
+   166→      document.body.style.overflow = prev;
+   167→      window.removeEventListener("keydown", onKey);
+   168→    };
+   169→  }, [open, setOpen]);
+   170→
+   171→  return (
+   172→    <AnimatePresence>
+   173→      {open && (
+   174→        <motion.div
+   175→          initial={{ opacity: 0 }}
+   176→          animate={{ opacity: 1 }}
+   177→          exit={{ opacity: 0 }}
+   178→          transition={{ duration: 0.2 }}
+   179→          className="fixed inset-0 z-[60] flex flex-col bg-background/97 backdrop-blur-md"
+   180→          role="dialog"
+   181→          aria-modal="true"
+   182→          aria-label="WALLORA Admin Dashboard"
+   183→        >
+   184→          {/* Header */}
+   185→          <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-6">
+   186→            <div className="flex items-center gap-3">
+   187→              <WalloraLogo spark />
+   188→              <div className="hidden sm:block">
+   189→                <div className="flex items-center gap-2">
+   190→                  <h1 className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
+   191→                    Admin Dashboard
+   192→                  </h1>
+   193→                  <Badge
+   194→                    variant="outline"
+   195→                    className="border-primary/30 bg-primary/10 text-[10px] font-medium text-primary"
+   196→                  >
+   197→                    Phase 12
+   198→                  </Badge>
+   199→                </div>
+   200→                <p className="text-[11px] text-secondary-text">
+   201→                  Internal moderation &amp; platform metrics
+   202→                </p>
+   203→              </div>
+   204→            </div>
+   205→
+   206→            <div className="flex items-center gap-2">
+   207→              {canRead && (
+   208→                <Badge
+   209→                  variant="outline"
+   210→                  className="hidden border-border bg-surface text-[10px] capitalize text-secondary-text sm:inline-flex"
+   211→                >
+   212→                  <Shield className="mr-1 h-2.5 w-2.5" />
+   213→                  {role}
+   214→                </Badge>
+   215→              )}
+   216→              <Button
+   217→                size="icon"
+   218→                variant="ghost"
+   219→                className="h-9 w-9"
+   220→                onClick={() => setOpen(false)}
+   221→                aria-label="Close admin dashboard"
+   222→              >
+   223→                <X className="h-4 w-4" />
+   224→              </Button>
+   225→            </div>
+   226→          </header>
+   227→
+   228→          {/* Tab navigation */}
+   229→          <nav
+   230→            className="flex items-center gap-1 overflow-x-auto border-b border-border px-4 py-2 sm:px-6"
+   231→            aria-label="Admin sections"
+   232→          >
+   233→            <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+   234→              <LayoutDashboard className="h-3.5 w-3.5" />
+   235→              Overview
+   236→            </TabButton>
+   237→            <TabButton active={tab === "users"} onClick={() => setTab("users")}>
+   238→              <UsersIcon className="h-3.5 w-3.5" />
+   239→              Users
+   240→            </TabButton>
+   241→            <TabButton active={tab === "moderation"} onClick={() => setTab("moderation")}>
+   242→              <Shield className="h-3.5 w-3.5" />
+   243→              Moderation
+   244→              <PendingBadge />
+   245→            </TabButton>
+   246→          </nav>
+   247→
+   248→          {/* Body */}
+   249→          <div className="flex-1 overflow-y-auto">
+   250→            <AnimatePresence mode="wait">
+   251→              <motion.div
+   252→                key={tab}
+   253→                initial={{ opacity: 0, y: 6 }}
+   254→                animate={{ opacity: 1, y: 0 }}
+   255→                exit={{ opacity: 0, y: -6 }}
+   256→                transition={{ duration: 0.18 }}
+   257→                className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8"
+   258→              >
+   259→                {!canRead ? (
+   260→                  <AccessDenied />
+   261→                ) : tab === "overview" ? (
+   262→                  <OverviewTab />
+   263→                ) : tab === "users" ? (
+   264→                  <UsersTab />
+   265→                ) : (
+   266→                  <ModerationTab canModerate={canModerate} />
+   267→                )}
+   268→              </motion.div>
+   269→            </AnimatePresence>
+   270→          </div>
+   271→        </motion.div>
+   272→      )}
+   273→    </AnimatePresence>
+   274→  );
+   275→}
+   276→
+   277→// ---------------------------------------------------------------------------
+   278→// Shared tab pieces
+   279→// ---------------------------------------------------------------------------
+   280→
+   281→function TabButton({
+   282→  active,
+   283→  onClick,
+   284→  children,
+   285→}: {
+   286→  active: boolean;
+   287→  onClick: () => void;
+   288→  children: React.ReactNode;
+   289→}) {
+   290→  return (
+   291→    <button
+   292→      type="button"
+   293→      onClick={onClick}
+   294→      aria-current={active ? "page" : undefined}
+   295→      className={cn(
+   296→        "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+   297→        active
+   298→          ? "bg-raised text-foreground"
+   299→          : "text-secondary-text hover:bg-surface hover:text-foreground",
+   300→      )}
+   301→    >
+   302→      {children}
+   303→    </button>
+   304→  );
+   305→}
+   306→
+   307→function PendingBadge() {
+   308→  const { data } = useQuery<{ data: Stats }>({
+   309→    queryKey: ["admin-stats"],
+   310→    queryFn: async () => {
+   311→      const res = await fetch("/api/v1/admin/stats");
+   312→      if (!res.ok) throw new Error("Failed to load stats");
+   313→      return res.json();
+   314→    },
+   315→    placeholderData: keepPreviousData,
+   316→  });
+   317→  const pending = data?.data?.pendingWallpapers ?? 0;
+   318→  if (pending === 0) return null;
+   319→  return (
+   320→    <span className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary/20 px-1 text-[10px] font-semibold text-primary">
+   321→      {pending}
+   322→    </span>
+   323→  );
+   324→}
+   325→
+   326→function AccessDenied() {
+   327→  return (
+   328→    <div className="flex flex-col items-center gap-4 py-20 text-center">
+   329→      <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+   330→        <Lock className="h-8 w-8" />
+   331→      </span>
+   332→      <div>
+   333→        <h2 className="font-display text-lg font-semibold text-foreground">Access denied</h2>
+   334→        <p className="mt-1 max-w-sm text-sm text-secondary-text">
+   335→          The admin dashboard is only visible to admin and super_admin accounts.
+   336→          Your current session does not have the required role.
+   337→        </p>
+   338→      </div>
+   339→    </div>
+   340→  );
+   341→}
+   342→
+   343→// ---------------------------------------------------------------------------
+   344→// Overview tab
+   345→// ---------------------------------------------------------------------------
+   346→
+   347→function OverviewTab() {
+   348→  const { data, isLoading, isError } = useQuery<{ data: Stats }>({
+   349→    queryKey: ["admin-stats"],
+   350→    queryFn: async () => {
+   351→      const res = await fetch("/api/v1/admin/stats");
+   352→      if (!res.ok) throw new Error("Failed to load stats");
+   353→      return res.json();
+   354→    },
+   355→  });
+   356→
+   357→  if (isError) {
+   358→    return (
+   359→      <div className="flex flex-col items-center gap-4 py-16 text-center">
+   360→        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+   361→          <XCircle className="h-6 w-6" />
+   362→        </span>
+   363→        <p className="text-sm text-secondary-text">Failed to load metrics. Try again.</p>
+   364→      </div>
+   365→    );
+   366→  }
+   367→
+   368→  if (isLoading || !data) {
+   369→    return <StatsSkeleton />;
+   370→  }
+   371→
+   372→  const s = data.data;
+   373→
+   374→  const cards: Array<{
+   375→    label: string;
+   376→    value: number;
+   377→    icon: React.ReactNode;
+   378→    hint?: string;
+   379→  }> = [
+   380→    { label: "Total users", value: s.totalUsers, icon: <UsersIcon className="h-4 w-4" />, hint: `+${s.todayNewUsers} today` },
+   381→    { label: "Wallpapers", value: s.totalWallpapers, icon: <ImageIcon className="h-4 w-4" />, hint: `+${s.todayNewWallpapers} today` },
+   382→    { label: "Pending review", value: s.pendingWallpapers, icon: <Clock className="h-4 w-4" /> },
+   383→    { label: "AI conversations", value: s.totalConversations, icon: <MessageSquare className="h-4 w-4" /> },
+   384→    { label: "AI messages", value: s.totalMessages, icon: <MessageCircle className="h-4 w-4" /> },
+   385→    { label: "AI generations", value: s.totalGenerations, icon: <Sparkles className="h-4 w-4" /> },
+   386→    { label: "Comments", value: s.totalComments, icon: <MessageCircle className="h-4 w-4" /> },
+   387→    { label: "Products", value: s.totalProducts, icon: <ShoppingBag className="h-4 w-4" /> },
+   388→    { label: "Purchases", value: s.totalPurchases, icon: <ShoppingCart className="h-4 w-4" /> },
+   389→    { label: "Waitlist entries", value: s.totalWaitlistEntries, icon: <Mail className="h-4 w-4" /> },
+   390→  ];
+   391→
+   392→  return (
+   393→    <div className="space-y-6">
+   394→      {/* Top KPI row */}
+   395→      <section>
+   396→        <SectionHeading
+   397→          title="Platform metrics"
+   398→          subtitle="Real-time counts from the WALLORA database."
+   399→        />
+   400→        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+   401→          {cards.map((c) => (
+   402→            <StatCard key={c.label} {...c} />
+   403→          ))}
+   404→        </div>
+   405→      </section>
+   406→
+   407→      {/* Today usage + status breakdown */}
+   408→      <section className="grid gap-4 md:grid-cols-3">
+   409→        <UsageCard credits={s.todayAiUsage} newUsers={s.todayNewUsers} newWallpapers={s.todayNewWallpapers} />
+   410→        <StatusBreakdownCard data={s.wallpapersByStatus} />
+   411→        <TopCategoriesCard categories={s.topCategories} />
+   412→      </section>
+   413→    </div>
+   414→  );
+   415→}
+   416→
+   417→function StatCard({
+   418→  label,
+   419→  value,
+   420→  icon,
+   421→  hint,
+   422→}: {
+   423→  label: string;
+   424→  value: number;
+   425→  icon: React.ReactNode;
+   426→  hint?: string;
+   427→}) {
+   428→  return (
+   429→    <div className="rounded-xl border border-border bg-surface p-4 transition-colors hover:border-primary/20">
+   430→      <div className="flex items-center justify-between">
+   431→        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   432→          {icon}
+   433→        </span>
+   434→        {hint && (
+   435→          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success">
+   436→            <TrendingUp className="h-3 w-3" />
+   437→            {hint.replace("+0 today", "—")}
+   438→          </span>
+   439→        )}
+   440→      </div>
+   441→      <p className="mt-3 font-display text-2xl font-semibold tabular-nums text-foreground">
+   442→        {value.toLocaleString()}
+   443→      </p>
+   444→      <p className="mt-0.5 text-xs text-secondary-text">{label}</p>
+   445→    </div>
+   446→  );
+   447→}
+   448→
+   449→function UsageCard({
+   450→  credits,
+   451→  newUsers,
+   452→  newWallpapers,
+   453→}: {
+   454→  credits: number;
+   455→  newUsers: number;
+   456→  newWallpapers: number;
+   457→}) {
+   458→  return (
+   459→    <div className="rounded-xl border border-border bg-surface p-5">
+   460→      <div className="flex items-center gap-2">
+   461→        <CalendarDays className="h-4 w-4 text-primary" />
+   462→        <h3 className="font-display text-sm font-semibold text-foreground">Today</h3>
+   463→      </div>
+   464→      <dl className="mt-4 space-y-3">
+   465→        <Row label="AI credits used" value={`${credits.toLocaleString()}`} />
+   466→        <Row label="New users" value={`${newUsers.toLocaleString()}`} />
+   467→        <Row label="New wallpapers" value={`${newWallpapers.toLocaleString()}`} />
+   468→      </dl>
+   469→    </div>
+   470→  );
+   471→}
+   472→
+   473→function StatusBreakdownCard({
+   474→  data,
+   475→}: {
+   476→  data: { approved: number; pending: number; rejected: number; flagged: number };
+   477→}) {
+   478→  const rows: Array<{ key: string; label: string; value: number; color: string }> = [
+   479→    { key: "approved", label: "Approved", value: data.approved, color: "bg-success" },
+   480→    { key: "pending", label: "Pending", value: data.pending, color: "bg-primary" },
+   481→    { key: "rejected", label: "Rejected", value: data.rejected, color: "bg-destructive" },
+   482→    { key: "flagged", label: "Flagged", value: data.flagged, color: "bg-secondary-text" },
+   483→  ];
+   484→  const total = rows.reduce((acc, r) => acc + r.value, 0) || 1;
+   485→  return (
+   486→    <div className="rounded-xl border border-border bg-surface p-5">
+   487→      <div className="flex items-center gap-2">
+   488→        <Shield className="h-4 w-4 text-primary" />
+   489→        <h3 className="font-display text-sm font-semibold text-foreground">Wallpaper status</h3>
+   490→      </div>
+   491→      <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-raised">
+   492→        {rows.map((r) =>
+   493→          r.value > 0 ? (
+   494→            <div
+   495→              key={r.key}
+   496→              className={cn("h-full", r.color)}
+   497→              style={{ width: `${(r.value / total) * 100}%` }}
+   498→              title={`${r.label}: ${r.value}`}
+   499→            />
+   500→          ) : null,
+   501→        )}
+   502→      </div>
+   503→      <dl className="mt-4 space-y-2.5">
+   504→        {rows.map((r) => (
+   505→          <div key={r.key} className="flex items-center justify-between text-xs">
+   506→            <dt className="flex items-center gap-2 text-secondary-text">
+   507→              <span className={cn("h-2 w-2 rounded-full", r.color)} />
+   508→              {r.label}
+   509→            </dt>
+   510→            <dd className="tabular-nums font-medium text-foreground">
+   511→              {r.value.toLocaleString()}
+   512→            </dd>
+   513→          </div>
+   514→        ))}
+   515→      </dl>
+   516→    </div>
+   517→  );
+   518→}
+   519→
+   520→function TopCategoriesCard({
+   521→  categories,
+   522→}: {
+   523→  categories: Array<{
+   524→    id: string;
+   525→    slug: string;
+   526→    name: string;
+   527→    icon: string | null;
+   528→    wallpaperCount: number;
+   529→  }>;
+   530→}) {
+   531→  return (
+   532→    <div className="rounded-xl border border-border bg-surface p-5">
+   533→      <div className="flex items-center gap-2">
+   534→        <Sparkles className="h-4 w-4 text-primary" />
+   535→        <h3 className="font-display text-sm font-semibold text-foreground">Top categories</h3>
+   536→      </div>
+   537→      {categories.length === 0 ? (
+   538→        <p className="mt-4 text-xs text-secondary-text">No categories yet.</p>
+   539→      ) : (
+   540→        <ol className="mt-4 space-y-2.5">
+   541→          {categories.map((c, i) => (
+   542→            <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
+   543→              <div className="flex min-w-0 items-center gap-2">
+   544→                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-raised text-[10px] font-semibold text-secondary-text">
+   545→                  {i + 1}
+   546→                </span>
+   547→                <span className="truncate font-medium text-foreground">{c.name}</span>
+   548→              </div>
+   549→              <span className="shrink-0 tabular-nums text-secondary-text">
+   550→                {c.wallpaperCount.toLocaleString()}
+   551→              </span>
+   552→            </li>
+   553→          ))}
+   554→        </ol>
+   555→      )}
+   556→    </div>
+   557→  );
+   558→}
+   559→
+   560→function Row({ label, value }: { label: string; value: string }) {
+   561→  return (
+   562→    <div className="flex items-center justify-between text-xs">
+   563→      <dt className="text-secondary-text">{label}</dt>
+   564→      <dd className="tabular-nums font-semibold text-foreground">{value}</dd>
+   565→    </div>
+   566→  );
+   567→}
+   568→
+   569→function SectionHeading({ title, subtitle }: { title: string; subtitle?: string }) {
+   570→  return (
+   571→    <div className="mb-4">
+   572→      <h2 className="font-display text-base font-semibold text-foreground">{title}</h2>
+   573→      {subtitle && <p className="mt-0.5 text-xs text-secondary-text">{subtitle}</p>}
+   574→    </div>
+   575→  );
+   576→}
+   577→
+   578→function StatsSkeleton() {
+   579→  return (
+   580→    <div className="space-y-6">
+   581→      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+   582→        {Array.from({ length: 10 }).map((_, i) => (
+   583→          <div key={i} className="h-28 animate-pulse rounded-xl border border-border bg-surface" />
+   584→        ))}
+   585→      </div>
+   586→      <div className="grid gap-4 md:grid-cols-3">
+   587→        {Array.from({ length: 3 }).map((_, i) => (
+   588→          <div key={i} className="h-40 animate-pulse rounded-xl border border-border bg-surface" />
+   589→        ))}
+   590→      </div>
+   591→    </div>
+   592→  );
+   593→}
+   594→
+   595→// ---------------------------------------------------------------------------
+   596→// Users tab
+   597→// ---------------------------------------------------------------------------
+   598→
+   599→function UsersTab() {
+   600→  const [page, setPage] = React.useState(1);
+   601→  const limit = 50;
+   602→
+   603→  const { data, isLoading, isError } = useQuery<{
+   604→    data: { items: AdminUser[]; pagination: { page: number; limit: number; total: number; totalPages: number } };
+   605→  }>({
+   606→    queryKey: ["admin-users", page],
+   607→    queryFn: async () => {
+   608→      const res = await fetch(`/api/v1/admin/users?page=${page}&limit=${limit}`);
+   609→      if (!res.ok) throw new Error("Failed to load users");
+   610→      return res.json();
+   611→    },
+   612→    placeholderData: keepPreviousData,
+   613→  });
+   614→
+   615→  const items = data?.data.items ?? [];
+   616→  const pagination = data?.data.pagination;
+   617→
+   618→  if (isError) {
+   619→    return (
+   620→      <div className="flex flex-col items-center gap-4 py-16 text-center">
+   621→        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+   622→          <XCircle className="h-6 w-6" />
+   623→        </span>
+   624→        <p className="text-sm text-secondary-text">Failed to load users.</p>
+   625→      </div>
+   626→    );
+   627→  }
+   628→
+   629→  return (
+   630→    <div className="space-y-4">
+   631→      <SectionHeading
+   632→        title="Users"
+   633→        subtitle={`Showing ${items.length} of ${pagination?.total.toLocaleString() ?? 0} users.`}
+   634→      />
+   635→
+   636→      {isLoading ? (
+   637→        <div className="space-y-2">
+   638→          {Array.from({ length: 8 }).map((_, i) => (
+   639→            <div key={i} className="h-14 animate-pulse rounded-lg border border-border bg-surface" />
+   640→          ))}
+   641→        </div>
+   642→      ) : items.length === 0 ? (
+   643→        <EmptyState
+   644→          icon={<UsersIcon className="h-7 w-7" />}
+   645→          title="No users found"
+   646→          subtitle="The user table is empty."
+   647→        />
+   648→      ) : (
+   649→        <>
+   650→          {/* Desktop table */}
+   651→          <div className="hidden overflow-hidden rounded-xl border border-border bg-surface md:block">
+   652→            <table className="w-full text-left text-sm">
+   653→              <thead className="border-b border-border bg-raised/60 text-[11px] uppercase tracking-wider text-secondary-text">
+   654→                <tr>
+   655→                  <th className="px-4 py-3 font-medium">User</th>
+   656→                  <th className="px-4 py-3 font-medium">Role</th>
+   657→                  <th className="px-4 py-3 font-medium">Status</th>
+   658→                  <th className="px-4 py-3 text-right font-medium">Wallpapers</th>
+   659→                  <th className="px-4 py-3 text-right font-medium">Conversations</th>
+   660→                  <th className="px-4 py-3 font-medium">Joined</th>
+   661→                </tr>
+   662→              </thead>
+   663→              <tbody className="divide-y divide-border">
+   664→                {items.map((u) => (
+   665→                  <UserRow key={u.id} user={u} />
+   666→                ))}
+   667→              </tbody>
+   668→            </table>
+   669→          </div>
+   670→
+   671→          {/* Mobile list */}
+   672→          <ul className="space-y-2 md:hidden">
+   673→            {items.map((u) => (
+   674→              <li key={u.id} className="rounded-lg border border-border bg-surface p-3">
+   675→                <div className="flex items-start justify-between gap-2">
+   676→                  <div className="min-w-0">
+   677→                    <p className="truncate text-sm font-medium text-foreground">
+   678→                      {u.profile?.displayName || u.profile?.username || u.name || "Unnamed"}
+   679→                    </p>
+   680→                    <p className="truncate text-xs text-secondary-text">{u.email}</p>
+   681→                  </div>
+   682→                  <div className="flex shrink-0 flex-col items-end gap-1">
+   683→                    <RoleBadge role={u.role} />
+   684→                    <StatusBadge status={u.status} />
+   685→                  </div>
+   686→                </div>
+   687→                <div className="mt-2 flex items-center justify-between text-[11px] text-secondary-text">
+   688→                  <span>{u.wallpaperCount} wallpapers</span>
+   689→                  <span>{new Date(u.createdAt).toLocaleDateString()}</span>
+   690→                </div>
+   691→              </li>
+   692→            ))}
+   693→          </ul>
+   694→
+   695→          {pagination && pagination.totalPages > 1 && (
+   696→            <Pagination
+   697→              page={pagination.page}
+   698→              totalPages={pagination.totalPages}
+   699→              onChange={setPage}
+   700→            />
+   701→          )}
+   702→        </>
+   703→      )}
+   704→    </div>
+   705→  );
+   706→}
+   707→
+   708→function UserRow({ user }: { user: AdminUser }) {
+   709→  return (
+   710→    <tr className="transition-colors hover:bg-raised/40">
+   711→      <td className="px-4 py-3">
+   712→        <div className="flex items-center gap-3">
+   713→          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+   714→            {(user.profile?.username?.[0] ?? user.email?.[0] ?? "?").toUpperCase()}
+   715→          </span>
+   716→          <div className="min-w-0">
+   717→            <div className="flex items-center gap-1.5">
+   718→              <span className="truncate text-sm font-medium text-foreground">
+   719→                {user.profile?.displayName || user.profile?.username || user.name || "Unnamed"}
+   720→              </span>
+   721→              {user.profile?.verified && (
+   722→                <CheckCircle2 className="h-3 w-3 shrink-0 text-primary" aria-label="Verified" />
+   723→              )}
+   724→            </div>
+   725→            <p className="truncate text-xs text-secondary-text">{user.email}</p>
+   726→          </div>
+   727→        </div>
+   728→      </td>
+   729→      <td className="px-4 py-3">
+   730→        <RoleBadge role={user.role} />
+   731→      </td>
+   732→      <td className="px-4 py-3">
+   733→        <StatusBadge status={user.status} />
+   734→      </td>
+   735→      <td className="px-4 py-3 text-right tabular-nums text-sm text-foreground">
+   736→        {user.wallpaperCount.toLocaleString()}
+   737→      </td>
+   738→      <td className="px-4 py-3 text-right tabular-nums text-sm text-foreground">
+   739→        {user.conversationCount.toLocaleString()}
+   740→      </td>
+   741→      <td className="px-4 py-3 text-xs text-secondary-text">
+   742→        {new Date(user.createdAt).toLocaleDateString(undefined, {
+   743→          year: "numeric",
+   744→          month: "short",
+   745→          day: "numeric",
+   746→        })}
+   747→      </td>
+   748→    </tr>
+   749→  );
+   750→}
+   751→
+   752→function RoleBadge({ role }: { role: string }) {
+   753→  const map: Record<string, string> = {
+   754→    super_admin: "border-primary/40 bg-primary/10 text-primary",
+   755→    admin: "border-primary/30 bg-primary/10 text-primary",
+   756→    moderator: "border-chart-3/30 bg-chart-3/10 text-chart-3",
+   757→    creator: "border-success/30 bg-success/10 text-success",
+   758→    user: "border-border bg-surface text-secondary-text",
+   759→    guest: "border-border bg-surface text-secondary-text",
+   760→  };
+   761→  return (
+   762→    <Badge
+   763→      variant="outline"
+   764→      className={cn(
+   765→        "border text-[10px] font-medium capitalize",
+   766→        map[role] ?? map.user,
+   767→      )}
+   768→    >
+   769→      {role}
+   770→    </Badge>
+   771→  );
+   772→}
+   773→
+   774→function StatusBadge({ status }: { status: string }) {
+   775→  const map: Record<string, string> = {
+   776→    active: "border-success/30 bg-success/10 text-success",
+   777→    suspended: "border-destructive/30 bg-destructive/10 text-destructive",
+   778→    deleted: "border-border bg-surface text-secondary-text",
+   779→  };
+   780→  return (
+   781→    <Badge
+   782→      variant="outline"
+   783→      className={cn(
+   784→        "border text-[10px] font-medium capitalize",
+   785→        map[status] ?? map.active,
+   786→      )}
+   787→    >
+   788→      {status}
+   789→    </Badge>
+   790→  );
+   791→}
+   792→
+   793→// ---------------------------------------------------------------------------
+   794→// Moderation tab
+   795→// ---------------------------------------------------------------------------
+   796→
+   797→const MOD_STATUS_OPTIONS = [
+   798→  { id: "pending", label: "Pending" },
+   799→  { id: "approved", label: "Approved" },
+   800→  { id: "rejected", label: "Rejected" },
+   801→  { id: "flagged", label: "Flagged" },
+   802→] as const;
+   803→
+   804→function ModerationTab({ canModerate }: { canModerate: boolean }) {
+   805→  const [status, setStatus] = React.useState<string>("pending");
+   806→  const [page, setPage] = React.useState(1);
+   807→  const limit = 24;
+   808→  const queryClient = useQueryClient();
+   809→
+   810→  // Reset to page 1 when filter changes.
+   811→  React.useEffect(() => {
+   812→    setPage(1);
+   813→  }, [status]);
+   814→
+   815→  const { data, isLoading, isError } = useQuery<{
+   816→    data: {
+   817→      items: AdminWallpaper[];
+   818→      pagination: { page: number; limit: number; total: number; totalPages: number };
+   819→    };
+   820→  }>({
+   821→    queryKey: ["admin-wallpapers", status, page],
+   822→    queryFn: async () => {
+   823→      const res = await fetch(
+   824→        `/api/v1/admin/wallpapers?status=${status}&page=${page}&limit=${limit}`,
+   825→      );
+   826→      if (!res.ok) throw new Error("Failed to load wallpapers");
+   827→      return res.json();
+   828→    },
+   829→    placeholderData: keepPreviousData,
+   830→  });
+   831→
+   832→  const moderateMutation = useMutation({
+   833→    mutationFn: async ({ id, nextStatus }: { id: string; nextStatus: string }) => {
+   834→      const res = await fetch(`/api/v1/admin/wallpapers/${id}/moderate`, {
+   835→        method: "PATCH",
+   836→        headers: { "Content-Type": "application/json" },
+   837→        body: JSON.stringify({ status: nextStatus }),
+   838→      });
+   839→      const payload = await res.json().catch(() => ({}));
+   840→      if (!res.ok) {
+   841→        throw new Error(payload?.error?.message ?? "Moderation failed");
+   842→      }
+   843→      return payload;
+   844→    },
+   845→    onSuccess: (_data, vars) => {
+   846→      toast.success(`Wallpaper ${vars.nextStatus}`, {
+   847→        description: "The moderation decision has been recorded.",
+   848→      });
+   849→      queryClient.invalidateQueries({ queryKey: ["admin-wallpapers"] });
+   850→      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+   851→    },
+   852→    onError: (err: Error) => {
+   853→      toast.error("Moderation failed", { description: err.message });
+   854→    },
+   855→  });
+   856→
+   857→  const items = data?.data.items ?? [];
+   858→  const pagination = data?.data.pagination;
+   859→
+   860→  return (
+   861→    <div className="space-y-4">
+   862→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   863→        <SectionHeading
+   864→          title="Moderation queue"
+   865→          subtitle="Review and act on wallpaper submissions."
+   866→        />
+   867→        <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border bg-surface p-1">
+   868→          {MOD_STATUS_OPTIONS.map((opt) => (
+   869→            <button
+   870→              key={opt.id}
+   871→              type="button"
+   872→              onClick={() => setStatus(opt.id)}
+   873→              className={cn(
+   874→                "whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+   875→                status === opt.id
+   876→                  ? "bg-raised text-foreground"
+   877→                  : "text-secondary-text hover:text-foreground",
+   878→              )}
+   879→            >
+   880→              {opt.label}
+   881→            </button>
+   882→          ))}
+   883→        </div>
+   884→      </div>
+   885→
+   886→      {!canModerate && (
+   887→        <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-xs text-secondary-text">
+   888→          <Lock className="h-3.5 w-3.5" />
+   889→          You have read access only. Approve and reject actions require an admin role.
+   890→        </div>
+   891→      )}
+   892→
+   893→      {isError ? (
+   894→        <div className="flex flex-col items-center gap-4 py-16 text-center">
+   895→          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+   896→            <XCircle className="h-6 w-6" />
+   897→          </span>
+   898→          <p className="text-sm text-secondary-text">Failed to load wallpapers.</p>
+   899→        </div>
+   900→      ) : isLoading ? (
+   901→        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+   902→          {Array.from({ length: 8 }).map((_, i) => (
+   903→            <div key={i} className="aspect-[4/5] animate-pulse rounded-xl border border-border bg-surface" />
+   904→          ))}
+   905→        </div>
+   906→      ) : items.length === 0 ? (
+   907→        <EmptyState
+   908→          icon={<CheckCircle2 className="h-7 w-7" />}
+   909→          title="Nothing to review"
+   910→          subtitle={`No wallpapers with status "${status}".`}
+   911→        />
+   912→      ) : (
+   913→        <>
+   914→          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+   915→            {items.map((w) => (
+   916→              <ModerationCard
+   917→                key={w.id}
+   918→                wallpaper={w}
+   919→                canModerate={canModerate}
+   920→                pendingAction={moderateMutation.isPending}
+   921→                onApprove={() => moderateMutation.mutate({ id: w.id, nextStatus: "approved" })}
+   922→                onReject={() => moderateMutation.mutate({ id: w.id, nextStatus: "rejected" })}
+   923→                onFlag={() => moderateMutation.mutate({ id: w.id, nextStatus: "flagged" })}
+   924→              />
+   925→            ))}
+   926→          </div>
+   927→          {pagination && pagination.totalPages > 1 && (
+   928→            <Pagination
+   929→              page={pagination.page}
+   930→              totalPages={pagination.totalPages}
+   931→              onChange={setPage}
+   932→            />
+   933→          )}
+   934→        </>
+   935→      )}
+   936→    </div>
+   937→  );
+   938→}
+   939→
+   940→function ModerationCard({
+   941→  wallpaper,
+   942→  canModerate,
+   943→  pendingAction,
+   944→  onApprove,
+   945→  onReject,
+   946→  onFlag,
+   947→}: {
+   948→  wallpaper: AdminWallpaper;
+   949→  canModerate: boolean;
+   950→  pendingAction: boolean;
+   951→  onApprove: () => void;
+   952→  onReject: () => void;
+   953→  onFlag: () => void;
+   954→}) {
+   955→  const aspectClass =
+   956→    wallpaper.orientation === "portrait"
+   957→      ? "aspect-[3/4]"
+   958→      : wallpaper.orientation === "landscape"
+   959→        ? "aspect-[16/10]"
+   960→        : "aspect-square";
+   961→
+   962→  return (
+   963→    <motion.div
+   964→      initial={{ opacity: 0, y: 8 }}
+   965→      animate={{ opacity: 1, y: 0 }}
+   966→      className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface"
+   967→    >
+   968→      <div className={cn("relative overflow-hidden bg-raised", aspectClass)}>
+   969→        {wallpaper.asset ? (
+   970→          <img
+   971→            src={wallpaper.asset.objectKey}
+   972→            alt={wallpaper.title}
+   973→            className="absolute inset-0 h-full w-full object-cover"
+   974→            loading="lazy"
+   975→          />
+   976→        ) : (
+   977→          <div className="absolute inset-0 flex items-center justify-center text-secondary-text">
+   978→            <ImageIcon className="h-8 w-8" />
+   979→          </div>
+   980→        )}
+   981→        <div className="absolute left-1.5 top-1.5">
+   982→          <ModerationStatusPill status={wallpaper.status} />
+   983→        </div>
+   984→        {!wallpaper.isPublic && (
+   985→          <div className="absolute right-1.5 top-1.5">
+   986→            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/80 px-2 py-0.5 text-[10px] text-secondary-text backdrop-blur">
+   987→              <Lock className="h-2.5 w-2.5" /> private
+   988→            </span>
+   989→          </div>
+   990→        )}
+   991→      </div>
+   992→
+   993→      <div className="flex flex-1 flex-col p-3">
+   994→        <p className="truncate text-sm font-medium text-foreground">{wallpaper.title}</p>
+   995→        <p className="mt-0.5 truncate text-[11px] text-secondary-text">
+   996→          {wallpaper.creator.displayName ||
+   997→            wallpaper.creator.username ||
+   998→            wallpaper.creator.email}
+   999→        </p>
+  1000→
+  1001→        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-secondary-text">
+  1002→          <span className="inline-flex items-center gap-1">
+  1003→            <Eye className="h-3 w-3" /> {wallpaper.viewCount.toLocaleString()}
+  1004→          </span>
+  1005→          <span className="inline-flex items-center gap-1">
+  1006→            <ThumbsUp className="h-3 w-3" /> {wallpaper.likeCount.toLocaleString()}
+  1007→          </span>
+  1008→          <span className="inline-flex items-center gap-1">
+  1009→            <Download className="h-3 w-3" /> {wallpaper.downloadCount.toLocaleString()}
+  1010→          </span>
+  1011→        </div>
+  1012→
+  1013→        <div className="mt-2 flex flex-wrap gap-1">
+  1014→          {wallpaper.category && (
+  1015→            <Badge variant="outline" className="border-border bg-raised text-[9px] text-secondary-text">
+  1016→              {wallpaper.category.name}
+  1017→            </Badge>
+  1018→          )}
+  1019→          <Badge variant="outline" className="border-border bg-raised text-[9px] capitalize text-secondary-text">
+  1020→            {wallpaper.sourceType}
+  1021→          </Badge>
+  1022→          <Badge variant="outline" className="border-border bg-raised text-[9px] text-secondary-text">
+  1023→            {wallpaper.license}
+  1024→          </Badge>
+  1025→        </div>
+  1026→
+  1027→        {canModerate && (
+  1028→          <div className="mt-3 flex items-center gap-1.5">
+  1029→            <Button
+  1030→              size="sm"
+  1031→              className="h-7 flex-1 bg-success text-success-foreground hover:bg-success/90"
+  1032→              onClick={onApprove}
+  1033→              disabled={pendingAction}
+  1034→            >
+  1035→              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+  1036→              Approve
+  1037→            </Button>
+  1038→            <Button
+  1039→              size="sm"
+  1040→              variant="outline"
+  1041→              className="h-7 border-border text-secondary-text hover:text-foreground"
+  1042→              onClick={onFlag}
+  1043→              disabled={pendingAction}
+  1044→              aria-label="Flag wallpaper"
+  1045→            >
+  1046→              <Flag className="h-3.5 w-3.5" />
+  1047→            </Button>
+  1048→            <Button
+  1049→              size="sm"
+  1050→              variant="outline"
+  1051→              className="h-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+  1052→              onClick={onReject}
+  1053→              disabled={pendingAction}
+  1054→              aria-label="Reject wallpaper"
+  1055→            >
+  1056→              <XCircle className="h-3.5 w-3.5" />
+  1057→            </Button>
+  1058→          </div>
+  1059→        )}
+  1060→        {pendingAction && (
+  1061→          <p className="mt-2 inline-flex items-center gap-1 text-[10px] text-secondary-text">
+  1062→            <Loader2 className="h-3 w-3 animate-spin" /> applying…
+  1063→          </p>
+  1064→        )}
+  1065→      </div>
+  1066→    </motion.div>
+  1067→  );
+  1068→}
+  1069→
+  1070→function ModerationStatusPill({ status }: { status: string }) {
+  1071→  const map: Record<string, { label: string; cls: string }> = {
+  1072→    approved: { label: "Approved", cls: "border-success/30 bg-success/20 text-success" },
+  1073→    pending: { label: "Pending", cls: "border-primary/30 bg-primary/20 text-primary" },
+  1074→    rejected: { label: "Rejected", cls: "border-destructive/30 bg-destructive/20 text-destructive" },
+  1075→    flagged: { label: "Flagged", cls: "border-secondary-text/40 bg-secondary-text/20 text-secondary-text" },
+  1076→  };
+  1077→  const entry = map[status] ?? { label: status, cls: "border-border bg-background/80 text-secondary-text" };
+  1078→  return (
+  1079→    <span
+  1080→      className={cn(
+  1081→        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium backdrop-blur",
+  1082→        entry.cls,
+  1083→      )}
+  1084→    >
+  1085→      {entry.label}
+  1086→    </span>
+  1087→  );
+  1088→}
+  1089→
+  1090→// ---------------------------------------------------------------------------
+  1091→// Pagination
+  1092→// ---------------------------------------------------------------------------
+  1093→
+  1094→function Pagination({
+  1095→  page,
+  1096→  totalPages,
+  1097→  onChange,
+  1098→}: {
+  1099→  page: number;
+  1100→  totalPages: number;
+  1101→  onChange: (p: number) => void;
+  1102→}) {
+  1103→  return (
+  1104→    <div className="flex items-center justify-between gap-2 pt-2">
+  1105→      <p className="text-xs text-secondary-text">
+  1106→        Page <span className="tabular-nums text-foreground">{page}</span> of{" "}
+  1107→        <span className="tabular-nums text-foreground">{totalPages}</span>
+  1108→      </p>
+  1109→      <div className="flex items-center gap-1">
+  1110→        <Button
+  1111→          size="sm"
+  1112→          variant="outline"
+  1113→          className="h-8 border-border text-secondary-text hover:text-foreground"
+  1114→          onClick={() => onChange(Math.max(1, page - 1))}
+  1115→          disabled={page <= 1}
+  1116→          aria-label="Previous page"
+  1117→        >
+  1118→          <ChevronLeft className="h-4 w-4" />
+  1119→        </Button>
+  1120→        <Button
+  1121→          size="sm"
+  1122→          variant="outline"
+  1123→          className="h-8 border-border text-secondary-text hover:text-foreground"
+  1124→          onClick={() => onChange(Math.min(totalPages, page + 1))}
+  1125→          disabled={page >= totalPages}
+  1126→          aria-label="Next page"
+  1127→        >
+  1128→          <ChevronRight className="h-4 w-4" />
+  1129→        </Button>
+  1130→      </div>
+  1131→    </div>
+  1132→  );
+  1133→}
+  1134→
+  1135→// ---------------------------------------------------------------------------
+  1136→// Empty state
+  1137→// ---------------------------------------------------------------------------
+  1138→
+  1139→function EmptyState({
+  1140→  icon,
+  1141→  title,
+  1142→  subtitle,
+  1143→}: {
+  1144→  icon: React.ReactNode;
+  1145→  title: string;
+  1146→  subtitle?: string;
+  1147→}) {
+  1148→  return (
+  1149→    <div className="flex flex-col items-center gap-4 py-16 text-center">
+  1150→      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface text-secondary-text">
+  1151→        {icon}
+  1152→      </span>
+  1153→      <div>
+  1154→        <h3 className="font-display text-sm font-semibold text-foreground">{title}</h3>
+  1155→        {subtitle && <p className="mt-1 text-xs text-secondary-text">{subtitle}</p>}
+  1156→      </div>
+  1157→    </div>
+  1158→  );
+  1159→}
+  1160→

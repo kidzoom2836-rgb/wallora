@@ -1,0 +1,1221 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+     5→import { useSession } from "next-auth/react";
+     6→import { AnimatePresence, motion } from "framer-motion";
+     7→import {
+     8→  X,
+     9→  Plus,
+    10→  FolderKanban,
+    11→  FolderPlus,
+    12→  Loader2,
+    13→  Trash2,
+    14→  ImageIcon,
+    15→  PencilLine,
+    16→  StickyNote,
+    17→  ArrowLeft,
+    18→  Sparkles,
+    19→  Lock,
+    20→  Globe,
+    21→  Calendar,
+    22→  Save,
+    23→} from "lucide-react";
+    24→import { toast } from "sonner";
+    25→import { formatDistanceToNow } from "date-fns";
+    26→
+    27→import { Button } from "@/components/ui/button";
+    28→import { Input } from "@/components/ui/input";
+    29→import { Textarea } from "@/components/ui/textarea";
+    30→import { Badge } from "@/components/ui/badge";
+    31→import { Separator } from "@/components/ui/separator";
+    32→import { WalloraMonogram } from "@/components/brand/wallora-logo";
+    33→import { useProjects } from "@/stores/projects";
+    34→import { useAuthDialog } from "@/stores/auth-dialog";
+    35→import { cn } from "@/lib/utils";
+    36→
+    37→// ---------------------------------------------------------------------------
+    38→// Types
+    39→// ---------------------------------------------------------------------------
+    40→
+    41→type ProjectListItem = {
+    42→  id: string;
+    43→  name: string;
+    44→  description: string | null;
+    45→  coverUrl: string | null;
+    46→  isPublic: boolean;
+    47→  createdAt: string;
+    48→  updatedAt: string;
+    49→  assetCount: number;
+    50→  noteCount: number;
+    51→};
+    52→
+    53→type ProjectAsset = {
+    54→  id: string;
+    55→  assetType: "wallpaper" | "generation";
+    56→  wallpaperId: string | null;
+    57→  generationId: string | null;
+    58→  note: string | null;
+    59→  createdAt: string;
+    60→  wallpaper: {
+    61→    id: string;
+    62→    slug: string;
+    63→    title: string;
+    64→    orientation: string;
+    65→    dominantColor: string | null;
+    66→    gridAsset: { objectKey: string; width: number; height: number } | null;
+    67→  } | null;
+    68→  generation: {
+    69→    id: string;
+    70→    prompt: string;
+    71→    publicUrl: string | null;
+    72→    width: number;
+    73→    height: number;
+    74→    aspectRatio: string;
+    75→  } | null;
+    76→};
+    77→
+    78→type ProjectNote = {
+    79→  id: string;
+    80→  content: string;
+    81→  createdAt: string;
+    82→};
+    83→
+    84→type ProjectDetail = {
+    85→  id: string;
+    86→  name: string;
+    87→  description: string | null;
+    88→  coverUrl: string | null;
+    89→  isPublic: boolean;
+    90→  createdAt: string;
+    91→  updatedAt: string;
+    92→  assets: ProjectAsset[];
+    93→  notes: ProjectNote[];
+    94→};
+    95→
+    96→// ---------------------------------------------------------------------------
+    97→// Main component
+    98→// ---------------------------------------------------------------------------
+    99→
+   100→export function ProjectsPanel() {
+   101→  const { open, setOpen, selectedProjectId, setSelectedProjectId } = useProjects();
+   102→  const openSignIn = useAuthDialog((s) => s.openSignIn);
+   103→  const { status } = useSession();
+   104→
+   105→  // If the user signs out while the panel is open, close it.
+   106→  React.useEffect(() => {
+   107→    if (open && status === "unauthenticated") {
+   108→      setOpen(false);
+   109→    }
+   110→  }, [open, status, setOpen]);
+   111→
+   112→  // Esc to close.
+   113→  React.useEffect(() => {
+   114→    if (!open) return;
+   115→    const onKey = (e: KeyboardEvent) => {
+   116→      if (e.key === "Escape") setOpen(false);
+   117→    };
+   118→    window.addEventListener("keydown", onKey);
+   119→    return () => window.removeEventListener("keydown", onKey);
+   120→  }, [open, setOpen]);
+   121→
+   122→  // Lock scroll while open.
+   123→  React.useEffect(() => {
+   124→    if (!open) return;
+   125→    const prev = document.body.style.overflow;
+   126→    document.body.style.overflow = "hidden";
+   127→    return () => {
+   128→      document.body.style.overflow = prev;
+   129→    };
+   130→  }, [open]);
+   131→
+   132→  // If not authenticated, surface sign-in instead of the panel.
+   133→  const handleOpenChange = (next: boolean) => {
+   134→    if (next && status !== "authenticated") {
+   135→      openSignIn();
+   136→      return;
+   137→    }
+   138→    setOpen(next);
+   139→    if (!next) {
+   140→      // Clear selection on close so reopening shows the sidebar / empty state.
+   141→      setSelectedProjectId(null);
+   142→    }
+   143→  };
+   144→
+   145→  return (
+   146→    <AnimatePresence>
+   147→      {open && status === "authenticated" && (
+   148→        <ProjectsPanelInner
+   149→          onClose={() => handleOpenChange(false)}
+   150→          selectedProjectId={selectedProjectId}
+   151→          setSelectedProjectId={setSelectedProjectId}
+   152→        />
+   153→      )}
+   154→    </AnimatePresence>
+   155→  );
+   156→}
+   157→
+   158→function ProjectsPanelInner({
+   159→  onClose,
+   160→  selectedProjectId,
+   161→  setSelectedProjectId,
+   162→}: {
+   163→  onClose: () => void;
+   164→  selectedProjectId: string | null;
+   165→  setSelectedProjectId: (id: string | null) => void;
+   166→}) {
+   167→  const queryClient = useQueryClient();
+   168→  const [showNewProjectForm, setShowNewProjectForm] = React.useState(false);
+   169→  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
+   170→
+   171→  // Reset the "new project" form when the panel closes/opens.
+   172→  React.useEffect(() => {
+   173→    if (!selectedProjectId) setShowNewProjectForm(false);
+   174→  }, [selectedProjectId]);
+   175→
+   176→  // ------------------------- Queries -------------------------
+   177→  const { data: projectsData, isLoading: loadingList } = useQuery<{ data: ProjectListItem[] }>({
+   178→    queryKey: ["projects"],
+   179→    queryFn: async () => {
+   180→      const res = await fetch("/api/v1/projects");
+   181→      if (!res.ok) return { data: [] };
+   182→      return res.json();
+   183→    },
+   184→  });
+   185→  const projects = projectsData?.data ?? [];
+   186→
+   187→  const { data: projectDetail, isLoading: loadingDetail } = useQuery<{ data: ProjectDetail }>({
+   188→    queryKey: ["project", selectedProjectId],
+   189→    queryFn: async () => {
+   190→      const res = await fetch(`/api/v1/projects/${selectedProjectId}`);
+   191→      if (!res.ok) throw new Error("Failed to load project");
+   192→      return res.json();
+   193→    },
+   194→    enabled: !!selectedProjectId,
+   195→  });
+   196→
+   197→  // ------------------------- Mutations -------------------------
+   198→  const createProjectMutation = useMutation({
+   199→    mutationFn: async (input: { name: string; description?: string }) => {
+   200→      const res = await fetch("/api/v1/projects", {
+   201→        method: "POST",
+   202→        headers: { "Content-Type": "application/json" },
+   203→        body: JSON.stringify(input),
+   204→      });
+   205→      const json = await res.json();
+   206→      if (!res.ok) {
+   207→        throw new Error(json?.error?.message ?? "Failed to create project");
+   208→      }
+   209→      return json as { data: ProjectListItem; message: string };
+   210→    },
+   211→    onSuccess: (data) => {
+   212→      queryClient.invalidateQueries({ queryKey: ["projects"] });
+   213→      setShowNewProjectForm(false);
+   214→      setSelectedProjectId(data.data.id);
+   215→      toast.success("Project created", { description: data.data.name });
+   216→    },
+   217→    onError: (err: Error) => toast.error(err.message),
+   218→  });
+   219→
+   220→  const updateProjectMutation = useMutation({
+   221→    mutationFn: async (input: {
+   222→      id: string;
+   223→      name?: string;
+   224→      description?: string | null;
+   225→    }) => {
+   226→      const res = await fetch(`/api/v1/projects/${input.id}`, {
+   227→        method: "PATCH",
+   228→        headers: { "Content-Type": "application/json" },
+   229→        body: JSON.stringify({
+   230→          name: input.name,
+   231→          description: input.description ?? null,
+   232→        }),
+   233→      });
+   234→      const json = await res.json();
+   235→      if (!res.ok) {
+   236→        throw new Error(json?.error?.message ?? "Failed to update project");
+   237→      }
+   238→      return json as { data: ProjectDetail };
+   239→    },
+   240→    onSuccess: () => {
+   241→      queryClient.invalidateQueries({ queryKey: ["projects"] });
+   242→      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+   243→      toast.success("Project updated");
+   244→    },
+   245→    onError: (err: Error) => toast.error(err.message),
+   246→  });
+   247→
+   248→  const deleteProjectMutation = useMutation({
+   249→    mutationFn: async (id: string) => {
+   250→      const res = await fetch(`/api/v1/projects/${id}`, { method: "DELETE" });
+   251→      const json = await res.json();
+   252→      if (!res.ok) {
+   253→        throw new Error(json?.error?.message ?? "Failed to delete project");
+   254→      }
+   255→      return json;
+   256→    },
+   257→    onSuccess: (_data, deletedId) => {
+   258→      if (selectedProjectId === deletedId) setSelectedProjectId(null);
+   259→      queryClient.invalidateQueries({ queryKey: ["projects"] });
+   260→      queryClient.invalidateQueries({ queryKey: ["project", deletedId] });
+   261→      toast.success("Project deleted");
+   262→    },
+   263→    onError: (err: Error) => toast.error(err.message),
+   264→  });
+   265→
+   266→  const addNoteMutation = useMutation({
+   267→    mutationFn: async ({ projectId, content }: { projectId: string; content: string }) => {
+   268→      const res = await fetch(`/api/v1/projects/${projectId}/notes`, {
+   269→        method: "POST",
+   270→        headers: { "Content-Type": "application/json" },
+   271→        body: JSON.stringify({ content }),
+   272→      });
+   273→      const json = await res.json();
+   274→      if (!res.ok) {
+   275→        throw new Error(json?.error?.message ?? "Failed to add note");
+   276→      }
+   277→      return json;
+   278→    },
+   279→    onSuccess: () => {
+   280→      queryClient.invalidateQueries({ queryKey: ["project", selectedProjectId] });
+   281→      queryClient.invalidateQueries({ queryKey: ["projects"] });
+   282→    },
+   283→    onError: (err: Error) => toast.error(err.message),
+   284→  });
+   285→
+   286→  // ------------------------- Render -------------------------
+   287→  return (
+   288→    <motion.div
+   289→      initial={{ opacity: 0 }}
+   290→      animate={{ opacity: 1 }}
+   291→      exit={{ opacity: 0 }}
+   292→      transition={{ duration: 0.2 }}
+   293→      className="fixed inset-0 z-[60] flex bg-background/95 backdrop-blur-sm"
+   294→      role="dialog"
+   295→      aria-modal="true"
+   296→      aria-label="Creative projects"
+   297→    >
+   298→      {/* Sidebar (desktop) */}
+   299→      <aside className="hidden w-80 shrink-0 flex-col border-r border-border bg-surface/60 lg:flex">
+   300→        <SidebarHeader onClose={onClose} />
+   301→        <div className="border-b border-border p-3">
+   302→          <Button
+   303→            className="w-full justify-start bg-primary/15 text-primary hover:bg-primary/25"
+   304→            variant="ghost"
+   305→            onClick={() => {
+   306→              setSelectedProjectId(null);
+   307→              setShowNewProjectForm(true);
+   308→            }}
+   309→          >
+   310→            <FolderPlus className="mr-2 h-4 w-4" />
+   311→            New project
+   312→          </Button>
+   313→        </div>
+   314→        <ProjectList
+   315→          projects={projects}
+   316→          loading={loadingList}
+   317→          selectedId={selectedProjectId}
+   318→          onSelect={(id) => {
+   319→            setSelectedProjectId(id);
+   320→            setShowNewProjectForm(false);
+   321→          }}
+   322→          onDelete={(id) => deleteProjectMutation.mutate(id)}
+   323→          deletingId={deleteProjectMutation.isPending ? selectedProjectId ?? "" : ""}
+   324→        />
+   325→      </aside>
+   326→
+   327→      {/* Main area */}
+   328→      <div className="flex flex-1 flex-col min-w-0">
+   329→        {/* Mobile header */}
+   330→        <header className="flex items-center justify-between border-b border-border px-4 py-3 lg:hidden">
+   331→          <div className="flex items-center gap-2">
+   332→            {selectedProjectId ? (
+   333→              <Button
+   334→                size="icon"
+   335→                variant="ghost"
+   336→                className="h-8 w-8"
+   337→                onClick={() => {
+   338→                  setSelectedProjectId(null);
+   339→                  setMobileSidebarOpen(true);
+   340→                }}
+   341→                aria-label="Back to projects"
+   342→              >
+   343→                <ArrowLeft className="h-4 w-4" />
+   344→              </Button>
+   345→            ) : (
+   346→              <WalloraMonogram className="h-7 w-7" />
+   347→            )}
+   348→            <span className="font-display text-sm font-semibold">Projects</span>
+   349→          </div>
+   350→          <Button
+   351→            size="icon"
+   352→            variant="ghost"
+   353→            className="h-8 w-8"
+   354→            onClick={onClose}
+   355→            aria-label="Close projects panel"
+   356→          >
+   357→            <X className="h-4 w-4" />
+   358→          </Button>
+   359→        </header>
+   360→
+   361→        {/* Mobile project picker (Sheet-style overlay) */}
+   362→        <AnimatePresence>
+   363→          {mobileSidebarOpen && !selectedProjectId && (
+   364→            <motion.div
+   365→              initial={{ opacity: 0 }}
+   366→              animate={{ opacity: 1 }}
+   367→              exit={{ opacity: 0 }}
+   368→              className="absolute inset-0 z-10 flex flex-col bg-background lg:hidden"
+   369→            >
+   370→              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+   371→                <span className="font-display text-sm font-semibold">Your projects</span>
+   372→                <Button
+   373→                  size="icon"
+   374→                  variant="ghost"
+   375→                  className="h-8 w-8"
+   376→                  onClick={() => setMobileSidebarOpen(false)}
+   377→                  aria-label="Close project list"
+   378→                >
+   379→                  <X className="h-4 w-4" />
+   380→                </Button>
+   381→              </div>
+   382→              <div className="border-b border-border p-3">
+   383→                <Button
+   384→                  className="w-full justify-start bg-primary/15 text-primary hover:bg-primary/25"
+   385→                  variant="ghost"
+   386→                  onClick={() => {
+   387→                    setShowNewProjectForm(true);
+   388→                    setMobileSidebarOpen(false);
+   389→                  }}
+   390→                >
+   391→                  <FolderPlus className="mr-2 h-4 w-4" />
+   392→                  New project
+   393→                </Button>
+   394→              </div>
+   395→              <ProjectList
+   396→                projects={projects}
+   397→                loading={loadingList}
+   398→                selectedId={selectedProjectId}
+   399→                onSelect={(id) => {
+   400→                  setSelectedProjectId(id);
+   401→                  setMobileSidebarOpen(false);
+   402→                  setShowNewProjectForm(false);
+   403→                }}
+   404→                onDelete={(id) => deleteProjectMutation.mutate(id)}
+   405→                deletingId=""
+   406→              />
+   407→            </motion.div>
+   408→          )}
+   409→        </AnimatePresence>
+   410→
+   411→        {/* Desktop header */}
+   412→        <header className="hidden items-center justify-between border-b border-border px-6 py-4 lg:flex">
+   413→          <div className="flex items-center gap-3">
+   414→            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-primary">
+   415→              <FolderKanban className="h-4.5 w-4.5" />
+   416→            </span>
+   417→            <div>
+   418→              <h2 className="font-display text-base font-semibold text-foreground">
+   419→                Creative Projects
+   420→              </h2>
+   421→              <p className="text-xs text-secondary-text">
+   422→                Curate wallpapers + generations into private collections.
+   423→              </p>
+   424→            </div>
+   425→          </div>
+   426→          <Button
+   427→            size="icon"
+   428→            variant="ghost"
+   429→            className="h-8 w-8"
+   430→            onClick={onClose}
+   431→            aria-label="Close projects panel"
+   432→          >
+   433→            <X className="h-4 w-4" />
+   434→          </Button>
+   435→        </header>
+   436→
+   437→        {/* Body */}
+   438→        <div className="flex-1 overflow-y-auto">
+   439→          <div className="mx-auto max-w-5xl p-4 sm:p-6">
+   440→            <AnimatePresence mode="wait">
+   441→              {showNewProjectForm && !selectedProjectId ? (
+   442→                <motion.div
+   443→                  key="new-project"
+   444→                  initial={{ opacity: 0, y: 12 }}
+   445→                  animate={{ opacity: 1, y: 0 }}
+   446→                  exit={{ opacity: 0, y: -12 }}
+   447→                  transition={{ duration: 0.2 }}
+   448→                >
+   449→                  <NewProjectForm
+   450→                    onCancel={() => setShowNewProjectForm(false)}
+   451→                    onSubmit={(input) => createProjectMutation.mutate(input)}
+   452→                    isSubmitting={createProjectMutation.isPending}
+   453→                  />
+   454→                </motion.div>
+   455→              ) : selectedProjectId && projectDetail?.data ? (
+   456→                <motion.div
+   457→                  key={`project-${selectedProjectId}`}
+   458→                  initial={{ opacity: 0, y: 12 }}
+   459→                  animate={{ opacity: 1, y: 0 }}
+   460→                  exit={{ opacity: 0, y: -12 }}
+   461→                  transition={{ duration: 0.2 }}
+   462→                >
+   463→                  <ProjectDetail
+   464→                    project={projectDetail.data}
+   465→                    onBack={() => setSelectedProjectId(null)}
+   466→                    onUpdate={(input) =>
+   467→                      updateProjectMutation.mutate({ id: selectedProjectId, ...input })
+   468→                    }
+   469→                    isUpdating={updateProjectMutation.isPending}
+   470→                    onDelete={() => deleteProjectMutation.mutate(selectedProjectId)}
+   471→                    isDeleting={deleteProjectMutation.isPending}
+   472→                    onAddNote={(content) =>
+   473→                      addNoteMutation.mutate({ projectId: selectedProjectId, content })
+   474→                    }
+   475→                    isAddingNote={addNoteMutation.isPending}
+   476→                  />
+   477→                </motion.div>
+   478→              ) : selectedProjectId && loadingDetail ? (
+   479→                <motion.div
+   480→                  key="loading"
+   481→                  initial={{ opacity: 0 }}
+   482→                  animate={{ opacity: 1 }}
+   483→                  exit={{ opacity: 0 }}
+   484→                  className="flex h-64 items-center justify-center"
+   485→                >
+   486→                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+   487→                </motion.div>
+   488→              ) : (
+   489→                <motion.div
+   490→                  key="empty"
+   491→                  initial={{ opacity: 0, y: 12 }}
+   492→                  animate={{ opacity: 1, y: 0 }}
+   493→                  exit={{ opacity: 0, y: -12 }}
+   494→                  transition={{ duration: 0.2 }}
+   495→                >
+   496→                  <EmptyState
+   497→                    hasProjects={projects.length > 0}
+   498→                    onNewProject={() => setShowNewProjectForm(true)}
+   499→                    onOpenMobileList={() => setMobileSidebarOpen(true)}
+   500→                  />
+   501→                </motion.div>
+   502→              )}
+   503→            </AnimatePresence>
+   504→          </div>
+   505→        </div>
+   506→      </div>
+   507→    </motion.div>
+   508→  );
+   509→}
+   510→
+   511→// ---------------------------------------------------------------------------
+   512→// Sidebar
+   513→// ---------------------------------------------------------------------------
+   514→
+   515→function SidebarHeader({ onClose }: { onClose: () => void }) {
+   516→  return (
+   517→    <div className="flex items-center justify-between border-b border-border p-4">
+   518→      <div className="flex items-center gap-2">
+   519→        <WalloraMonogram className="h-7 w-7" />
+   520→        <span className="font-display text-sm font-semibold">Projects</span>
+   521→      </div>
+   522→      <Button
+   523→        size="icon"
+   524→        variant="ghost"
+   525→        className="h-7 w-7"
+   526→        onClick={onClose}
+   527→        aria-label="Close projects panel"
+   528→      >
+   529→        <X className="h-4 w-4" />
+   530→      </Button>
+   531→    </div>
+   532→  );
+   533→}
+   534→
+   535→function ProjectList({
+   536→  projects,
+   537→  loading,
+   538→  selectedId,
+   539→  onSelect,
+   540→  onDelete,
+   541→  deletingId,
+   542→}: {
+   543→  projects: ProjectListItem[];
+   544→  loading: boolean;
+   545→  selectedId: string | null;
+   546→  onSelect: (id: string) => void;
+   547→  onDelete: (id: string) => void;
+   548→  deletingId: string;
+   549→}) {
+   550→  if (loading) {
+   551→    return (
+   552→      <div className="flex flex-1 items-center justify-center p-6">
+   553→        <Loader2 className="h-5 w-5 animate-spin text-secondary-text" />
+   554→      </div>
+   555→    );
+   556→  }
+   557→
+   558→  if (projects.length === 0) {
+   559→    return (
+   560→      <div className="flex flex-1 flex-col items-center gap-2 p-6 text-center">
+   561→        <FolderKanban className="h-8 w-8 text-secondary-text" />
+   562→        <p className="text-xs text-secondary-text">
+   563→          No projects yet.
+   564→          <br />
+   565→          Create your first to get started.
+   566→        </p>
+   567→      </div>
+   568→    );
+   569→  }
+   570→
+   571→  return (
+   572→    <div className="flex-1 overflow-y-auto p-2">
+   573→      {projects.map((p) => (
+   574→        <div
+   575→          key={p.id}
+   576→          className={cn(
+   577→            "group mb-1 cursor-pointer rounded-lg px-3 py-2.5 transition-colors",
+   578→            selectedId === p.id
+   579→              ? "bg-raised text-foreground"
+   580→              : "text-secondary-text hover:bg-surface hover:text-foreground",
+   581→          )}
+   582→          onClick={() => onSelect(p.id)}
+   583→        >
+   584→          <div className="flex items-center gap-2">
+   585→            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-primary">
+   586→              {p.isPublic ? (
+   587→                <Globe className="h-3 w-3" />
+   588→              ) : (
+   589→                <Lock className="h-3 w-3" />
+   590→              )}
+   591→            </span>
+   592→            <span className="flex-1 truncate text-xs font-medium">{p.name}</span>
+   593→            <button
+   594→              type="button"
+   595→              onClick={(e) => {
+   596→                e.stopPropagation();
+   597→                if (
+   598→                  confirm(
+   599→                    `Delete "${p.name}"? This removes the project and all its assets and notes. This cannot be undone.`,
+   600→                  )
+   601→                ) {
+   602→                  onDelete(p.id);
+   603→                }
+   604→              }}
+   605→              className="opacity-0 transition-opacity group-hover:opacity-100"
+   606→              aria-label="Delete project"
+   607→            >
+   608→              {deletingId === p.id ? (
+   609→                <Loader2 className="h-3 w-3 animate-spin text-destructive" />
+   610→              ) : (
+   611→                <Trash2 className="h-3 w-3 text-destructive" />
+   612→              )}
+   613→            </button>
+   614→          </div>
+   615→          <div className="mt-1 flex items-center gap-2 pl-8 text-[10px] text-secondary-text">
+   616→            <span>{p.assetCount} assets</span>
+   617→            <span aria-hidden>·</span>
+   618→            <span>{p.noteCount} notes</span>
+   619→          </div>
+   620→        </div>
+   621→      ))}
+   622→    </div>
+   623→  );
+   624→}
+   625→
+   626→// ---------------------------------------------------------------------------
+   627→// New project form
+   628→// ---------------------------------------------------------------------------
+   629→
+   630→function NewProjectForm({
+   631→  onCancel,
+   632→  onSubmit,
+   633→  isSubmitting,
+   634→}: {
+   635→  onCancel: () => void;
+   636→  onSubmit: (input: { name: string; description?: string }) => void;
+   637→  isSubmitting: boolean;
+   638→}) {
+   639→  const [name, setName] = React.useState("");
+   640→  const [description, setDescription] = React.useState("");
+   641→
+   642→  const handleSubmit = (e: React.FormEvent) => {
+   643→    e.preventDefault();
+   644→    const trimmed = name.trim();
+   645→    if (trimmed.length < 2 || trimmed.length > 80) {
+   646→      toast.error("Name must be 2–80 characters.");
+   647→      return;
+   648→    }
+   649→    onSubmit({ name: trimmed, description: description.trim() || undefined });
+   650→  };
+   651→
+   652→  return (
+   653→    <div className="mx-auto max-w-xl rounded-2xl border border-border bg-surface p-6">
+   654→      <div className="mb-4 flex items-center gap-3">
+   655→        <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-raised text-primary">
+   656→          <FolderPlus className="h-5 w-5" />
+   657→        </span>
+   658→        <div>
+   659→          <h3 className="font-display text-lg font-semibold text-foreground">
+   660→            Create a new project
+   661→          </h3>
+   662→          <p className="text-xs text-secondary-text">
+   663→            A workspace for wallpapers, generations and notes.
+   664→          </p>
+   665→        </div>
+   666→      </div>
+   667→
+   668→      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+   669→        <div>
+   670→          <label
+   671→            htmlFor="project-name"
+   672→            className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-secondary-text"
+   673→          >
+   674→            Name <span className="text-destructive">*</span>
+   675→          </label>
+   676→          <Input
+   677→            id="project-name"
+   678→            value={name}
+   679→            onChange={(e) => setName(e.target.value)}
+   680→            placeholder="e.g. Bedroom refresh — moody + gold"
+   681→            maxLength={80}
+   682→            autoFocus
+   683→            className="border-border bg-raised text-sm"
+   684→            disabled={isSubmitting}
+   685→          />
+   686→          <p className="mt-1 text-[11px] text-secondary-text">{name.length}/80</p>
+   687→        </div>
+   688→
+   689→        <div>
+   690→          <label
+   691→            htmlFor="project-description"
+   692→            className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-secondary-text"
+   693→          >
+   694→            Description <span className="text-secondary-text">(optional)</span>
+   695→          </label>
+   696→          <Textarea
+   697→            id="project-description"
+   698→            value={description}
+   699→            onChange={(e) => setDescription(e.target.value)}
+   700→            placeholder="What is this project about?"
+   701→            rows={4}
+   702→            maxLength={500}
+   703→            className="resize-none border-border bg-raised text-sm"
+   704→            disabled={isSubmitting}
+   705→          />
+   706→          <p className="mt-1 text-[11px] text-secondary-text">{description.length}/500</p>
+   707→        </div>
+   708→
+   709→        <div className="flex items-center justify-end gap-2">
+   710→          <Button
+   711→            type="button"
+   712→            variant="ghost"
+   713→            onClick={onCancel}
+   714→            disabled={isSubmitting}
+   715→            className="text-secondary-text hover:text-foreground"
+   716→          >
+   717→            Cancel
+   718→          </Button>
+   719→          <Button
+   720→            type="submit"
+   721→            disabled={isSubmitting || name.trim().length < 2}
+   722→            className="bg-primary text-primary-foreground hover:bg-primary/90"
+   723→          >
+   724→            {isSubmitting ? (
+   725→              <>
+   726→                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+   727→                Creating…
+   728→              </>
+   729→            ) : (
+   730→              <>
+   731→                <Sparkles className="mr-2 h-4 w-4" />
+   732→                Create project
+   733→              </>
+   734→            )}
+   735→          </Button>
+   736→        </div>
+   737→      </form>
+   738→    </div>
+   739→  );
+   740→}
+   741→
+   742→// ---------------------------------------------------------------------------
+   743→// Empty state (no project selected)
+   744→// ---------------------------------------------------------------------------
+   745→
+   746→const EXAMPLE_PROMPTS = [
+   747→  {
+   748→    icon: "🛏️",
+   749→    title: "Bedroom refresh",
+   750→    body: "A moodboard for a moody, gold-accented bedroom redo.",
+   751→  },
+   752→  {
+   753→    icon: "🌃",
+   754→    title: "Cyberpunk city",
+   755→    body: "Collect neon rain-soaked skylines for a desktop wallpaper pack.",
+   756→  },
+   757→  {
+   758→    icon: "⛰️",
+   759→    title: "Mountain series",
+   760→    body: "Reference photos + generations for a landscape series.",
+   761→  },
+   762→];
+   763→
+   764→function EmptyState({
+   765→  hasProjects,
+   766→  onNewProject,
+   767→  onOpenMobileList,
+   768→}: {
+   769→  hasProjects: boolean;
+   770→  onNewProject: () => void;
+   771→  onOpenMobileList: () => void;
+   772→}) {
+   773→  return (
+   774→    <div className="flex flex-col items-center gap-6 py-10 text-center sm:py-16">
+   775→      <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+   776→        <FolderKanban className="h-8 w-8" />
+   777→      </span>
+   778→      <div>
+   779→        <h3 className="font-display text-xl font-semibold text-foreground sm:text-2xl">
+   780→          {hasProjects ? "Pick a project to open" : "Create your first project"}
+   781→        </h3>
+   782→        <p className="mx-auto mt-2 max-w-md text-sm text-secondary-text">
+   783→          Projects bundle wallpapers, AI generations and notes into private
+   784→          moodboards. Use them to plan a room refresh, collect references, or
+   785→          curate a wallpaper pack.
+   786→        </p>
+   787→      </div>
+   788→
+   789→      <div className="flex flex-wrap items-center justify-center gap-2">
+   790→        <Button
+   791→          className="bg-primary text-primary-foreground hover:bg-primary/90"
+   792→          onClick={onNewProject}
+   793→        >
+   794→          <FolderPlus className="mr-2 h-4 w-4" />
+   795→          New project
+   796→        </Button>
+   797→        {hasProjects && (
+   798→          <Button
+   799→            variant="outline"
+   800→            className="border-border bg-surface text-secondary-text hover:text-foreground lg:hidden"
+   801→            onClick={onOpenMobileList}
+   802→          >
+   803→            View all projects
+   804→          </Button>
+   805→        )}
+   806→      </div>
+   807→
+   808→      <div className="grid w-full max-w-2xl gap-3 text-left sm:grid-cols-3">
+   809→        {EXAMPLE_PROMPTS.map((ex) => (
+   810→          <button
+   811→            key={ex.title}
+   812→            type="button"
+   813→            onClick={onNewProject}
+   814→            className="rounded-xl border border-border bg-surface p-4 text-left transition-colors hover:border-primary/30"
+   815→          >
+   816→            <div className="mb-2 text-2xl">{ex.icon}</div>
+   817→            <p className="text-sm font-medium text-foreground">{ex.title}</p>
+   818→            <p className="mt-1 text-xs text-secondary-text">{ex.body}</p>
+   819→          </button>
+   820→        ))}
+   821→      </div>
+   822→
+   823→      <Badge variant="outline" className="border-border bg-surface text-[10px] text-secondary-text">
+   824→        Phase 7 · Creative Projects
+   825→      </Badge>
+   826→    </div>
+   827→  );
+   828→}
+   829→
+   830→// ---------------------------------------------------------------------------
+   831→// Project detail view
+   832→// ---------------------------------------------------------------------------
+   833→
+   834→function ProjectDetail({
+   835→  project,
+   836→  onBack,
+   837→  onUpdate,
+   838→  isUpdating,
+   839→  onDelete,
+   840→  isDeleting,
+   841→  onAddNote,
+   842→  isAddingNote,
+   843→}: {
+   844→  project: ProjectDetail;
+   845→  onBack: () => void;
+   846→  onUpdate: (input: { name?: string; description?: string | null }) => void;
+   847→  isUpdating: boolean;
+   848→  onDelete: () => void;
+   849→  isDeleting: boolean;
+   850→  onAddNote: (content: string) => void;
+   851→  isAddingNote: boolean;
+   852→}) {
+   853→  const [editing, setEditing] = React.useState(false);
+   854→  const [draftName, setDraftName] = React.useState(project.name);
+   855→  const [draftDescription, setDraftDescription] = React.useState(project.description ?? "");
+   856→
+   857→  React.useEffect(() => {
+   858→    setDraftName(project.name);
+   859→    setDraftDescription(project.description ?? "");
+   860→  }, [project.id, project.name, project.description]);
+   861→
+   862→  const handleSave = () => {
+   863→    const name = draftName.trim();
+   864→    if (name.length < 2 || name.length > 80) {
+   865→      toast.error("Name must be 2–80 characters.");
+   866→      return;
+   867→    }
+   868→    onUpdate({ name, description: draftDescription.trim() || null });
+   869→    setEditing(false);
+   870→  };
+   871→
+   872→  const handleDelete = () => {
+   873→    if (
+   874→      confirm(
+   875→        `Delete "${project.name}"? This removes the project and all its assets and notes. This cannot be undone.`,
+   876→      )
+   877→    ) {
+   878→      onDelete();
+   879→    }
+   880→  };
+   881→
+   882→  return (
+   883→    <div className="flex flex-col gap-6">
+   884→      {/* Header / title */}
+   885→      <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+   886→        <div className="flex flex-wrap items-start justify-between gap-3">
+   887→          <div className="flex min-w-0 flex-1 flex-col gap-2">
+   888→            {editing ? (
+   889→              <div className="flex flex-col gap-3">
+   890→                <Input
+   891→                  value={draftName}
+   892→                  onChange={(e) => setDraftName(e.target.value)}
+   893→                  maxLength={80}
+   894→                  className="border-border bg-raised text-base font-semibold"
+   895→                  autoFocus
+   896→                />
+   897→                <Textarea
+   898→                  value={draftDescription}
+   899→                  onChange={(e) => setDraftDescription(e.target.value)}
+   900→                  placeholder="Description (optional)"
+   901→                  rows={3}
+   902→                  maxLength={500}
+   903→                  className="resize-none border-border bg-raised text-sm"
+   904→                />
+   905→                <div className="flex items-center gap-2">
+   906→                  <Button
+   907→                    size="sm"
+   908→                    onClick={handleSave}
+   909→                    disabled={isUpdating}
+   910→                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+   911→                  >
+   912→                    {isUpdating ? (
+   913→                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+   914→                    ) : (
+   915→                      <Save className="mr-1.5 h-3.5 w-3.5" />
+   916→                    )}
+   917→                    Save
+   918→                  </Button>
+   919→                  <Button
+   920→                    size="sm"
+   921→                    variant="ghost"
+   922→                    onClick={() => {
+   923→                      setEditing(false);
+   924→                      setDraftName(project.name);
+   925→                      setDraftDescription(project.description ?? "");
+   926→                    }}
+   927→                    disabled={isUpdating}
+   928→                    className="text-secondary-text"
+   929→                  >
+   930→                    Cancel
+   931→                  </Button>
+   932→                </div>
+   933→              </div>
+   934→            ) : (
+   935→              <>
+   936→                <div className="flex flex-wrap items-center gap-2">
+   937→                  <h1 className="font-display text-xl font-semibold text-foreground sm:text-2xl">
+   938→                    {project.name}
+   939→                  </h1>
+   940→                  <Badge
+   941→                    variant="outline"
+   942→                    className={
+   943→                      project.isPublic
+   944→                        ? "border-success/30 bg-success/10 text-[10px] text-success"
+   945→                        : "border-border bg-surface text-[10px] text-secondary-text"
+   946→                    }
+   947→                  >
+   948→                    {project.isPublic ? (
+   949→                      <>
+   950→                        <Globe className="mr-1 h-2.5 w-2.5" />
+   951→                        Public
+   952→                      </>
+   953→                    ) : (
+   954→                      <>
+   955→                        <Lock className="mr-1 h-2.5 w-2.5" />
+   956→                        Private
+   957→                      </>
+   958→                    )}
+   959→                  </Badge>
+   960→                </div>
+   961→                {project.description ? (
+   962→                  <p className="text-sm text-secondary-text">{project.description}</p>
+   963→                ) : (
+   964→                  <p className="text-xs italic text-secondary-text">No description yet.</p>
+   965→                )}
+   966→                <div className="flex flex-wrap items-center gap-3 text-[11px] text-secondary-text">
+   967→                  <span className="inline-flex items-center gap-1">
+   968→                    <Calendar className="h-3 w-3" />
+   969→                    Updated {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true })}
+   970→                  </span>
+   971→                  <span aria-hidden>·</span>
+   972→                  <span>{project.assets.length} assets</span>
+   973→                  <span aria-hidden>·</span>
+   974→                  <span>{project.notes.length} notes</span>
+   975→                </div>
+   976→              </>
+   977→            )}
+   978→          </div>
+   979→
+   980→          {!editing && (
+   981→            <div className="flex items-center gap-2">
+   982→              <Button
+   983→                size="sm"
+   984→                variant="outline"
+   985→                onClick={() => setEditing(true)}
+   986→                className="border-border bg-raised text-secondary-text hover:text-foreground"
+   987→              >
+   988→                <PencilLine className="mr-1.5 h-3.5 w-3.5" />
+   989→                Edit
+   990→              </Button>
+   991→              <Button
+   992→                size="sm"
+   993→                variant="ghost"
+   994→                onClick={handleDelete}
+   995→                disabled={isDeleting}
+   996→                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+   997→              >
+   998→                {isDeleting ? (
+   999→                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+  1000→                ) : (
+  1001→                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+  1002→                )}
+  1003→                Delete
+  1004→              </Button>
+  1005→            </div>
+  1006→          )}
+  1007→        </div>
+  1008→      </div>
+  1009→
+  1010→      {/* Assets grid */}
+  1011→      <section aria-labelledby="assets-heading">
+  1012→        <div className="mb-3 flex items-center justify-between">
+  1013→          <h2
+  1014→            id="assets-heading"
+  1015→            className="font-display text-sm font-semibold uppercase tracking-wider text-secondary-text"
+  1016→          >
+  1017→            Assets ({project.assets.length})
+  1018→          </h2>
+  1019→        </div>
+  1020→        {project.assets.length === 0 ? (
+  1021→          <div className="rounded-xl border border-dashed border-border bg-surface/40 p-8 text-center">
+  1022→            <ImageIcon className="mx-auto mb-2 h-8 w-8 text-secondary-text" />
+  1023→            <p className="text-sm text-secondary-text">
+  1024→              No assets yet. Add wallpapers or AI generations from their detail views.
+  1025→            </p>
+  1026→          </div>
+  1027→        ) : (
+  1028→          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+  1029→            {project.assets.map((asset) => (
+  1030→              <AssetCard key={asset.id} asset={asset} />
+  1031→            ))}
+  1032→          </div>
+  1033→        )}
+  1034→      </section>
+  1035→
+  1036→      <Separator className="bg-border" />
+  1037→
+  1038→      {/* Notes */}
+  1039→      <section aria-labelledby="notes-heading">
+  1040→        <div className="mb-3 flex items-center justify-between">
+  1041→          <h2
+  1042→            id="notes-heading"
+  1043→            className="font-display text-sm font-semibold uppercase tracking-wider text-secondary-text"
+  1044→          >
+  1045→            Notes ({project.notes.length})
+  1046→          </h2>
+  1047→        </div>
+  1048→        <AddNoteForm onAdd={onAddNote} isAdding={isAddingNote} />
+  1049→        {project.notes.length > 0 && (
+  1050→          <div className="mt-4 flex flex-col gap-2">
+  1051→            {project.notes.map((note) => (
+  1052→              <NoteRow key={note.id} note={note} />
+  1053→            ))}
+  1054→          </div>
+  1055→        )}
+  1056→      </section>
+  1057→
+  1058→      {/* Mobile back */}
+  1059→      <div className="pt-2 lg:hidden">
+  1060→        <Button
+  1061→          variant="ghost"
+  1062→          onClick={onBack}
+  1063→          className="text-secondary-text hover:text-foreground"
+  1064→        >
+  1065→          <ArrowLeft className="mr-1.5 h-4 w-4" />
+  1066→          Back to projects
+  1067→        </Button>
+  1068→      </div>
+  1069→    </div>
+  1070→  );
+  1071→}
+  1072→
+  1073→// ---------------------------------------------------------------------------
+  1074→// Asset card
+  1075→// ---------------------------------------------------------------------------
+  1076→
+  1077→function AssetCard({ asset }: { asset: ProjectAsset }) {
+  1078→  const imgSrc =
+  1079→    asset.assetType === "generation"
+  1080→      ? asset.generation?.publicUrl
+  1081→      : asset.wallpaper?.gridAsset?.objectKey;
+  1082→  const title =
+  1083→    asset.assetType === "generation"
+  1084→      ? asset.generation?.prompt ?? "Generation"
+  1085→      : asset.wallpaper?.title ?? "Wallpaper";
+  1086→
+  1087→  const aspectClass =
+  1088→    asset.assetType === "generation"
+  1089→      ? asset.generation?.aspectRatio === "portrait"
+  1090→        ? "aspect-[3/4]"
+  1091→        : asset.generation?.aspectRatio === "landscape"
+  1092→          ? "aspect-[16/9]"
+  1093→          : "aspect-square"
+  1094→      : asset.wallpaper?.orientation === "portrait"
+  1095→        ? "aspect-[3/4]"
+  1096→        : asset.wallpaper?.orientation === "landscape"
+  1097→          ? "aspect-[16/9]"
+  1098→          : "aspect-square";
+  1099→
+  1100→  return (
+  1101→    <motion.div
+  1102→      initial={{ opacity: 0, scale: 0.96 }}
+  1103→      animate={{ opacity: 1, scale: 1 }}
+  1104→      transition={{ duration: 0.2 }}
+  1105→      className="group relative overflow-hidden rounded-xl border border-border bg-surface"
+  1106→    >
+  1107→      <div className={cn("relative overflow-hidden", aspectClass)}>
+  1108→        {imgSrc ? (
+  1109→          <img
+  1110→            src={imgSrc}
+  1111→            alt={title}
+  1112→            className="absolute inset-0 h-full w-full object-cover"
+  1113→            loading="lazy"
+  1114→          />
+  1115→        ) : (
+  1116→          <div className="absolute inset-0 flex items-center justify-center bg-raised">
+  1117→            <ImageIcon className="h-6 w-6 text-secondary-text" />
+  1118→          </div>
+  1119→        )}
+  1120→        <div className="absolute right-1.5 top-1.5">
+  1121→          <Badge
+  1122→            variant="outline"
+  1123→            className="border-border bg-background/80 text-[9px] text-secondary-text backdrop-blur"
+  1124→          >
+  1125→            {asset.assetType === "generation" ? "AI" : "Wallpaper"}
+  1126→          </Badge>
+  1127→        </div>
+  1128→      </div>
+  1129→      <div className="p-2.5">
+  1130→        <p className="truncate text-xs font-medium text-foreground" title={title}>
+  1131→          {title}
+  1132→        </p>
+  1133→        <p className="mt-0.5 text-[10px] text-secondary-text">
+  1134→          {formatDistanceToNow(new Date(asset.createdAt), { addSuffix: true })}
+  1135→        </p>
+  1136→        {asset.note && (
+  1137→          <p className="mt-1.5 line-clamp-2 rounded-md bg-raised px-2 py-1 text-[10px] text-secondary-text">
+  1138→            {asset.note}
+  1139→          </p>
+  1140→        )}
+  1141→      </div>
+  1142→    </motion.div>
+  1143→  );
+  1144→}
+  1145→
+  1146→// ---------------------------------------------------------------------------
+  1147→// Notes
+  1148→// ---------------------------------------------------------------------------
+  1149→
+  1150→function AddNoteForm({
+  1151→  onAdd,
+  1152→  isAdding,
+  1153→}: {
+  1154→  onAdd: (content: string) => void;
+  1155→  isAdding: boolean;
+  1156→}) {
+  1157→  const [content, setContent] = React.useState("");
+  1158→
+  1159→  const handleSubmit = (e: React.FormEvent) => {
+  1160→    e.preventDefault();
+  1161→    const trimmed = content.trim();
+  1162→    if (trimmed.length < 1 || trimmed.length > 500) {
+  1163→      toast.error("Note must be 1–500 characters.");
+  1164→      return;
+  1165→    }
+  1166→    onAdd(trimmed);
+  1167→    setContent("");
+  1168→  };
+  1169→
+  1170→  return (
+  1171→    <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-surface p-3">
+  1172→      <Textarea
+  1173→        value={content}
+  1174→        onChange={(e) => setContent(e.target.value)}
+  1175→        placeholder="Add a note — design ideas, references, reminders…"
+  1176→        rows={2}
+  1177→        maxLength={500}
+  1178→        className="resize-none border-0 bg-transparent px-1 text-sm focus-visible:ring-0"
+  1179→        disabled={isAdding}
+  1180→      />
+  1181→      <div className="mt-2 flex items-center justify-between">
+  1182→        <span className="text-[10px] text-secondary-text">{content.length}/500</span>
+  1183→        <Button
+  1184→          type="submit"
+  1185→          size="sm"
+  1186→          disabled={isAdding || content.trim().length === 0}
+  1187→          className="bg-primary text-primary-foreground hover:bg-primary/90"
+  1188→        >
+  1189→          {isAdding ? (
+  1190→            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+  1191→          ) : (
+  1192→            <Plus className="mr-1.5 h-3.5 w-3.5" />
+  1193→          )}
+  1194→          Add note
+  1195→        </Button>
+  1196→      </div>
+  1197→    </form>
+  1198→  );
+  1199→}
+  1200→
+  1201→function NoteRow({ note }: { note: ProjectNote }) {
+  1202→  return (
+  1203→    <motion.div
+  1204→      initial={{ opacity: 0, y: 6 }}
+  1205→      animate={{ opacity: 1, y: 0 }}
+  1206→      transition={{ duration: 0.2 }}
+  1207→      className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5"
+  1208→    >
+  1209→      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-raised text-primary">
+  1210→        <StickyNote className="h-3 w-3" />
+  1211→      </span>
+  1212→      <div className="min-w-0 flex-1">
+  1213→        <p className="whitespace-pre-wrap break-words text-sm text-foreground">{note.content}</p>
+  1214→        <p className="mt-1 text-[10px] text-secondary-text">
+  1215→          {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+  1216→        </p>
+  1217→      </div>
+  1218→    </motion.div>
+  1219→  );
+  1220→}
+  1221→

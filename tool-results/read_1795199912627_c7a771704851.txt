@@ -1,0 +1,2002 @@
+     1→# WALLORA — COMPLETE PRODUCT REQUIREMENTS, TECHNICAL ARCHITECTURE & MASTER AI DEVELOPMENT PROMPT
+     2→
+     3→**Product:** WALLORA  
+     4→**Product category:** AI-powered creative ecosystem and visual social platform  
+     5→**Tagline:** Discover. Chat. Imagine. Create. Share. Earn.  
+     6→**Target platforms:** Web, Progressive Web App (PWA), Android  
+     7→**Development approach:** Full-stack, modular, production-oriented, phased implementation  
+     8→**Primary AI provider:** NVIDIA NIM, using eligible free hosted models where available  
+     9→**Database:** Neon PostgreSQL  
+    10→**ORM:** Drizzle ORM  
+    11→**Authentication:** Better Auth  
+    12→**Frontend hosting:** Vercel  
+    13→**Image storage:** Cloudflare R2  
+    14→**CDN:** Cloudflare  
+    15→**Mobile:** Expo + React Native  
+    16→**Repository:** GitHub  
+    17→**Project name:** WALLORA
+    18→
+    19→---
+    20→
+    21→# PART 1 — YOUR ROLE AS THE DEVELOPMENT AGENT
+    22→
+    23→You are acting as a complete senior software development organization.
+    24→
+    25→Your responsibilities include:
+    26→
+    27→1. Principal software architect.
+    28→2. Senior frontend developer.
+    29→3. Senior backend developer.
+    30→4. Database architect.
+    31→5. UI/UX designer.
+    32→6. AI integration engineer.
+    33→7. NVIDIA model integration specialist.
+    34→8. React and Next.js specialist.
+    35→9. Expo and React Native developer.
+    36→10. PWA engineer.
+    37→11. Cloud infrastructure engineer.
+    38→12. Security engineer.
+    39→13. QA and testing engineer.
+    40→14. DevOps engineer.
+    41→15. Product designer.
+    42→
+    43→You are responsible for planning, designing, implementing, testing and documenting WALLORA.
+    44→
+    45→Do not behave like a code generator that creates several files without understanding the application.
+    46→
+    47→Think about the entire system before implementing each feature.
+    48→
+    49→## Permanent development rules
+    50→
+    51→These rules apply throughout the project:
+    52→
+    53→- Inspect the existing repository before making changes.
+    54→- Preserve existing working code.
+    55→- Do not overwrite working configurations without a reason.
+    56→- Build one development phase at a time.
+    57→- Never skip phases.
+    58→- Do not begin the next phase without approval.
+    59→- Use strict TypeScript.
+    60→- Avoid unnecessary dependencies.
+    61→- Use reusable components and modular architecture.
+    62→- Do not hardcode production data.
+    63→- Do not create fake AI generation functionality.
+    64→- Do not use static arrays to simulate real backend functionality.
+    65→- Do not create decorative buttons that do nothing.
+    66→- Every visible interaction must have a real implementation or a clearly marked unavailable state.
+    67→- Never expose secret keys in frontend or mobile code.
+    68→- Do not trust frontend roles or permissions.
+    69→- Validate all API inputs.
+    70→- Add database migrations for schema changes.
+    71→- Test every important feature.
+    72→- Maintain consistent web and mobile API contracts.
+    73→- Add loading, error, empty and success states.
+    74→- Make the application responsive.
+    75→- Keep accessibility in mind.
+    76→- Document every environment variable.
+    77→- Never claim an incomplete feature is finished.
+    78→- Create Git checkpoints after each completed phase.
+    79→- Stop and wait for approval after each phase.
+    80→
+    81→If a required external service has not been configured, create a clean integration interface and explain what configuration is missing. Never pretend the integration works.
+    82→
+    83→---
+    84→
+    85→# PART 2 — PRODUCT VISION
+    86→
+    87→WALLORA is not simply a wallpaper application.
+    88→
+    89→It is an AI-powered creative platform where users can discover visual content, communicate with AI, generate artwork, edit images, build projects, interact with creators, publish digital creations and monetize their work.
+    90→
+    91→The product should combine the best ideas behind:
+    92→
+    93→- Pinterest: visual discovery and inspiration.
+    94→- ChatGPT: conversational AI assistance.
+    95→- Canva: accessible creative tools.
+    96→- Instagram: profiles and community.
+    97→- Creative marketplaces: digital products and creator monetization.
+    98→- AI image studios: image generation and editing.
+    99→- Personalization applications: wallpapers, collections and digital aesthetics.
+   100→
+   101→These are product references, not instructions to copy their branding, interfaces or proprietary designs.
+   102→
+   103→## Core product promise
+   104→
+   105→A user should be able to enter WALLORA with an idea and leave with something they have created, discovered, organized, shared or purchased.
+   106→
+   107→Example:
+   108→
+   109→A user opens WALLORA and types:
+   110→
+   111→"I want to create a futuristic luxury bedroom design with black walls, golden lighting, a gaming setup and a large window overlooking Nairobi."
+   112→
+   113→WALLORA AI should understand the request, help refine it, select a suitable creative tool, generate a visual concept using an available model, display the result, and allow the user to save it inside a project.
+   114→
+   115→Another user might ask:
+   116→
+   117→"Give me five wallpapers that match my dark minimalist phone setup."
+   118→
+   119→WALLORA should understand the request and search the approved wallpaper library.
+   120→
+   121→---
+   122→
+   123→# PART 3 — TECHNOLOGY STACK
+   124→
+   125→Use this technology stack unless a genuine technical incompatibility is discovered and explained before changing it.
+   126→
+   127→## Frontend — Web
+   128→
+   129→- Next.js App Router.
+   130→- React.
+   131→- TypeScript.
+   132→- Tailwind CSS.
+   133→- Shadcn UI.
+   134→- Lucide icons.
+   135→- Framer Motion.
+   136→- Zustand.
+   137→- TanStack Query.
+   138→- React Hook Form.
+   139→- Zod.
+   140→
+   141→## Frontend — Android
+   142→
+   143→- Expo.
+   144→- React Native.
+   145→- Expo Router.
+   146→- TypeScript.
+   147→- NativeWind or well-structured React Native styles.
+   148→- React Native Reanimated.
+   149→- TanStack Query.
+   150→- Zustand.
+   151→- Expo Image Picker.
+   152→- Expo File System.
+   153→- Expo Notifications.
+   154→- Expo Sharing.
+   155→- Expo Secure Store.
+   156→
+   157→The Android application must be a genuine native Expo application, not a WebView wrapper.
+   158→
+   159→## PWA
+   160→
+   161→The Next.js website must be installable as a Progressive Web App.
+   162→
+   163→Implement:
+   164→
+   165→- Web app manifest.
+   166→- App icons.
+   167→- Installability.
+   168→- Service worker.
+   169→- Offline application shell.
+   170→- Offline saved content where technically and legally permitted.
+   171→- Cache strategies.
+   172→- Update detection.
+   173→- Install instructions.
+   174→- Network failure handling.
+   175→- Responsive mobile layouts.
+   176→- Standalone display mode.
+   177→- Theme colors.
+   178→- Splash screen configuration where supported.
+   179→
+   180→Do not cache private user data or private image URLs insecurely.
+   181→
+   182→The PWA and Android application must share backend contracts and business logic where practical.
+   183→
+   184→## Backend
+   185→
+   186→- Next.js server-side API.
+   187→- Route Handlers.
+   188→- Server-side service layer.
+   189→- Drizzle ORM.
+   190→- Neon PostgreSQL.
+   191→- Better Auth.
+   192→- Zod validation.
+   193→- Background job architecture.
+   194→- Cloudflare R2 integration.
+   195→- NVIDIA NIM integration.
+   196→
+   197→Use versioned endpoints under `/api/v1`.
+   198→
+   199→## Infrastructure
+   200→
+   201→| Service | Responsibility |
+   202→|---|---|
+   203→| Vercel | Next.js hosting and supported API functions |
+   204→| Neon | PostgreSQL database |
+   205→| Cloudflare R2 | Image and media object storage |
+   206→| Cloudflare | CDN and media delivery |
+   207→| NVIDIA NIM | Hosted AI inference |
+   208→| GitHub | Source control |
+   209→| Background worker | Asynchronous processing |
+   210→
+   211→Heavy AI tasks and image processing must not rely on a long-running Vercel request. Create a separate worker architecture.
+   212→
+   213→During local development, the worker may run locally.
+   214→
+   215→Choose a production worker hosting and queue solution only after checking its current capabilities, cost and compatibility. Keep it configurable.
+   216→
+   217→---
+   218→
+   219→# PART 4 — BRAND IDENTITY AND DESIGN SYSTEM
+   220→
+   221→Create a visually distinctive premium product.
+   222→
+   223→WALLORA should feel like a modern creative technology company, not a generic AI dashboard.
+   224→
+   225→## Visual direction
+   226→
+   227→Primary theme: Premium dark.
+   228→
+   229→Suggested colors:
+   230→
+   231→- Background: #0B0C0F
+   232→- Surface: #14161B
+   233→- Raised surface: #1C1F26
+   234→- Foreground: #F7F7F5
+   235→- Secondary text: #9296A1
+   236→- Primary accent: #D7B879
+   237→- Border: #292C33
+   238→- Success: #43B581
+   239→- Error: #E46F75
+   240→
+   241→Use CSS variables and shared design tokens.
+   242→
+   243→## Design principles
+   244→
+   245→1. Image-first design.
+   246→2. Premium typography.
+   247→3. Strong visual hierarchy.
+   248→4. Spacious layouts.
+   249→5. Smooth but restrained animations.
+   250→6. High-quality image presentation.
+   251→7. Elegant dark surfaces.
+   252→8. Subtle gradients.
+   253→9. Consistent border radii.
+   254→10. Accessible contrast.
+   255→11. Responsive layouts.
+   256→12. Consistent icons.
+   257→13. Thoughtful empty states.
+   258→14. Excellent mobile navigation.
+   259→
+   260→Avoid:
+   261→
+   262→- Generic AI-generated dashboard designs.
+   263→- Excessive gold gradients.
+   264→- Overcrowded interfaces.
+   265→- Excessive glassmorphism.
+   266→- Too many borders.
+   267→- Random colors.
+   268→- Inconsistent button styles.
+   269→- Unnecessary animation.
+   270→- Oversized headings everywhere.
+   271→- Fake statistics and fake social activity.
+   272→
+   273→Create a proper design system before building all application screens.
+   274→
+   275→## Typography
+   276→
+   277→Use a modern font system such as Inter, Geist or another suitable licensed font.
+   278→
+   279→Use consistent typography tokens for:
+   280→
+   281→- Display headings.
+   282→- Page headings.
+   283→- Section headings.
+   284→- Body text.
+   285→- Small labels.
+   286→- Buttons.
+   287→- Metadata.
+   288→
+   289→## Responsive requirements
+   290→
+   291→Support:
+   292→
+   293→- Small Android phones.
+   294→- Large Android phones.
+   295→- Tablets.
+   296→- Small laptops.
+   297→- Standard desktops.
+   298→- Large desktop displays.
+   299→
+   300→Design mobile-first, then expand for desktop.
+   301→
+   302→---
+   303→
+   304→# PART 5 — COMPLETE FRONTEND SCREEN SPECIFICATION
+   305→
+   306→Do not build only a homepage.
+   307→
+   308→Implement the complete user-facing application.
+   309→
+   310→Every page must have real navigation, appropriate state, loading states, error states and responsive behavior.
+   311→
+   312→## 5.1 Public landing page
+   313→
+   314→Route: `/`
+   315→
+   316→Sections:
+   317→
+   318→1. Premium navigation.
+   319→2. WALLORA logo and brand identity.
+   320→3. Hero section.
+   321→4. Main AI creation input.
+   322→5. Featured artwork.
+   323→6. Explore categories.
+   324→7. AI Studio introduction.
+   325→8. Creative tools showcase.
+   326→9. Trending creators.
+   327→10. Featured collections.
+   328→11. Marketplace preview.
+   329→12. How WALLORA works.
+   330→13. Free and premium plans.
+   331→14. Testimonials only when real testimonials exist.
+   332→15. FAQ.
+   333→16. Footer.
+   334→
+   335→Hero message:
+   336→
+   337→"Your imagination deserves a place to live."
+   338→
+   339→Supporting message:
+   340→
+   341→"Discover inspiring visuals, talk to AI, create original artwork and build your creative world."
+   342→
+   343→Primary actions:
+   344→
+   345→- Start creating.
+   346→- Explore artwork.
+   347→
+   348→Landing page requirements:
+   349→
+   350→- High-quality visual presentation.
+   351→- Responsive navigation.
+   352→- Functional CTA buttons.
+   353→- Proper SEO metadata.
+   354→- Open Graph metadata.
+   355→- Fast image loading.
+   356→- PWA installation support.
+   357→
+   358→## 5.2 Authentication
+   359→
+   360→Routes:
+   361→
+   362→- `/login`
+   363→- `/register`
+   364→- `/forgot-password`
+   365→- `/reset-password`
+   366→- `/verify-email`
+   367→
+   368→Login screen:
+   369→
+   370→- WALLORA branding.
+   371→- Email.
+   372→- Password.
+   373→- Show/hide password.
+   374→- Remember session where appropriate.
+   375→- Forgot password.
+   376→- Sign in.
+   377→- Registration link.
+   378→- OAuth options only when configured.
+   379→- Loading and validation states.
+   380→- Authentication errors.
+   381→
+   382→Registration:
+   383→
+   384→- Display name.
+   385→- Username.
+   386→- Email.
+   387→- Password.
+   388→- Password confirmation.
+   389→- Terms acceptance.
+   390→- Privacy acceptance.
+   391→- Validation.
+   392→- Email verification.
+   393→
+   394→Do not create insecure custom authentication.
+   395→
+   396→Use Better Auth and its documented database schema and supported features.
+   397→
+   398→## 5.3 Onboarding
+   399→
+   400→Route: `/onboarding`
+   401→
+   402→After registration, introduce users to WALLORA.
+   403→
+   404→Collect:
+   405→
+   406→- Username.
+   407→- Display name.
+   408→- Profile image, optional.
+   409→- Creative interests.
+   410→- Favourite visual categories.
+   411→- Preferred image styles.
+   412→- Device type.
+   413→- Optional notification preferences.
+   414→
+   415→Possible interests:
+   416→
+   417→- Nature.
+   418→- Technology.
+   419→- Cars.
+   420→- Anime-inspired original artwork.
+   421→- Gaming.
+   422→- Architecture.
+   423→- Minimalism.
+   424→- Luxury.
+   425→- Abstract art.
+   426→- Photography.
+   427→- Fashion.
+   428→- Interior design.
+   429→- Digital illustration.
+   430→
+   431→Allow users to skip optional steps.
+   432→
+   433→Save onboarding preferences in the database.
+   434→
+   435→Use the preferences for recommendations.
+   436→
+   437→## 5.4 Main application dashboard
+   438→
+   439→Route: `/dashboard`
+   440→
+   441→This is the central authenticated application.
+   442→
+   443→Desktop layout:
+   444→
+   445→- Left navigation sidebar.
+   446→- Main content area.
+   447→- Optional right contextual panel.
+   448→- Header with search, credits and notifications.
+   449→- User profile menu.
+   450→
+   451→Mobile layout:
+   452→
+   453→- Compact header.
+   454→- Bottom navigation.
+   455→- Scrollable content.
+   456→- Floating AI action where appropriate.
+   457→
+   458→Dashboard sections:
+   459→
+   460→1. Personalized welcome.
+   461→2. Main AI prompt box.
+   462→3. Continue recent projects.
+   463→4. Recommended artwork.
+   464→5. Trending visuals.
+   465→6. New creator uploads.
+   466→7. Popular categories.
+   467→8. Daily creative challenge.
+   468→9. Recommended creators.
+   469→10. Recently saved content.
+   470→
+   471→Do not show fake user-specific information.
+   472→
+   473→## 5.5 Discover page
+   474→
+   475→Route: `/discover`
+   476→
+   477→Features:
+   478→
+   479→- Visual masonry grid.
+   480→- Search.
+   481→- Category filters.
+   482→- Trending.
+   483→- Latest.
+   484→- Featured.
+   485→- Recommended.
+   486→- Creator filter.
+   487→- Orientation filter.
+   488→- Color filter where available.
+   489→- Free and premium filter.
+   490→- Sort options.
+   491→
+   492→Cards must include:
+   493→
+   494→- Image.
+   495→- Title.
+   496→- Creator.
+   497→- Like action.
+   498→- Save action.
+   499→- Content type.
+   500→- Relevant metadata.
+   501→
+   502→Use pagination or infinite scrolling.
+   503→
+   504→Use responsive image variants.
+   505→
+   506→Do not load original 4K/8K images in the discovery grid.
+   507→
+   508→## 5.6 Wallpaper detail page
+   509→
+   510→Route: `/wallpapers/[id]`
+   511→
+   512→Features:
+   513→
+   514→- Large preview.
+   515→- Creator information.
+   516→- Description.
+   517→- Resolution.
+   518→- Dimensions.
+   519→- File format.
+   520→- File size.
+   521→- License.
+   522→- Like.
+   523→- Save.
+   524→- Download.
+   525→- Share.
+   526→- Report.
+   527→- Related images.
+   528→- Comments.
+   529→- Creator profile link.
+   530→
+   531→Download behavior:
+   532→
+   533→- Verify permissions.
+   534→- Verify license and purchase requirements.
+   535→- Generate authorized download URL.
+   536→- Record download event.
+   537→- Update relevant analytics safely.
+   538→
+   539→## 5.7 WALLORA AI Chat
+   540→
+   541→Route: `/ai`
+   542→
+   543→This is a flagship feature.
+   544→
+   545→Create a premium conversational interface.
+   546→
+   547→Layout:
+   548→
+   549→Desktop:
+   550→- Conversation history sidebar.
+   551→- Main conversation area.
+   552→- AI mode selector.
+   553→- Input composer.
+   554→- Optional right-side creative context panel.
+   555→
+   556→Mobile:
+   557→- Conversation header.
+   558→- Chat messages.
+   559→- Composer at the bottom.
+   560→- Attachment button.
+   561→- Voice input button where supported.
+   562→- Tool and mode selection.
+   563→
+   564→Chat features:
+   565→
+   566→- Create new conversation.
+   567→- Rename conversation.
+   568→- Delete conversation.
+   569→- Search history.
+   570→- Continue existing conversation.
+   571→- Send text.
+   572→- Upload images.
+   573→- Voice input.
+   574→- Streaming responses where supported.
+   575→- Retry failed messages.
+   576→- Stop generation.
+   577→- Regenerate response.
+   578→- Copy response.
+   579→- Save response.
+   580→- Turn an idea into a project.
+   581→- Attach generated images to conversations.
+   582→- Show generation progress.
+   583→
+   584→Conversation records must belong to the authenticated user.
+   585→
+   586→Never expose another user's conversations.
+   587→
+   588→### AI modes
+   589→
+   590→Implement configurable modes:
+   591→
+   592→1. Creative Assistant.
+   593→2. Wallpaper Expert.
+   594→3. Graphic Designer.
+   595→4. Photo Editor.
+   596→5. Brand Consultant.
+   597→6. Interior Designer.
+   598→7. Fashion Assistant.
+   599→8. Story Creator.
+   600→9. Visual Inspiration Assistant.
+   601→
+   602→Modes should configure tools, system instructions, model preferences and output schemas.
+   603→
+   604→Do not create nine unrelated AI systems.
+   605→
+   606→Use a shared conversation engine with configurable capabilities.
+   607→
+   608→### AI tool calling
+   609→
+   610→The assistant should be able to request supported application actions:
+   611→
+   612→- Search wallpaper library.
+   613→- Recommend artwork.
+   614→- Generate image.
+   615→- Analyze uploaded image.
+   616→- Enhance prompt.
+   617→- Create design concept.
+   618→- Create project.
+   619→- Save generated asset.
+   620→- Retrieve user collections.
+   621→- Suggest color palette.
+   622→- Search creators.
+   623→
+   624→Tool execution must happen on the server.
+   625→
+   626→Validate all tool arguments using Zod.
+   627→
+   628→Check user authorization and quotas before executing tools.
+   629→
+   630→Do not allow AI output to bypass permissions.
+   631→
+   632→The AI must distinguish between:
+   633→
+   634→- A suggestion.
+   635→- A requested action.
+   636→- An accepted action.
+   637→- A successfully completed action.
+   638→
+   639→Never tell users an image was generated unless the backend confirms success.
+   640→
+   641→## 5.8 AI Studio
+   642→
+   643→Route: `/studio`
+   644→
+   645→Create a professional creative workspace.
+   646→
+   647→Main tools:
+   648→
+   649→- Text-to-image.
+   650→- Image-to-image when supported.
+   651→- Prompt enhancement.
+   652→- Style presets.
+   653→- Aspect ratio.
+   654→- Resolution options.
+   655→- Number of outputs.
+   656→- Negative prompt where supported.
+   657→- Seed where supported.
+   658→- Generation history.
+   659→- Variations.
+   660→- Saved outputs.
+   661→- Download.
+   662→- Send to project.
+   663→
+   664→Style presets:
+   665→
+   666→- Cinematic.
+   667→- Minimalist.
+   668→- Luxury.
+   669→- Cyberpunk.
+   670→- Nature.
+   671→- Futuristic.
+   672→- Abstract.
+   673→- Architecture.
+   674→- Photography.
+   675→- Digital illustration.
+   676→- Anime-inspired original art.
+   677→
+   678→Generation states:
+   679→
+   680→- Queued.
+   681→- Processing.
+   682→- Completed.
+   683→- Failed.
+   684→- Cancelled.
+   685→- Refunded or reconciled where applicable.
+   686→
+   687→Show estimated credit usage before generation.
+   688→
+   689→Do not invent resolution capabilities.
+   690→
+   691→Only expose controls that the selected model supports.
+   692→
+   693→## 5.9 Other creative studios
+   694→
+   695→Routes:
+   696→
+   697→- `/studio/design`
+   698→- `/studio/photo`
+   699→- `/studio/brand`
+   700→- `/studio/interior`
+   701→- `/studio/fashion`
+   702→- `/studio/story`
+   703→- `/studio/music-visuals`
+   704→
+   705→### Design Studio
+   706→
+   707→Create:
+   708→
+   709→- Posters.
+   710→- Flyers.
+   711→- Event invitations.
+   712→- Social media artwork.
+   713→- Business promotions.
+   714→- Digital banners.
+   715→- Cover art.
+   716→
+   717→### Photo Studio
+   718→
+   719→Create:
+   720→
+   721→- Image enhancement.
+   722→- Background removal.
+   723→- Image resizing.
+   724→- Supported image editing.
+   725→- Image restoration.
+   726→- Color correction.
+   727→- Cropping.
+   728→
+   729→### Brand Studio
+   730→
+   731→Create:
+   732→
+   733→- Brand concepts.
+   734→- Logo concepts.
+   735→- Brand colors.
+   736→- Typography suggestions.
+   737→- Brand moodboards.
+   738→- Business card designs.
+   739→- Product mockup concepts.
+   740→
+   741→### Interior Studio
+   742→
+   743→Create:
+   744→
+   745→- Bedroom concepts.
+   746→- Living room concepts.
+   747→- Gaming setups.
+   748→- Office concepts.
+   749→- Color palettes.
+   750→- Furniture inspiration.
+   751→
+   752→### Fashion Studio
+   753→
+   754→Create:
+   755→
+   756→- Outfit inspiration.
+   757→- Fashion moodboards.
+   758→- Style concepts.
+   759→- Color combinations.
+   760→- Original fashion illustrations.
+   761→
+   762→### Story Studio
+   763→
+   764→Create:
+   765→
+   766→- Original characters.
+   767→- Storyboards.
+   768→- Scene concepts.
+   769→- Comic concepts.
+   770→- Visual storytelling.
+   771→
+   772→### Music Visual Studio
+   773→
+   774→Create:
+   775→
+   776→- Album covers.
+   777→- Mixtape covers.
+   778→- Music posters.
+   779→- Artist promotional graphics.
+   780→- Music visual concepts.
+   781→
+   782→Important:
+   783→
+   784→Do not promise features unsupported by the selected AI provider.
+   785→
+   786→A studio may launch initially with concept generation and compatible tools, then receive more editing capabilities later.
+   787→
+   788→## 5.10 Creative Projects
+   789→
+   790→Route: `/projects`
+   791→
+   792→This is the user's creative workspace.
+   793→
+   794→Features:
+   795→
+   796→- Create project.
+   797→- Rename project.
+   798→- Delete project.
+   799→- Project cover.
+   800→- Project description.
+   801→- Add AI conversations.
+   802→- Add images.
+   803→- Add design concepts.
+   804→- Add notes.
+   805→- Add prompt versions.
+   806→- Duplicate project.
+   807→- Export project where supported.
+   808→- Private and public project visibility.
+   809→
+   810→Project detail:
+   811→
+   812→`/projects/[id]`
+   813→
+   814→Each project must maintain ownership and access control.
+   815→
+   816→## 5.11 My Space
+   817→
+   818→Route: `/my-space`
+   819→
+   820→Personal library:
+   821→
+   822→- Saved wallpapers.
+   823→- Favourites.
+   824→- Downloads.
+   825→- Generated images.
+   826→- Collections.
+   827→- Recent activity.
+   828→- Personal visual preferences.
+   829→- Offline saved content.
+   830→
+   831→## 5.12 Collections
+   832→
+   833→Routes:
+   834→
+   835→- `/collections`
+   836→- `/collections/[id]`
+   837→
+   838→Features:
+   839→
+   840→- Create collection.
+   841→- Add and remove items.
+   842→- Reorder items.
+   843→- Public or private.
+   844→- Collection cover.
+   845→- Share collection.
+   846→- Follow public collections where appropriate.
+   847→
+   848→## 5.13 Community
+   849→
+   850→Route: `/community`
+   851→
+   852→Features:
+   853→
+   854→- Creator feed.
+   855→- Follow creators.
+   856→- Like posts.
+   857→- Comment.
+   858→- Share.
+   859→- Save.
+   860→- Report.
+   861→- Creative challenges.
+   862→- Community guidelines.
+   863→- Moderation.
+   864→
+   865→Routes:
+   866→
+   867→- `/community`
+   868→- `/community/challenges`
+   869→- `/community/challenges/[id]`
+   870→- `/creators/[username]`
+   871→
+   872→Avoid building private messaging until the core community features are stable.
+   873→
+   874→## 5.14 Marketplace
+   875→
+   876→Routes:
+   877→
+   878→- `/marketplace`
+   879→- `/marketplace/[productId]`
+   880→- `/creator/dashboard`
+   881→- `/creator/products`
+   882→- `/creator/earnings`
+   883→
+   884→Features:
+   885→
+   886→- Digital wallpaper packs.
+   887→- Premium artwork.
+   888→- Creator storefronts.
+   889→- Product details.
+   890→- License information.
+   891→- Purchase flow.
+   892→- Download entitlements.
+   893→- Reviews where supported.
+   894→- Sales statistics.
+   895→- Creator earnings ledger.
+   896→
+   897→Never mark a purchase successful based only on frontend state.
+   898→
+   899→Use payment provider webhooks and idempotency.
+   900→
+   901→## 5.15 Notifications
+   902→
+   903→Route: `/notifications`
+   904→
+   905→Types:
+   906→
+   907→- AI generation complete.
+   908→- New follower.
+   909→- New comment.
+   910→- New like.
+   911→- Purchase.
+   912→- Creator payout status.
+   913→- Moderation decision.
+   914→- Security alert.
+   915→
+   916→Allow notification preferences.
+   917→
+   918→## 5.16 Profile
+   919→
+   920→Route: `/profile/[username]`
+   921→
+   922→Features:
+   923→
+   924→- Avatar.
+   925→- Cover image.
+   926→- Username.
+   927→- Display name.
+   928→- Bio.
+   929→- Social links.
+   930→- Published creations.
+   931→- Collections.
+   932→- Followers.
+   933→- Following.
+   934→- Verified status.
+   935→- Creator status.
+   936→
+   937→## 5.17 Settings
+   938→
+   939→Route: `/settings`
+   940→
+   941→Sections:
+   942→
+   943→- Account.
+   944→- Profile.
+   945→- Security.
+   946→- Password.
+   947→- Sessions.
+   948→- Notifications.
+   949→- Appearance.
+   950→- Privacy.
+   951→- AI preferences.
+   952→- Credits and usage.
+   953→- Subscription.
+   954→- Connected accounts.
+   955→- Data export.
+   956→- Account deletion.
+   957→
+   958→Account deletion must have a proper confirmation and backend process.
+   959→
+   960→---
+   961→
+   962→# PART 6 — ADMIN DASHBOARD
+   963→
+   964→Route: `/admin`
+   965→
+   966→Admin must be a protected application area.
+   967→
+   968→Only server-authorized admin roles can access it.
+   969→
+   970→Create these screens:
+   971→
+   972→1. Overview.
+   973→2. User management.
+   974→3. Creator management.
+   975→4. Wallpaper management.
+   976→5. Upload moderation.
+   977→6. AI generations.
+   978→7. AI providers.
+   979→8. AI models.
+   980→9. AI usage and costs.
+   981→10. Plans and subscriptions.
+   982→11. Payments.
+   983→12. Creator earnings.
+   984→13. Reports.
+   985→14. Community moderation.
+   986→15. Categories and tags.
+   987→16. Notifications.
+   988→17. Analytics.
+   989→18. Feature flags.
+   990→19. Application settings.
+   991→20. Audit logs.
+   992→
+   993→Admin overview metrics should come from actual database queries.
+   994→
+   995→Do not display fabricated statistics.
+   996→
+   997→### Admin permissions
+   998→
+   999→- Moderator: content and community moderation.
+  1000→- Admin: operational management.
+  1001→- Super admin: sensitive platform configuration and role management.
+  1002→
+  1003→Never let users grant themselves elevated roles.
+  1004→
+  1005→Admin actions must be recorded in audit logs.
+  1006→
+  1007→### AI management
+  1008→
+  1009→Admin should be able to:
+  1010→
+  1011→- Enable and disable providers.
+  1012→- Enable and disable models.
+  1013→- Configure model capabilities.
+  1014→- Set model priorities.
+  1015→- Set generation limits.
+  1016→- Configure quotas.
+  1017→- View failed jobs.
+  1018→- Retry eligible jobs.
+  1019→- Monitor token/image usage where available.
+  1020→- Review provider errors.
+  1021→- Configure user entitlements.
+  1022→
+  1023→Store provider credentials securely in server environment variables or a suitable secret manager. Never return API keys to the browser.
+  1024→
+  1025→---
+  1026→
+  1027→# PART 7 — NVIDIA AI INTEGRATION
+  1028→
+  1029→NVIDIA NIM is the primary AI provider for eligible hosted model endpoints.
+  1030→
+  1031→Do not assume every NVIDIA model supports every capability.
+  1032→
+  1033→At the beginning of AI development:
+  1034→
+  1035→1. Inspect NVIDIA's current model catalogue.
+  1036→2. Verify hosted endpoint availability.
+  1037→3. Verify request and response formats.
+  1038→4. Verify free-tier limitations.
+  1039→5. Verify image generation capabilities.
+  1040→6. Verify supported image sizes and formats.
+  1041→7. Verify commercial usage and licensing terms.
+  1042→8. Document the verified models.
+  1043→
+  1044→Official sources:
+  1045→
+  1046→- https://build.nvidia.com/
+  1047→- https://docs.api.nvidia.com/nim/
+  1048→- https://developer.nvidia.com/nim
+  1049→
+  1050→## AI provider abstraction
+  1051→
+  1052→Implement interfaces similar to:
+  1053→
+  1054→```ts
+  1055→interface AIProvider {
+  1056→  id: string;
+  1057→  name: string;
+  1058→
+  1059→  getCapabilities(): Promise<ModelCapability[]>;
+  1060→
+  1061→  generateText(
+  1062→    request: TextGenerationRequest
+  1063→  ): Promise<TextGenerationResult>;
+  1064→
+  1065→  analyzeImage?(
+  1066→    request: ImageAnalysisRequest
+  1067→  ): Promise<ImageAnalysisResult>;
+  1068→
+  1069→  generateImage?(
+  1070→    request: ImageGenerationRequest
+  1071→  ): Promise<ImageGenerationResult>;
+  1072→
+  1073→  getJobStatus?(
+  1074→    jobId: string
+  1075→  ): Promise<GenerationJobStatus>;
+  1076→}
+  1077→```
+  1078→
+  1079→Use capability-based routing.
+  1080→
+  1081→Do not assume an OpenAI-compatible endpoint supports image generation merely because it supports chat completions.
+  1082→
+  1083→## AI capabilities
+  1084→
+  1085→Separate these operations:
+  1086→
+  1087→- Text conversation.
+  1088→- Prompt enhancement.
+  1089→- Image understanding.
+  1090→- Text-to-image.
+  1091→- Image-to-image.
+  1092→- Embeddings.
+  1093→- Content moderation.
+  1094→- Image upscaling.
+  1095→
+  1096→A provider can support some capabilities without supporting all of them.
+  1097→
+  1098→## Free usage management
+  1099→
+  1100→Create a configurable credit system.
+  1101→
+  1102→Possible example:
+  1103→
+  1104→- Free users: limited daily AI operations.
+  1105→- Plus users: larger monthly allowance.
+  1106→- Pro creators: higher configurable limits.
+  1107→
+  1108→Do not hardcode prices or limits.
+  1109→
+  1110→Use an admin-configurable entitlement system.
+  1111→
+  1112→Reserve credits atomically before executing expensive work.
+  1113→
+  1114→Refund or reconcile credits for failed operations.
+  1115→
+  1116→Prevent duplicate charging during retries.
+  1117→
+  1118→## AI chat memory
+  1119→
+  1120→Implement:
+  1121→
+  1122→- Conversation history.
+  1123→- Conversation summaries when appropriate.
+  1124→- User-configurable creative preferences.
+  1125→- Project-specific context.
+  1126→- User-controlled deletion.
+  1127→
+  1128→Do not send unnecessary personal data to AI providers.
+  1129→
+  1130→---
+  1131→
+  1132→# PART 8 — BACKEND ARCHITECTURE
+  1133→
+  1134→Use modular service architecture.
+  1135→
+  1136→Suggested modules:
+  1137→
+  1138→```text
+  1139→src/
+  1140→├── modules/
+  1141→│   ├── auth/
+  1142→│   ├── users/
+  1143→│   ├── profiles/
+  1144→│   ├── wallpapers/
+  1145→│   ├── categories/
+  1146→│   ├── search/
+  1147→│   ├── uploads/
+  1148→│   ├── downloads/
+  1149→│   ├── favorites/
+  1150→│   ├── collections/
+  1151→│   ├── community/
+  1152→│   ├── creators/
+  1153→│   ├── marketplace/
+  1154→│   ├── payments/
+  1155→│   ├── subscriptions/
+  1156→│   ├── ai/
+  1157→│   ├── conversations/
+  1158→│   ├── projects/
+  1159→│   ├── notifications/
+  1160→│   ├── moderation/
+  1161→│   ├── admin/
+  1162→│   └── analytics/
+  1163→├── lib/
+  1164→├── middleware/
+  1165→├── db/
+  1166→├── services/
+  1167→└── app/
+  1168→```
+  1169→
+  1170→Keep domain logic separate from route handlers.
+  1171→
+  1172→Do not put all application logic in a single API file.
+  1173→
+  1174→## API conventions
+  1175→
+  1176→Use:
+  1177→
+  1178→`/api/v1`
+  1179→
+  1180→Examples:
+  1181→
+  1182→```text
+  1183→POST   /api/v1/auth/*
+  1184→GET    /api/v1/profiles/me
+  1185→PATCH  /api/v1/profiles/me
+  1186→
+  1187→GET    /api/v1/wallpapers
+  1188→GET    /api/v1/wallpapers/:id
+  1189→POST   /api/v1/uploads/presign
+  1190→POST   /api/v1/uploads/complete
+  1191→
+  1192→GET    /api/v1/search
+  1193→
+  1194→GET    /api/v1/favorites
+  1195→POST   /api/v1/favorites
+  1196→DELETE /api/v1/favorites/:id
+  1197→
+  1198→GET    /api/v1/collections
+  1199→POST   /api/v1/collections
+  1200→PATCH  /api/v1/collections/:id
+  1201→DELETE /api/v1/collections/:id
+  1202→
+  1203→POST   /api/v1/wallpapers/:id/download
+  1204→POST   /api/v1/wallpapers/:id/like
+  1205→DELETE /api/v1/wallpapers/:id/like
+  1206→
+  1207→GET    /api/v1/creators/:username
+  1208→
+  1209→POST   /api/v1/ai/generations
+  1210→GET    /api/v1/ai/generations/:id
+  1211→
+  1212→POST   /api/v1/ai/conversations
+  1213→GET    /api/v1/ai/conversations
+  1214→GET    /api/v1/ai/conversations/:id
+  1215→POST   /api/v1/ai/conversations/:id/messages
+  1216→
+  1217→GET    /api/v1/projects
+  1218→POST   /api/v1/projects
+  1219→
+  1220→GET    /api/v1/notifications
+  1221→POST   /api/v1/reports
+  1222→
+  1223→GET    /api/v1/subscriptions/me
+  1224→
+  1225→GET    /api/v1/admin/*
+  1226→```
+  1227→
+  1228→API requirements:
+  1229→
+  1230→- Zod validation.
+  1231→- Authentication.
+  1232→- Authorization.
+  1233→- Ownership checks.
+  1234→- Rate limiting.
+  1235→- Pagination.
+  1236→- Request IDs.
+  1237→- Consistent error responses.
+  1238→- Idempotency for payment and generation operations.
+  1239→- Structured logging.
+  1240→- Safe server-side error messages.
+  1241→
+  1242→---
+  1243→
+  1244→# PART 9 — DATABASE ARCHITECTURE
+  1245→
+  1246→Use Neon PostgreSQL with Drizzle ORM.
+  1247→
+  1248→Before creating tables, inspect the Better Auth schema requirements for the selected installed version.
+  1249→
+  1250→Use matching user ID types.
+  1251→
+  1252→Do not blindly assume all IDs are UUIDs.
+  1253→
+  1254→## Main database entities
+  1255→
+  1256→Authentication:
+  1257→
+  1258→- user
+  1259→- session
+  1260→- account
+  1261→- verification
+  1262→
+  1263→Profiles:
+  1264→
+  1265→- profiles
+  1266→- user_roles
+  1267→- user_settings
+  1268→- user_devices
+  1269→
+  1270→Content:
+  1271→
+  1272→- categories
+  1273→- tags
+  1274→- wallpapers
+  1275→- wallpaper_assets
+  1276→- wallpaper_tags
+  1277→- wallpaper_categories
+  1278→
+  1279→Interactions:
+  1280→
+  1281→- wallpaper_likes
+  1282→- wallpaper_downloads
+  1283→- favorites
+  1284→- collections
+  1285→- collection_items
+  1286→- follows
+  1287→- comments
+  1288→- reports
+  1289→
+  1290→AI:
+  1291→
+  1292→- ai_providers
+  1293→- ai_models
+  1294→- ai_conversations
+  1295→- ai_messages
+  1296→- ai_generations
+  1297→- ai_generation_jobs
+  1298→- usage_ledger
+  1299→
+  1300→Creative workspace:
+  1301→
+  1302→- creative_projects
+  1303→- project_assets
+  1304→- project_conversations
+  1305→- project_notes
+  1306→
+  1307→Marketplace:
+  1308→
+  1309→- creator_profiles
+  1310→- products
+  1311→- product_assets
+  1312→- purchases
+  1313→- subscriptions
+  1314→- payments
+  1315→- creator_earnings
+  1316→- creator_payouts
+  1317→
+  1318→Notifications:
+  1319→
+  1320→- notifications
+  1321→- notification_preferences
+  1322→
+  1323→Administration:
+  1324→
+  1325→- moderation_queue
+  1326→- audit_logs
+  1327→- app_settings
+  1328→- feature_flags
+  1329→
+  1330→## Database requirements
+  1331→
+  1332→- Proper foreign keys.
+  1333→- Unique constraints.
+  1334→- Check constraints.
+  1335→- Useful indexes.
+  1336→- Timestamps.
+  1337→- Soft deletion where appropriate.
+  1338→- Referential integrity.
+  1339→- Migration history.
+  1340→- Transaction-safe operations.
+  1341→- Pagination-friendly indexes.
+  1342→
+  1343→Use object storage keys in database records, not binary image files.
+  1344→
+  1345→Create migrations and test them.
+  1346→
+  1347→Neon is PostgreSQL, not Supabase.
+  1348→
+  1349→Do not copy Supabase Auth or assume Supabase automatic RLS behavior.
+  1350→
+  1351→Use Better Auth for sessions and explicit server-side authorization.
+  1352→
+  1353→If using PostgreSQL RLS, design the database role and session context carefully.
+  1354→
+  1355→---
+  1356→
+  1357→# PART 10 — CLOUDFLARE R2 MEDIA SYSTEM
+  1358→
+  1359→Create a secure media architecture.
+  1360→
+  1361→Logical object prefixes:
+  1362→
+  1363→```text
+  1364→wallora-originals/
+  1365→wallora-public-assets/
+  1366→wallora-user-uploads/
+  1367→wallora-generated/
+  1368→wallora-avatars/
+  1369→wallora-private/
+  1370→wallora-thumbnails/
+  1371→```
+  1372→
+  1373→Do not store files directly in PostgreSQL.
+  1374→
+  1375→## Upload workflow
+  1376→
+  1377→1. Authenticate user.
+  1378→2. Validate file size and allowed file type.
+  1379→3. Validate actual file signature.
+  1380→4. Create pending upload record.
+  1381→5. Generate short-lived signed upload URL.
+  1382→6. Upload directly to R2.
+  1383→7. Verify uploaded object.
+  1384→8. Send job to worker.
+  1385→9. Process image using Sharp.
+  1386→10. Extract image dimensions.
+  1387→11. Remove sensitive EXIF metadata where appropriate.
+  1388→12. Generate image variants.
+  1389→13. Run moderation.
+  1390→14. Save asset metadata.
+  1391→15. Publish only after approval.
+  1392→
+  1393→## Image variants
+  1394→
+  1395→Where supported by original dimensions:
+  1396→
+  1397→- Thumbnail.
+  1398→- Grid preview.
+  1399→- Detail preview.
+  1400→- Mobile.
+  1401→- Desktop.
+  1402→- Original.
+  1403→
+  1404→Never claim an image is genuine 4K or 8K if its source dimensions do not support that claim.
+  1405→
+  1406→Use responsive image delivery.
+  1407→
+  1408→Use caching and versioned asset keys.
+  1409→
+  1410→Private images must not be accessible through predictable public URLs.
+  1411→
+  1412→---
+  1413→
+  1414→# PART 11 — PROGRESSIVE WEB APP
+  1415→
+  1416→The web application must work as a genuine PWA.
+  1417→
+  1418→Implement:
+  1419→
+  1420→1. `manifest.webmanifest`.
+  1421→2. Service worker.
+  1422→3. App icons.
+  1423→4. Installability.
+  1424→5. Standalone display.
+  1425→6. Theme color.
+  1426→7. Offline fallback page.
+  1427→8. Offline application shell.
+  1428→9. Cache strategy.
+  1429→10. Update notification.
+  1430→11. Network status handling.
+  1431→12. Safe image caching.
+  1432→13. Responsive touch controls.
+  1433→14. Install guidance.
+  1434→
+  1435→The service worker should use sensible caching:
+  1436→
+  1437→- Cache static application assets.
+  1438→- Cache selected public image previews.
+  1439→- Avoid caching private API responses.
+  1440→- Avoid caching authentication responses.
+  1441→- Never expose private user files through shared caches.
+  1442→
+  1443→Support offline viewing of content that users have explicitly saved and that is permitted for offline storage.
+  1444→
+  1445→Test PWA installation on supported browsers.
+  1446→
+  1447→Do not claim PWA support is complete merely because a manifest exists.
+  1448→
+  1449→---
+  1450→
+  1451→# PART 12 — ANDROID APPLICATION
+  1452→
+  1453→Use Expo and React Native.
+  1454→
+  1455→The mobile application should provide:
+  1456→
+  1457→- Splash screen.
+  1458→- Onboarding.
+  1459→- Login and registration.
+  1460→- Discover feed.
+  1461→- Wallpaper detail.
+  1462→- AI chat.
+  1463→- AI Studio.
+  1464→- Creative projects.
+  1465→- Collections.
+  1466→- Profile.
+  1467→- Marketplace.
+  1468→- Downloads.
+  1469→- Offline library.
+  1470→- Settings.
+  1471→- Push notifications.
+  1472→- Deep links.
+  1473→- Image picker.
+  1474→- Share sheet.
+  1475→- Native file storage.
+  1476→
+  1477→Use secure token storage.
+  1478→
+  1479→Use native Android capabilities where available.
+  1480→
+  1481→Implement actual wallpaper application through supported Android APIs where possible, with a clear manual fallback.
+  1482→
+  1483→Test on a physical Android device.
+  1484→
+  1485→Do not use Android Studio as a required development workflow if Expo tooling can handle the task.
+  1486→
+  1487→---
+  1488→
+  1489→# PART 13 — PAYMENTS AND MONETIZATION
+  1490→
+  1491→Create a provider-independent payment architecture.
+  1492→
+  1493→Possible integrations should be researched before implementation.
+  1494→
+  1495→For the Kenyan market, investigate supported M-Pesa and Paystack payment workflows, including their current merchant availability and requirements.
+  1496→
+  1497→Do not assume an integration is available until verified.
+  1498→
+  1499→Plans:
+  1500→
+  1501→- Free.
+  1502→- WALLORA Plus.
+  1503→- WALLORA Creator Pro.
+  1504→
+  1505→Possible revenue:
+  1506→
+  1507→- Premium subscriptions.
+  1508→- AI credits.
+  1509→- Premium wallpaper packs.
+  1510→- Marketplace commissions.
+  1511→- Creator memberships.
+  1512→- Optional advertisements.
+  1513→
+  1514→Requirements:
+  1515→
+  1516→- Server-side entitlements.
+  1517→- Verified webhooks.
+  1518→- Idempotency.
+  1519→- Transaction history.
+  1520→- Refund handling.
+  1521→- Subscription renewal.
+  1522→- Grace periods.
+  1523→- Creator earnings ledger.
+  1524→- Payout verification.
+  1525→
+  1526→Do not let frontend state determine whether a user has paid.
+  1527→
+  1528→Do not create artificial earnings.
+  1529→
+  1530→---
+  1531→
+  1532→# PART 14 — SEARCH AND DISCOVERY
+  1533→
+  1534→Create a scalable search system.
+  1535→
+  1536→Search should cover:
+  1537→
+  1538→- Wallpapers.
+  1539→- Creators.
+  1540→- Categories.
+  1541→- Collections.
+  1542→- Marketplace products.
+  1543→- Creative projects belonging to the user.
+  1544→
+  1545→Start with PostgreSQL full-text search and indexed filters.
+  1546→
+  1547→Use pg_trgm or another appropriate PostgreSQL extension for typo-tolerant search if supported by the database environment.
+  1548→
+  1549→Evaluate vector search separately if AI embeddings become useful.
+  1550→
+  1551→Search results should support:
+  1552→
+  1553→- Relevance.
+  1554→- Newest.
+  1555→- Trending.
+  1556→- Most downloaded.
+  1557→- Most liked.
+  1558→- Category.
+  1559→- Orientation.
+  1560→- Color.
+  1561→- Creator.
+  1562→
+  1563→Do not create a complex external search infrastructure before there is a genuine need.
+  1564→
+  1565→---
+  1566→
+  1567→# PART 15 — SECURITY, PRIVACY AND CONTENT MODERATION
+  1568→
+  1569→Implement:
+  1570→
+  1571→- Secure authentication.
+  1572→- Password and session protections.
+  1573→- Server-side role checks.
+  1574→- Authorization on every protected resource.
+  1575→- Input validation.
+  1576→- SQL injection prevention.
+  1577→- XSS protection.
+  1578→- CSRF protections where applicable.
+  1579→- Rate limits.
+  1580→- Upload validation.
+  1581→- Signed media access.
+  1582→- Webhook verification.
+  1583→- Audit logs.
+  1584→- Secure secret handling.
+  1585→- Account deletion.
+  1586→- Data export.
+  1587→- Backup and recovery documentation.
+  1588→
+  1589→Roles:
+  1590→
+  1591→- guest
+  1592→- user
+  1593→- creator
+  1594→- moderator
+  1595→- admin
+  1596→- super_admin
+  1597→
+  1598→Do not let the client grant roles.
+  1599→
+  1600→## Content moderation
+  1601→
+  1602→Every public upload must have a moderation status.
+  1603→
+  1604→Implement:
+  1605→
+  1606→- Pending.
+  1607→- Approved.
+  1608→- Rejected.
+  1609→- Flagged.
+  1610→- Removed.
+  1611→
+  1612→Allow reporting of:
+  1613→
+  1614→- Copyright violations.
+  1615→- Inappropriate content.
+  1616→- Spam.
+  1617→- Harassment.
+  1618→- Impersonation.
+  1619→- Other policy violations.
+  1620→
+  1621→Create admin review tools.
+  1622→
+  1623→Keep a record of moderation decisions.
+  1624→
+  1625→Provide a copyright complaint and appeal workflow.
+  1626→
+  1627→AI moderation should be treated as an aid, not infallible authority.
+  1628→
+  1629→---
+  1630→
+  1631→# PART 16 — PERFORMANCE AND SCALABILITY
+  1632→
+  1633→Requirements:
+  1634→
+  1635→- Responsive image loading.
+  1636→- Lazy loading.
+  1637→- Pagination.
+  1638→- Caching.
+  1639→- Database indexes.
+  1640→- Query optimization.
+  1641→- Background image processing.
+  1642→- Job retry policies.
+  1643→- Generation concurrency limits.
+  1644→- CDN delivery.
+  1645→- Efficient React rendering.
+  1646→- Code splitting.
+  1647→- Error boundaries.
+  1648→- Performance monitoring.
+  1649→
+  1650→Do not load full-resolution originals in discovery cards.
+  1651→
+  1652→Do not run heavy image transformations inside ordinary user-facing requests.
+  1653→
+  1654→Use background jobs for long-running operations.
+  1655→
+  1656→---
+  1657→
+  1658→# PART 17 — TESTING AND QUALITY ASSURANCE
+  1659→
+  1660→Use:
+  1661→
+  1662→- Vitest.
+  1663→- React Testing Library.
+  1664→- Playwright.
+  1665→- API integration tests.
+  1666→- Database integration tests.
+  1667→- Maestro for mobile E2E testing.
+  1668→
+  1669→Test:
+  1670→
+  1671→Authentication:
+  1672→- Registration.
+  1673→- Login.
+  1674→- Logout.
+  1675→- Session expiration.
+  1676→- Password reset.
+  1677→- Unauthorized access.
+  1678→
+  1679→Library:
+  1680→- Upload.
+  1681→- Validation.
+  1682→- Moderation.
+  1683→- Search.
+  1684→- Download permissions.
+  1685→
+  1686→AI:
+  1687→- Valid request.
+  1688→- Invalid request.
+  1689→- Quota exhaustion.
+  1690→- Provider timeout.
+  1691→- Failed generation.
+  1692→- Retry.
+  1693→- Credit reconciliation.
+  1694→- Duplicate requests.
+  1695→
+  1696→Community:
+  1697→- Follow.
+  1698→- Like.
+  1699→- Comment.
+  1700→- Report.
+  1701→- Moderation.
+  1702→
+  1703→Marketplace:
+  1704→- Purchase.
+  1705→- Failed payment.
+  1706→- Duplicate webhook.
+  1707→- Refund.
+  1708→- Entitlement verification.
+  1709→
+  1710→PWA:
+  1711→- Installation.
+  1712→- Offline fallback.
+  1713→- Cache correctness.
+  1714→- Update behavior.
+  1715→
+  1716→Mobile:
+  1717→- Navigation.
+  1718→- Login.
+  1719→- Image picker.
+  1720→- Downloads.
+  1721→- Sharing.
+  1722→- Offline library.
+  1723→
+  1724→Never mark a phase complete without reporting test results.
+  1725→
+  1726→---
+  1727→
+  1728→# PART 18 — ENVIRONMENT VARIABLES
+  1729→
+  1730→Create `.env.example` with placeholders only.
+  1731→
+  1732→Initial variables may include:
+  1733→
+  1734→```env
+  1735→NODE_ENV=development
+  1736→
+  1737→NEXT_PUBLIC_APP_URL=http://localhost:3000
+  1738→
+  1739→DATABASE_URL=
+  1740→
+  1741→BETTER_AUTH_SECRET=
+  1742→BETTER_AUTH_URL=http://localhost:3000
+  1743→
+  1744→R2_ACCOUNT_ID=
+  1745→R2_ACCESS_KEY_ID=
+  1746→R2_SECRET_ACCESS_KEY=
+  1747→R2_BUCKET_NAME=
+  1748→R2_PUBLIC_BASE_URL=
+  1749→
+  1750→NVIDIA_API_KEY=
+  1751→
+  1752→WORKER_DATABASE_URL=
+  1753→WORKER_SECRET=
+  1754→
+  1755→EMAIL_PROVIDER_API_KEY=
+  1756→
+  1757→PAYMENT_PROVIDER=
+  1758→PAYMENT_SECRET_KEY=
+  1759→PAYMENT_WEBHOOK_SECRET=
+  1760→```
+  1761→
+  1762→Add additional variables only when the actual integration requires them.
+  1763→
+  1764→Do not put server secrets in `NEXT_PUBLIC_` variables.
+  1765→
+  1766→For mobile, use the correct public API base URL and secure session storage. Never embed NVIDIA, Neon or R2 secret keys inside the mobile app.
+  1767→
+  1768→Document local and production configuration separately.
+  1769→
+  1770→---
+  1771→
+  1772→# PART 19 — COMPLETE REPOSITORY STRUCTURE
+  1773→
+  1774→Use pnpm workspaces.
+  1775→
+  1776→Recommended structure:
+  1777→
+  1778→```text
+  1779→wallora/
+  1780→│
+  1781→├── apps/
+  1782→│   ├── web/
+  1783→│   │   ├── app/
+  1784→│   │   │   ├── (marketing)/
+  1785→│   │   │   ├── (auth)/
+  1786→│   │   │   ├── (onboarding)/
+  1787→│   │   │   ├── (dashboard)/
+  1788→│   │   │   ├── admin/
+  1789→│   │   │   └── api/
+  1790→│   │   ├── components/
+  1791→│   │   ├── features/
+  1792→│   │   ├── hooks/
+  1793→│   │   ├── lib/
+  1794→│   │   ├── public/
+  1795→│   │   └── styles/
+  1796→│   │
+  1797→│   ├── mobile/
+  1798→│   │   ├── app/
+  1799→│   │   ├── components/
+  1800→│   │   ├── features/
+  1801→│   │   ├── hooks/
+  1802→│   │   ├── services/
+  1803→│   │   └── assets/
+  1804→│   │
+  1805→│   └── worker/
+  1806→│       ├── jobs/
+  1807→│       ├── processors/
+  1808→│       ├── providers/
+  1809→│       └── lib/
+  1810→│
+  1811→├── packages/
+  1812→│   ├── database/
+  1813→│   ├── auth/
+  1814→│   ├── shared/
+  1815→│   ├── validation/
+  1816→│   ├── api-client/
+  1817→│   ├── design-tokens/
+  1818→│   └── domain/
+  1819→│
+  1820→├── docs/
+  1821→│   ├── PRD.md
+  1822→│   ├── ARCHITECTURE.md
+  1823→│   ├── DATABASE.md
+  1824→│   ├── API.md
+  1825→│   ├── SECURITY.md
+  1826→│   ├── AI_SYSTEM.md
+  1827→│   ├── PWA.md
+  1828→│   ├── MOBILE.md
+  1829→│   └── DEVELOPMENT_PHASES.md
+  1830→│
+  1831→├── .env.example
+  1832→├── package.json
+  1833→├── pnpm-workspace.yaml
+  1834→├── tsconfig.base.json
+  1835→└── README.md
+  1836→```
+  1837→
+  1838→Adjust this structure when necessary, but maintain clear boundaries.
+  1839→
+  1840→---
+  1841→
+  1842→# PART 20 — PHASED DEVELOPMENT PLAN
+  1843→
+  1844→This is the most important instruction.
+  1845→
+  1846→DO NOT BUILD THE ENTIRE APPLICATION IN ONE RESPONSE.
+  1847→
+  1848→Build and test one phase at a time.
+  1849→
+  1850→After completing a phase, stop and wait for approval.
+  1851→
+  1852→## PHASE 0 — REPOSITORY INSPECTION AND FOUNDATION
+  1853→
+  1854→Tasks:
+  1855→
+  1856→1. Inspect the existing repository.
+  1857→2. Inspect installed Node.js and pnpm versions.
+  1858→3. Inspect Git status.
+  1859→4. Identify existing application code.
+  1860→5. Plan the monorepo.
+  1861→6. Create pnpm workspace.
+  1862→7. Create Next.js application.
+  1863→8. Create Expo application.
+  1864→9. Create worker package.
+  1865→10. Configure TypeScript strict mode.
+  1866→11. Configure linting and formatting.
+  1867→12. Configure environment examples.
+  1868→13. Create documentation structure.
+  1869→14. Configure basic CI.
+  1870→15. Add basic health checks.
+  1871→
+  1872→Acceptance:
+  1873→
+  1874→- Web starts locally.
+  1875→- Mobile starts locally.
+  1876→- Worker starts locally.
+  1877→- Shared packages compile.
+  1878→- Type checking passes.
+  1879→- Lint passes.
+  1880→- README explains setup.
+  1881→
+  1882→STOP AND REQUEST APPROVAL.
+  1883→
+  1884→## PHASE 1 — BRANDING AND COMPLETE DESIGN SYSTEM
+  1885→
+  1886→Create the WALLORA visual identity.
+  1887→
+  1888→Design and implement:
+  1889→
+  1890→- Logo treatment.
+  1891→- Typography.
+  1892→- Colors.
+  1893→- Spacing.
+  1894→- Buttons.
+  1895→- Inputs.
+  1896→- Cards.
+  1897→- Dialogs.
+  1898→- Dropdowns.
+  1899→- Navigation.
+  1900→- Image cards.
+  1901→- Loading skeletons.
+  1902→- Empty states.
+  1903→- Error states.
+  1904→- Toast notifications.
+  1905→- Mobile navigation.
+  1906→- Desktop navigation.
+  1907→
+  1908→Design the landing page.
+  1909→
+  1910→Design login, registration and onboarding.
+  1911→
+  1912→Create the authenticated application shell.
+  1913→
+  1914→Use genuine design assets or clearly marked development placeholders.
+  1915→
+  1916→Do not build fake backend functionality.
+  1917→
+  1918→Acceptance:
+  1919→
+  1920→- Responsive design.
+  1921→- Consistent components.
+  1922→- Functional navigation.
+  1923→- Accessible controls.
+  1924→- No major layout overflow.
+  1925→
+  1926→STOP AND REQUEST APPROVAL.
+  1927→
+  1928→## PHASE 2 — AUTHENTICATION AND DATABASE
+  1929→
+  1930→Tasks:
+  1931→
+  1932→1. Configure Neon.
+  1933→2. Configure Drizzle.
+  1934→3. Configure migrations.
+  1935→4. Integrate Better Auth.
+  1936→5. Create profiles.
+  1937→6. Create user roles.
+  1938→7. Create settings.
+  1939→8. Implement protected routes.
+  1940→9. Implement authorization.
+  1941→10. Add integration tests.
+  1942→
+  1943→Acceptance:
+  1944→
+  1945→- Registration works.
+  1946→- Login works.
+  1947→- Logout works.
+  1948→- Sessions work.
+  1949→- User profiles persist.
+  1950→- Unauthorized requests are rejected.
+  1951→- Admin access is server-controlled.
+  1952→- Migrations execute successfully.
+  1953→
+  1954→STOP AND REQUEST APPROVAL.
+  1955→
+  1956→## PHASE 3 — DISCOVERY AND WALLPAPER LIBRARY
+  1957→
+  1958→Tasks:
+  1959→
+  1960→- Categories.
+  1961→- Tags.
+  1962→- Wallpaper records.
+  1963→- Asset metadata.
+  1964→- Search.
+  1965→- Discovery feed.
+  1966→- Wallpaper detail.
+  1967→- Likes.
+  1968→- Favorites.
+  1969→- Downloads.
+  1970→- Pagination.
+  1971→- Responsive image cards.
+  1972→
+  1973→Acceptance:
+  1974→
+  1975→- Real database-backed library.
+  1976→- Working search.
+  1977→- Correct authorization.
+  1978→- Correct image metadata.
+  1979→- No fake production records.
+  1980→
+  1981→STOP AND REQUEST APPROVAL.
+  1982→
+  1983→## PHASE 4 — CLOUDFLARE MEDIA SYSTEM
+  1984→
+  1985→Tasks:
+  1986→
+  1987→- R2 configuration.
+  1988→- Signed uploads.
+  1989→- Upload records.
+  1990→- File validation.
+  1991→- Sharp processing.
+  1992→- Worker architecture.
+  1993→- Thumbnail generation.
+  1994→- Image metadata extraction.
+  1995→- Moderation status.
+  1996→- Authorized downloads.
+  1997→
+  1998→Acceptance:
+  1999→
+  2000→- Real upload.
+
+[showing lines 1-2000 of 2408; use offset=2001 with limit to continue reading]

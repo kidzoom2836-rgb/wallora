@@ -1,0 +1,269 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * WALLORA Design System
+ * Premium dark theme — image-first creative platform.
+ * Palette per WALLORA brand spec (PART 4).
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-success: var(--success);
+  --color-secondary-text: var(--secondary-text);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-geist-sans);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+/*
+ * WALLORA premium dark palette is the default theme.
+ * (Light theme deferred to a later phase per the settings/Appearance spec.)
+ */
+:root {
+  --radius: 0.75rem;
+
+  /* Core WALLORA surfaces */
+  --background: #0B0C0F;       /* page bg */
+  --foreground: #F7F7F5;       /* primary text */
+  --surface: #14161B;          /* cards / panels */
+  --raised: #1C1F26;           /* raised cards / popovers */
+  --secondary-text: #A8ACB8;   /* muted text */
+
+  /* shadcn token mapping */
+  --card: #14161B;
+  --card-foreground: #F7F7F5;
+  --popover: #1C1F26;
+  --popover-foreground: #F7F7F5;
+
+  --primary: #D7B879;          /* WALLORA gold accent */
+  --primary-foreground: #0B0C0F;
+
+  --secondary: #1C1F26;
+  --secondary-foreground: #F7F7F5;
+
+  --muted: #14161B;
+  --muted-foreground: #9296A1;
+
+  --accent: #1C1F26;
+  --accent-foreground: #D7B879;
+
+  --destructive: #E46F75;      /* WALLORA error */
+  --success: #43B581;          /* WALLORA success */
+  --gold: #D7B879;
+  --gold-foreground: #0B0C0F;
+
+  --border: #2E323A;
+  --input: #292C33;
+  --ring: #D7B879;
+
+  --chart-1: #D7B879;
+  --chart-2: #43B581;
+  --chart-3: #6E8BCC;
+  --chart-4: #E46F75;
+  --chart-5: #9296A1;
+
+  --sidebar: #0E1014;
+  --sidebar-foreground: #F7F7F5;
+  --sidebar-primary: #D7B879;
+  --sidebar-primary-foreground: #0B0C0F;
+  --sidebar-accent: #1C1F26;
+  --sidebar-accent-foreground: #F7F7F5;
+  --sidebar-border: #292C33;
+  --sidebar-ring: #D7B879;
+}
+
+/* Mirror the dark palette under .dark so shadcn component variants stay correct. */
+.dark {
+  --background: #0B0C0F;
+  --foreground: #F7F7F5;
+  --surface: #14161B;
+  --raised: #1C1F26;
+  --secondary-text: #A8ACB8;
+  --card: #14161B;
+  --card-foreground: #F7F7F5;
+  --popover: #1C1F26;
+  --popover-foreground: #F7F7F5;
+  --primary: #D7B879;
+  --primary-foreground: #0B0C0F;
+  --secondary: #1C1F26;
+  --secondary-foreground: #F7F7F5;
+  --muted: #14161B;
+  --muted-foreground: #9296A1;
+  --accent: #1C1F26;
+  --accent-foreground: #D7B879;
+  --destructive: #E46F75;
+  --success: #43B581;
+  --gold: #D7B879;
+  --gold-foreground: #0B0C0F;
+  --border: #2E323A;
+  --input: #292C33;
+  --ring: #D7B879;
+  --chart-1: #D7B879;
+  --chart-2: #43B581;
+  --chart-3: #6E8BCC;
+  --chart-4: #E46F75;
+  --chart-5: #9296A1;
+  --sidebar: #0E1014;
+  --sidebar-foreground: #F7F7F5;
+  --sidebar-primary: #D7B879;
+  --sidebar-primary-foreground: #0B0C0F;
+  --sidebar-accent: #1C1F26;
+  --sidebar-accent-foreground: #F7F7F5;
+  --sidebar-border: #292C33;
+  --sidebar-ring: #D7B879;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv01", "cv11";
+  }
+  /* Premium custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0B0C0F;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #292C33;
+    border-radius: 999px;
+    border: 2px solid #0B0C0F;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3A3F48;
+  }
+  ::selection {
+    background: rgba(215, 184, 121, 0.25);
+    color: #F7F7F5;
+  }
+}
+
+/* WALLORA utility primitives */
+@layer utilities {
+  .text-gold {
+    color: #D7B879;
+  }
+  .bg-surface {
+    background-color: #14161B;
+  }
+  .bg-raised {
+    background-color: #1C1F26;
+  }
+  .text-secondary-text {
+    color: #9296A1;
+  }
+  .border-wallora {
+    border-color: #292C33;
+  }
+  /* Subtle premium gradient used sparingly on hero / CTA surfaces */
+  .bg-wallora-radial {
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(215, 184, 121, 0.10), transparent 60%),
+      radial-gradient(800px 400px at 100% 0%, rgba(110, 139, 204, 0.06), transparent 55%),
+      #0B0C0F;
+  }
+  .bg-wallora-grain {
+    background-image:
+      radial-gradient(rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+  .gold-gradient-text {
+    background: linear-gradient(135deg, #F0D9A8 0%, #D7B879 45%, #B8964F 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .ring-gold {
+    box-shadow: 0 0 0 1px rgba(215, 184, 121, 0.35), 0 0 0 4px rgba(215, 184, 121, 0.08);
+  }
+  .shadow-premium {
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+      0 24px 60px -20px rgba(0, 0, 0, 0.75),
+      0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+  .shadow-gold-glow {
+    box-shadow: 0 12px 40px -12px rgba(215, 184, 121, 0.35);
+  }
+  /* Masonry columns for discovery-style grids */
+  .masonry-columns {
+    column-gap: 1rem;
+  }
+}
+
+/* Reveal-on-scroll animation used by landing sections */
+@keyframes wallora-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise {
+  animation: wallora-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes wallora-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, #14161B 0%, #1C1F26 50%, #14161B 100%);
+  background-size: 200% 100%;
+  animation: wallora-shimmer 1.6s ease-in-out infinite;
+}
