@@ -236,6 +236,9 @@ export default function BuilderPage() {
             {active && <Badge variant="secondary" className="text-[10px]">{active.model}</Badge>}
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-8 text-xs" asChild>
+              <Link href="/sites">Explore sites</Link>
+            </Button>
             <select
               value={activeId ?? ""}
               onChange={(e) => setActiveId(e.target.value || null)}
