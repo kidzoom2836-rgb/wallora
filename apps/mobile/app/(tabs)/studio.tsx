@@ -44,6 +44,7 @@ interface Generation {
   stylePreset: string;
   aspectRatio: string;
   status: string;
+  objectKey?: string | null;
   publicUrl?: string | null;
   width?: number;
   height?: number;
@@ -203,15 +204,18 @@ export default function StudioScreen() {
         return;
       }
     }
-    // Fallback: publish as a real community wallpaper post.
+    // Fallback: publish the generated image as a real community image post.
     try {
+      const imageKey =
+        result.objectKey ?? result.publicUrl?.match(/gen\/[^?#]+$/i)?.[0] ?? null;
+      if (!imageKey) throw new Error("The generated image has no shareable storage key.");
       await withVerification(() =>
         apiJson("/api/v1/community/posts", {
           method: "POST",
           body: JSON.stringify({
             body: result.prompt.slice(0, 2000),
-            kind: "wallpaper",
-            imageUrl: result.publicUrl,
+            kind: "image",
+            imageKey,
           }),
         }),
       );

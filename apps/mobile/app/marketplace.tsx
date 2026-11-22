@@ -143,6 +143,23 @@ export default function MarketplaceScreen() {
               {total ? `${total} real listings` : "Real listings with clear licenses and honest purchase counts"}
             </Text>
 
+            <View style={styles.sellerRow}>
+              <Pressable
+                onPress={() => router.push("/marketplace/new")}
+                style={({ pressed }) => [styles.sellerButton, pressed && styles.buttonPressed]}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={C.bg} />
+                <Text style={styles.sellerButtonText}>Sell a design</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/marketplace/manage")}
+                style={({ pressed }) => [styles.sellerButtonOutline, pressed && styles.buttonPressed]}
+              >
+                <Ionicons name="create-outline" size={16} color={C.accent} />
+                <Text style={styles.sellerButtonOutlineText}>Manage listings</Text>
+              </Pressable>
+            </View>
+
             <View style={styles.search}>
               <Ionicons name="search-outline" size={17} color={C.muted} />
               <TextInput
@@ -298,6 +315,32 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 10, letterSpacing: 1.6, color: C.accent, fontWeight: "800", marginBottom: 4 },
   title: { fontSize: 26, fontWeight: "800", color: C.text },
   subtitle: { fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 18 },
+  sellerRow: { flexDirection: "row", flexWrap: "wrap", gap: S.sm, marginTop: S.md },
+  sellerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: S.md,
+    paddingVertical: 10,
+    borderRadius: R.md,
+    backgroundColor: C.accent,
+  },
+  sellerButtonText: { color: C.bg, fontSize: 12, fontWeight: "800" },
+  sellerButtonOutline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: S.md,
+    paddingVertical: 10,
+    borderRadius: R.md,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  sellerButtonOutlineText: { color: C.accent, fontSize: 12, fontWeight: "800" },
+  buttonPressed: { opacity: 0.7 },
   search: {
     flexDirection: "row",
     alignItems: "center",

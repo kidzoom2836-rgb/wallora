@@ -9,13 +9,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { Link, useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import { apiFetch, apiJson } from "../../lib/api";
+import { apiJson } from "../../lib/api";
 import { assetUrl } from "../../lib/config";
 import { useAuth } from "../../lib/auth";
-import { C, R, SHADOW, tierMeta } from "../../lib/theme";
+import { C, R, S, SHADOW, tierMeta } from "../../lib/theme";
 import { VerifiedBadge } from "../../components/ui/VerifiedBadge";
 import { SectionTitle } from "../../components/ui/States";
 
@@ -51,9 +51,10 @@ export default function ProfileScreen() {
 
   const load = useCallback(async () => {
     if (!user?.username) return;
+    const handle = encodeURIComponent(user.username);
     const [profile, walls] = await Promise.allSettled([
-      apiJson<any>(`/api/v1/users/${user.username}`),
-      apiJson<{ items: Wallpaper[] }>(`/api/v1/users/${user.username}/wallpapers?limit=12`),
+      apiJson<any>(`/api/v1/users/${handle}`),
+      apiJson<{ items: Wallpaper[] }>(`/api/v1/wallpapers?creator=${handle}&limit=12`),
     ]);
     if (profile.status === "fulfilled") {
       const d = profile.value;
@@ -88,14 +89,17 @@ export default function ProfileScreen() {
   const doSignOut = async () => {
     setSigningOut(true);
     try {
-      await apiFetch("/api/v1/auth/signout", { method: "POST" }).catch(() => {});
+      // AuthProvider owns the NextAuth signout + local session cleanup.
       await signOut();
+    } catch {
+      // signOut always clears the local session; keep the UI responsive.
     } finally {
       setSigningOut(false);
     }
   };
 
   const tier = tierMeta(stats?.tier ?? user?.verificationTier ?? "free");
+  const publicHandle = stats?.username ?? user?.username;
 
   return (
     <View style={styles.screen}>
@@ -145,6 +149,24 @@ export default function ProfileScreen() {
               <Text style={styles.bio}>{stats.bio}</Text>
             </View>
           )}
+
+          {publicHandle ? (
+            <Link
+              href={{ pathname: "/profile/[username]", params: { username: publicHandle } }}
+              asChild
+            >
+              <Pressable style={({ pressed }) => [styles.publicProfileLink, pressed && styles.pressed]}>
+                <Ionicons name="person-circle-outline" size={20} color={C.accent} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.publicProfileTitle}>View public profile</Text>
+                  <Text style={styles.publicProfileHandle} numberOfLines={1}>
+                    wallora.app/profile/{publicHandle}
+                  </Text>
+                </View>
+                <Ionicons name="open-outline" size={17} color={C.muted} />
+              </Pressable>
+            </Link>
+          ) : null}
 
           <View style={styles.menuGrid}>
             <MenuTile icon="apps-outline" label="Your Space" onPress={() => router.push("/(tabs)/space")} />
@@ -240,6 +262,19 @@ const styles = StyleSheet.create({
   card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 14, marginBottom: 14 },
   cardLabel: { color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginBottom: 7 },
   bio: { color: C.textSoft, fontSize: 13, lineHeight: 19 },
+  publicProfileLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    backgroundColor: C.card,
+    borderColor: C.accent + "55",
+    borderWidth: 1,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
+  },
+  publicProfileTitle: { color: C.text, fontSize: 13, fontWeight: "800" },
+  publicProfileHandle: { color: C.muted, fontSize: 11, marginTop: 2 },
   menuGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 22 },
   menuTile: { width: "30%", minHeight: 70, borderRadius: R.md, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", gap: 7 },
   menuLabel: { color: C.textSoft, fontSize: 11, fontWeight: "700", textAlign: "center" },

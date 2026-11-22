@@ -50,9 +50,14 @@ export default function MyUploadsScreen() {
         </View>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
+        <Pressable style={styles.uploadButton} onPress={() => router.push("/upload")}>
+          <Ionicons name="cloud-upload-outline" size={17} color={C.bg} />
+          <Text style={styles.uploadButtonText}>Upload wallpaper</Text>
+        </Pressable>
+
         <View style={styles.info}>
           <Ionicons name="information-circle-outline" size={17} color={C.accent} />
-          <Text style={styles.infoText}>Upload and publish new wallpapers on the WALLORA web app. Approved uploads appear in Discover for everyone.</Text>
+          <Text style={styles.infoText}>Publish one to three variations from your phone. Approved wallpapers appear in Discover for everyone.</Text>
         </View>
 
         {error && <Text style={styles.error}>{error}</Text>}
@@ -102,6 +107,8 @@ const styles = StyleSheet.create({
   title: { color: C.text, fontSize: 20, fontWeight: "700" },
   sub: { color: C.muted, fontSize: 12, marginTop: 2 },
   content: { padding: 16, paddingBottom: 40 },
+  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: C.accent, borderRadius: 12, paddingVertical: 13, marginBottom: 14 },
+  uploadButtonText: { color: C.bg, fontSize: 14, fontWeight: "800" },
   info: { flexDirection: "row", gap: 9, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: 12, marginBottom: 16 },
   infoText: { color: C.muted, fontSize: 12, lineHeight: 18, flex: 1 },
   error: { color: "#E46F75", fontSize: 12, marginBottom: 10 },

@@ -43,8 +43,8 @@ type Product = {
 
 type PurchaseResult = {
   alreadyOwned?: boolean;
-  demo?: boolean;
-  note?: string;
+  demo?: { note?: string; paymentProvider?: string | null };
+  purchase?: { id?: string; status?: string; createdAt?: string };
 };
 
 function priceLabel(cents: number | undefined) {
@@ -108,11 +108,7 @@ export default function ProductDetailScreen() {
       );
       setResult({
         message: data?.alreadyOwned ? "Already in your library" : "Pack added to your library",
-        note:
-          data?.note ??
-          (data?.demo === false
-            ? "The purchase was recorded by WALLORA."
-            : "Demo purchase — no payment was processed."),
+        note: data?.demo?.note ?? "Demo purchase — no payment was processed.",
         success: true,
       });
       await load();
@@ -125,6 +121,7 @@ export default function ProductDetailScreen() {
 
   const cover = assetUrl(product?.coverUrl);
   const creator = product?.creator;
+  const isOwnListing = !!user?.id && !!creator?.id && creator.id === user.id;
 
   return (
     <View style={styles.root}>
@@ -210,6 +207,12 @@ export default function ProductDetailScreen() {
                 <Ionicons name="bag-outline" size={14} color={C.accent} />
                 <Text style={styles.statText}>{product.purchaseCount ?? 0} purchases</Text>
               </View>
+              {isOwnListing ? (
+                <View style={styles.stat}>
+                  <Ionicons name="pricetag-outline" size={14} color={C.accent} />
+                  <Text style={[styles.statText, { color: C.accent }]}>Your listing</Text>
+                </View>
+              ) : null}
               {product.owned ? (
                 <View style={styles.stat}>
                   <Ionicons name="checkmark-circle" size={14} color={C.success} />
@@ -242,37 +245,47 @@ export default function ProductDetailScreen() {
               </View>
             ) : null}
 
-            <View style={styles.noteCard}>
-              <Ionicons name="information-circle-outline" size={16} color={C.blue} />
-              <Text style={styles.noteText}>
-                Purchases are recorded on WALLORA as a demo. No payment details are collected in the app.
-              </Text>
-            </View>
-
-            {!user ? (
-              <Pressable style={styles.signInCard} onPress={() => router.push("/auth/login")}>
-                <Ionicons name="lock-closed-outline" size={17} color={C.accent} />
-                <Text style={styles.signInText}>Sign in to add this pack to your library.</Text>
+            {isOwnListing ? (
+              <Pressable style={styles.manageButton} onPress={() => router.push("/marketplace/manage")}>
+                <Ionicons name="create-outline" size={17} color={C.accent} />
+                <Text style={styles.manageButtonText}>Manage this listing</Text>
                 <Ionicons name="chevron-forward" size={16} color={C.accent} />
               </Pressable>
-            ) : null}
-
-            <Pressable
-              onPress={() => void purchase()}
-              disabled={purchasing}
-              style={[styles.buyButton, purchasing && styles.buttonDisabled]}
-            >
-              {purchasing ? (
-                <ActivityIndicator color={C.bg} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="cart-outline" size={18} color={C.bg} />
-                  <Text style={styles.buyText}>
-                    {product.owned ? "Claim again (demo)" : `Purchase · ${priceLabel(product.price)}`}
+            ) : (
+              <>
+                <View style={styles.noteCard}>
+                  <Ionicons name="information-circle-outline" size={16} color={C.blue} />
+                  <Text style={styles.noteText}>
+                    Purchases are recorded on WALLORA as a demo. No payment details are collected in the app.
                   </Text>
-                </>
-              )}
-            </Pressable>
+                </View>
+
+                {!user ? (
+                  <Pressable style={styles.signInCard} onPress={() => router.push("/auth/login")}>
+                    <Ionicons name="lock-closed-outline" size={17} color={C.accent} />
+                    <Text style={styles.signInText}>Sign in to add this pack to your library.</Text>
+                    <Ionicons name="chevron-forward" size={16} color={C.accent} />
+                  </Pressable>
+                ) : null}
+
+                <Pressable
+                  onPress={() => void purchase()}
+                  disabled={purchasing}
+                  style={[styles.buyButton, purchasing && styles.buttonDisabled]}
+                >
+                  {purchasing ? (
+                    <ActivityIndicator color={C.bg} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="cart-outline" size={18} color={C.bg} />
+                      <Text style={styles.buyText}>
+                        {product.owned ? "Claim again (demo)" : `Purchase · ${priceLabel(product.price)}`}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
+            )}
           </>
         ) : null}
       </ScrollView>
@@ -380,6 +393,19 @@ const styles = StyleSheet.create({
     marginTop: S.lg,
   },
   signInText: { flex: 1, fontSize: 12, color: C.textSoft },
+  manageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.accent + "55",
+    borderRadius: R.md,
+    paddingHorizontal: S.md,
+    paddingVertical: 13,
+    marginTop: S.lg,
+  },
+  manageButtonText: { flex: 1, fontSize: 13, fontWeight: "800", color: C.accent },
   buyButton: {
     flexDirection: "row",
     alignItems: "center",
