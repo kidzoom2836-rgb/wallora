@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,8 +15,18 @@ import {
 import type { ScrollViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 
 import { apiJson } from "../../lib/api";
+import { assetUrl } from "../../lib/config";
+import { pickImages } from "../../lib/uploads";
+import {
+  AI_ATTACHMENT_MAX_FILES,
+  validateAiFiles,
+  uploadAiAttachments,
+  type AiAttachment,
+  type LocalAiFile,
+} from "../../lib/aiAttachments";
 import { withVerification } from "../../lib/verification";
 import { C, R } from "../../lib/theme";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
@@ -42,7 +53,10 @@ interface Message {
   content: string;
   createdAt?: string;
   error?: string;
+  attachments?: AiAttachment[];
 }
+
+type PendingFile = LocalAiFile & { previewUri?: string };
 
 interface Conversation {
   id: string;
@@ -101,6 +115,36 @@ function parseAssistant(content: string): { text: string; suggestions: Assistant
   return { text: text.trim(), suggestions: suggestions.slice(0, 3) };
 }
 
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: AiAttachment;
+  onRemove?: () => void;
+}) {
+  const isImage = attachment.kind === "image" || /^image\//i.test(attachment.contentType ?? "");
+  const uri = isImage ? assetUrl(attachment.url) : undefined;
+  return (
+    <View style={styles.attachmentChip}>
+      {uri ? (
+        <Image source={{ uri }} style={styles.attachmentThumb} resizeMode="cover" />
+      ) : (
+        <View style={styles.attachmentDocIcon}>
+          <Ionicons name="document-outline" size={13} color={C.accent} />
+        </View>
+      )}
+      <Text style={styles.attachmentName} numberOfLines={1}>
+        {attachment.name}
+      </Text>
+      {onRemove ? (
+        <Pressable onPress={onRemove} hitSlop={8} style={styles.attachmentRemove}>
+          <Ionicons name="close" size={12} color={C.muted} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export default function AiScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance>(null);
@@ -114,6 +158,8 @@ export default function AiScreen() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [stage, setStage] = useState(0);
@@ -261,30 +307,114 @@ export default function AiScreen() {
     }
   };
 
+  const addPendingFiles = (files: PendingFile[]) => {
+    if (!files.length) return;
+    try {
+      const next = [...pendingFiles, ...files].slice(0, AI_ATTACHMENT_MAX_FILES);
+      validateAiFiles(next);
+      setPendingFiles(next);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message ?? "Could not add those files.");
+    } finally {
+      setShowAttachmentPicker(false);
+    }
+  };
+
+  const pickAttachmentPhotos = async (source: "library" | "camera") => {
+    setShowAttachmentPicker(false);
+    try {
+      const images = await pickImages(source, {
+        max: AI_ATTACHMENT_MAX_FILES - pendingFiles.length,
+        allowsEditing: false,
+        quality: 0.82,
+      });
+      addPendingFiles(
+        images.map((image) => ({
+          uri: image.uri,
+          name: image.fileName,
+          type: image.mimeType,
+          size: image.fileSize,
+          previewUri: image.uri,
+        })),
+      );
+    } catch (e: any) {
+      setError(e?.message ?? "Could not choose that photo.");
+    }
+  };
+
+  const pickAttachmentDocuments = async () => {
+    setShowAttachmentPicker(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/pdf",
+          "text/plain",
+          "text/markdown",
+          "text/csv",
+          "application/json",
+        ],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      addPendingFiles(
+        result.assets.map((asset) => ({
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType,
+          size: asset.size,
+        })),
+      );
+    } catch (e: any) {
+      setError(e?.message ?? "Could not choose that document.");
+    }
+  };
+
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
-    if (!content || !conversation || sending) return;
+    const files = pendingFiles;
+    if ((!content && files.length === 0) || !conversation || sending) return;
     setInput("");
+    setPendingFiles([]);
     setError(null);
     setSending(true);
     setStage(0);
 
-    const optimistic: Message = { id: `temp-${Date.now()}`, role: "user", content };
+    const optimistic: Message = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      content: content || "(Attached files)",
+      attachments: files.map((file, index) => ({
+        id: `local-${index}`,
+        name: file.name,
+        contentType: file.type ?? undefined,
+        size: file.size ?? undefined,
+        kind: file.type?.startsWith("image/") ? "image" : "document",
+        url: file.previewUri,
+      })),
+    };
     setMessages((m) => [...m, optimistic]);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 90000);
 
     try {
-      const data = await withVerification(() =>
-        apiJson<{ userMessage: Message; assistantMessage: Message; error?: string }>(
+      const data = await withVerification(async () => {
+        const uploaded = await uploadAiAttachments(files);
+        return apiJson<{ userMessage: Message; assistantMessage: Message; error?: string }>(
           `/api/v1/ai/conversations/${conversation.id}/messages`,
-          { method: "POST", body: JSON.stringify({ content }), signal: controller.signal },
-        ),
-      );
+          {
+            method: "POST",
+            body: JSON.stringify({ content, attachmentIds: uploaded.map((a) => a.id) }),
+            signal: controller.signal,
+          },
+        );
+      });
       if (!data) {
         setMessages((m) => m.filter((x) => x.id !== optimistic.id));
         setInput(content);
+        setPendingFiles(files);
         setError("Claim your free WALLORA tick to use AI chat.");
         return;
       }
@@ -297,6 +427,7 @@ export default function AiScreen() {
     } catch (e: any) {
       setMessages((m) => m.filter((x) => x.id !== optimistic.id));
       setInput(content);
+      setPendingFiles(files);
       setError(
         controller.signal.aborted
           ? "That request took too long. Please try again."
@@ -420,6 +551,13 @@ export default function AiScreen() {
                 return (
                   <View key={m.id} style={styles.userRow}>
                     <View style={styles.userBubble}>
+                      {m.attachments?.length ? (
+                        <View style={styles.attachmentList}>
+                          {m.attachments.map((attachment) => (
+                            <AttachmentChip key={attachment.id} attachment={attachment} />
+                          ))}
+                        </View>
+                      ) : null}
                       <Text style={styles.userText}>{m.content}</Text>
                     </View>
                   </View>
@@ -474,7 +612,34 @@ export default function AiScreen() {
       </ScrollView>
 
       <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) + 8 }]}>
+        {pendingFiles.length > 0 && (
+          <View style={styles.pendingRow}>
+            {pendingFiles.map((file, index) => (
+              <AttachmentChip
+                key={`${file.name}-${index}`}
+                attachment={{
+                  id: `pending-${index}`,
+                  name: file.name,
+                  contentType: file.type ?? undefined,
+                  size: file.size ?? undefined,
+                  kind: file.type?.startsWith("image/") ? "image" : "document",
+                  url: file.previewUri,
+                }}
+                onRemove={() => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
+              />
+            ))}
+          </View>
+        )}
         <View style={styles.inputWrap}>
+          <Pressable
+            onPress={() => setShowAttachmentPicker(true)}
+            disabled={sending || pendingFiles.length >= AI_ATTACHMENT_MAX_FILES}
+            hitSlop={8}
+            style={[styles.paperclip, (sending || pendingFiles.length >= AI_ATTACHMENT_MAX_FILES) && styles.iconDisabled]}
+            accessibilityLabel="Attach photos or documents"
+          >
+            <Ionicons name="attach-outline" size={19} color={C.muted} />
+          </Pressable>
           <TextInput
             value={input}
             onChangeText={setInput}
@@ -488,10 +653,10 @@ export default function AiScreen() {
           />
           <Pressable
             onPress={() => void send()}
-            disabled={!input.trim() || sending || !conversation}
+            disabled={(!input.trim() && pendingFiles.length === 0) || sending || !conversation}
             style={({ pressed }) => [
               styles.sendBtn,
-              (!input.trim() || sending || !conversation) && styles.sendDisabled,
+              ((!input.trim() && pendingFiles.length === 0) || sending || !conversation) && styles.sendDisabled,
               pressed && styles.pressed,
             ]}
             accessibilityLabel="Send message"
@@ -503,7 +668,7 @@ export default function AiScreen() {
             )}
           </Pressable>
         </View>
-        <Text style={styles.composerNote}>Follow-ups stay in this chat · WALLORA AI can make mistakes</Text>
+        <Text style={styles.composerNote}>Attach up to 4 photos or documents · Follow-ups stay in this chat</Text>
       </View>
 
       <Modal
@@ -569,6 +734,68 @@ export default function AiScreen() {
                 })
               )}
             </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showAttachmentPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAttachmentPicker(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowAttachmentPicker(false)}>
+          <Pressable style={styles.historySheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.historyHeader}>
+              <View>
+                <Text style={styles.historyTitle}>Add to Aurora</Text>
+                <Text style={styles.historySheetSub}>
+                  Photos, PDFs and notes become context for this chat — not app navigation.
+                </Text>
+              </View>
+              <Pressable onPress={() => setShowAttachmentPicker(false)} hitSlop={10}>
+                <Ionicons name="close" size={20} color={C.muted} />
+              </Pressable>
+            </View>
+            <View style={styles.pickerList}>
+              <Pressable
+                style={styles.pickerOption}
+                onPress={() => void pickAttachmentPhotos("library")}
+              >
+                <View style={styles.pickerIcon}>
+                  <Ionicons name="images-outline" size={18} color={C.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pickerTitle}>Photo library</Text>
+                  <Text style={styles.pickerSub}>Attach up to {AI_ATTACHMENT_MAX_FILES} images</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={C.muted} />
+              </Pressable>
+              <Pressable
+                style={styles.pickerOption}
+                onPress={() => void pickAttachmentPhotos("camera")}
+              >
+                <View style={styles.pickerIcon}>
+                  <Ionicons name="camera-outline" size={18} color={C.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pickerTitle}>Camera</Text>
+                  <Text style={styles.pickerSub}>Take a new reference photo</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={C.muted} />
+              </Pressable>
+              <Pressable style={styles.pickerOption} onPress={() => void pickAttachmentDocuments()}>
+                <View style={styles.pickerIcon}>
+                  <Ionicons name="document-attach-outline" size={18} color={C.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pickerTitle}>Documents</Text>
+                  <Text style={styles.pickerSub}>PDF, TXT, MD, CSV or JSON</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={C.muted} />
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -678,6 +905,31 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   userText: { color: C.text, fontSize: 14, lineHeight: 20 },
+  attachmentList: { flexDirection: "row", flexWrap: "wrap", gap: 6, maxWidth: 240, marginBottom: 8 },
+  attachmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: 210,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  attachmentThumb: { width: 22, height: 22, borderRadius: 11 },
+  attachmentDocIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.accentDim, alignItems: "center", justifyContent: "center" },
+  attachmentName: { color: C.textSoft, fontSize: 10.5, flexShrink: 1 },
+  attachmentRemove: { padding: 2 },
+  pendingRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  paperclip: { width: 26, alignItems: "center", justifyContent: "center", alignSelf: "flex-end", paddingBottom: 8 },
+  pickerList: { paddingHorizontal: 18, paddingBottom: 8 },
+  pickerOption: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 13, marginBottom: 9 },
+  pickerIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.accentDim, alignItems: "center", justifyContent: "center" },
+  pickerTitle: { color: C.text, fontSize: 13, fontWeight: "800" },
+  pickerSub: { color: C.muted, fontSize: 10.5, marginTop: 2 },
+  historySheetSub: { color: C.muted, fontSize: 10.5, marginTop: 3, maxWidth: 260 },
   assistantRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   assistantAvatar: {
     width: 28,

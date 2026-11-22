@@ -311,6 +311,35 @@ export default function SpaceScreen() {
           </View>
         </View>
 
+        <View style={styles.quickActions}>
+          <Pressable
+            onPress={() => router.push("/watch-themes")}
+            style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: C.accentDim }]}>
+              <Ionicons name="watch-outline" size={18} color={C.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quickTitle}>Watch Themes</Text>
+              <Text style={styles.quickSub}>Square art for round faces</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={15} color={C.muted} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/downloads")}
+            style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: C.successDim }]}>
+              <Ionicons name="download-outline" size={18} color={C.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quickTitle}>Offline Downloads</Text>
+              <Text style={styles.quickSub}>{downloads.length} saved on this device</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={15} color={C.muted} />
+          </Pressable>
+        </View>
+
         <SectionTitle title={title} subtitle={subtitle} />
 
         {error && <Text style={styles.error}>{error}</Text>}
@@ -419,6 +448,11 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: "center" },
   statValue: { color: C.text, fontSize: 16, fontWeight: "800" },
   statLabel: { color: C.muted, fontSize: 10, marginTop: 2 },
+  quickActions: { flexDirection: "row", gap: 10, marginTop: -12, marginBottom: 24 },
+  quickAction: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 11 },
+  quickIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  quickTitle: { color: C.text, fontSize: 11.5, fontWeight: "800" },
+  quickSub: { color: C.muted, fontSize: 9.5, marginTop: 2 },
   error: { color: C.error, fontSize: 12, marginBottom: 10 },
   loading: { paddingVertical: 50, alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },

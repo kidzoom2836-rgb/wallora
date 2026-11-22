@@ -10,6 +10,7 @@ import {
   persistSession,
   signInBody,
 } from "./api";
+import { disablePushNotifications, enablePushNotifications } from "./pushNotifications";
 
 export interface User {
   id: string;
@@ -129,6 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         return { error: "Signed in, but the session could not be verified. Please try again." };
       }
+      // Ask once after a real sign-in so new-wallpaper and new-feature alerts
+      // work without making the user hunt through settings.
+      void enablePushNotifications();
       return {};
     } catch (e: any) {
       return { error: messageOf(e, "Could not sign in. Check your connection.") };
@@ -187,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Local sign-out still succeeds if the server is unreachable.
     }
+    await disablePushNotifications();
     await clearSession();
     await SecureStore.deleteItemAsync(USER_STORE_KEY).catch(() => {});
     setUser(null);
