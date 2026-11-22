@@ -115,5 +115,6 @@ export async function POST(request: NextRequest) {
   if (!showroom) return error("conflict", "That showroom belongs to another creator.", 409);
 
   const payload = (await buildShowroomPayloads([showroom]))[0];
+  if (!payload) return error("profile_required", "A public profile is required for a showroom.", 400);
   return NextResponse.json({ data: payload }, { status: existing ? 200 : 201 });
 }

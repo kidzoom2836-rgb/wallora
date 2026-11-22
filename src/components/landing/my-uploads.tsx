@@ -34,6 +34,12 @@ type MyWallpaper = {
   category: { slug: string; name: string } | null;
   gridAsset: { objectKey: string; width: number; height: number } | null;
   assets: { variant: string; objectKey: string; width: number; height: number; fileSize: number; format: string }[];
+  variationCount?: number;
+  variations?: {
+    index: number;
+    label: string;
+    preview: { variant: string; objectKey: string; width: number; height: number } | null;
+  }[];
 };
 
 type Response = {
@@ -139,11 +145,16 @@ export function MyUploads() {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent" />
-                        <div className="absolute right-2 top-2">
+                        <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
                           <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium", statusCfg.color)}>
                             <StatusIcon size={10} />
                             {statusCfg.label}
                           </span>
+                          {(w.variationCount ?? w.variations?.length ?? 0) > 1 && (
+                            <span className="rounded-full border border-primary/30 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-primary">
+                              {w.variationCount ?? w.variations?.length} variations
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="absolute inset-x-0 bottom-0 p-3">

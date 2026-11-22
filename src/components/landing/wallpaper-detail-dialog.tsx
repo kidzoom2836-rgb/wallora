@@ -45,6 +45,24 @@ type DetailAsset = {
   mimeType: string;
 };
 
+type VariationPreview = {
+  objectKey: string;
+  width: number;
+  height: number;
+  variant?: string;
+};
+
+type Variation = {
+  index: number;
+  label: string;
+  prefix?: string;
+  previewAsset: VariationPreview | null;
+  originalAsset?: DetailAsset | null;
+  gridAsset?: DetailAsset | null;
+  detailAsset?: DetailAsset | null;
+  assets?: DetailAsset[];
+};
+
 type DetailResponse = {
   data: {
     id: string;
@@ -71,6 +89,8 @@ type DetailResponse = {
       tier: "free" | "verified" | "premium" | "supreme";
     };
     assets: DetailAsset[];
+    variationCount?: number;
+    variations?: Variation[];
     tags: { slug: string; name: string }[];
     liked: boolean;
     favorited: boolean;
@@ -82,6 +102,8 @@ type DetailResponse = {
       dominantColor: string | null;
       likeCount: number;
       asset: { objectKey: string; width: number; height: number } | null;
+      variationCount?: number;
+      variations?: { index: number; label: string; preview: VariationPreview | null }[];
     }[];
   };
 };
@@ -104,6 +126,16 @@ export function WallpaperDetailDialog() {
 
   const wallpaper = data?.data;
   const originalAsset = wallpaper?.assets.find((a) => a.variant === "original") ?? wallpaper?.assets[0];
+  const variations = wallpaper?.variations ?? [];
+  const [activeVariation, setActiveVariation] = React.useState(0);
+
+  React.useEffect(() => {
+    setActiveVariation(0);
+  }, [wallpaper?.id]);
+
+  const activeVariationData = variations[activeVariation] ?? null;
+  const heroAsset = activeVariationData?.previewAsset ?? originalAsset;
+  const metaAsset = activeVariationData?.originalAsset ?? originalAsset;
 
   const [liked, setLiked] = React.useState(false);
   const [favorited, setFavorited] = React.useState(false);
@@ -158,8 +190,9 @@ export function WallpaperDetailDialog() {
   });
 
   const downloadMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/v1/wallpapers/${wallpaper!.slug}/download`, { method: "POST" });
+    mutationFn: async (variant?: string) => {
+      const query = variant ? `?variant=${encodeURIComponent(variant)}` : "";
+      const res = await fetch(`/api/v1/wallpapers/${wallpaper!.slug}/download${query}`, { method: "POST" });
       if (!res.ok) throw new Error();
       return res.json();
     },
@@ -192,7 +225,7 @@ export function WallpaperDetailDialog() {
   };
   const handleDownload = () => {
     if (!wallpaper) return;
-    downloadMutation.mutate();
+    downloadMutation.mutate(metaAsset?.variant);
   };
   const handleShare = async () => {
     if (!wallpaper) return;
@@ -234,10 +267,10 @@ export function WallpaperDetailDialog() {
           <div className="grid max-h-[90vh] overflow-y-auto lg:grid-cols-[1.4fr_1fr]">
             {/* Image */}
             <div className="relative bg-black/40">
-              {originalAsset && (
+              {heroAsset && (
                 <img
-                  src={originalAsset.objectKey}
-                  alt={wallpaper.title}
+                  src={heroAsset.objectKey}
+                  alt={activeVariationData ? `${wallpaper.title} — ${activeVariationData.label}` : wallpaper.title}
                   className="h-full max-h-[60vh] w-full object-contain lg:max-h-[90vh]"
                 />
               )}
@@ -246,6 +279,39 @@ export function WallpaperDetailDialog() {
                   {wallpaper.sourceType === "showcase" ? "WALLORA Showcase" : wallpaper.sourceType}
                 </span>
               </div>
+
+              {/* Variation gallery — every approved source image in one post. */}
+              {variations.length > 1 && (
+                <div className="absolute inset-x-3 bottom-3 flex gap-2 overflow-x-auto pb-1">
+                  {variations.map((variation, index) => (
+                    <button
+                      key={variation.index}
+                      type="button"
+                      onClick={() => setActiveVariation(index)}
+                      aria-label={`Show ${variation.label}`}
+                      aria-pressed={index === activeVariation}
+                      className={cn(
+                        "flex shrink-0 flex-col gap-1 rounded-lg border p-1 text-left backdrop-blur transition-colors",
+                        index === activeVariation
+                          ? "border-primary bg-background/90"
+                          : "border-border bg-background/70 hover:border-primary/50",
+                      )}
+                    >
+                      {variation.previewAsset && (
+                        <img
+                          src={variation.previewAsset.objectKey}
+                          alt=""
+                          className="h-12 w-16 rounded object-cover"
+                          loading="lazy"
+                        />
+                      )}
+                      <span className="max-w-16 truncate px-0.5 text-[10px] font-medium text-foreground">
+                        {variation.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Sidebar */}
@@ -350,13 +416,20 @@ export function WallpaperDetailDialog() {
 
               {/* Metadata */}
               <dl className="grid grid-cols-2 gap-3 text-xs">
-                {originalAsset && (
+                {metaAsset && (
                   <>
-                    <MetaRow icon={Ruler} label="Dimensions" value={`${originalAsset.width} × ${originalAsset.height}`} />
-                    <MetaRow icon={FileType} label="Format" value={originalAsset.format.toUpperCase()} />
+                    <MetaRow icon={Ruler} label="Dimensions" value={`${metaAsset.width} × ${metaAsset.height}`} />
+                    <MetaRow icon={FileType} label="Format" value={metaAsset.format.toUpperCase()} />
                     <MetaRow icon={Eye} label="Views" value={String(wallpaper.viewCount)} />
                     <MetaRow icon={Calendar} label="Added" value={new Date(wallpaper.createdAt).toLocaleDateString()} />
                   </>
+                )}
+                {(wallpaper.variationCount ?? variations.length) > 1 && (
+                  <MetaRow
+                    icon={Ruler}
+                    label="Variations"
+                    value={String(wallpaper.variationCount ?? variations.length)}
+                  />
                 )}
                 <MetaRow icon={Shield} label="License" value={wallpaper.license} />
                 <MetaRow icon={Ruler} label="Orientation" value={wallpaper.orientation} />
@@ -398,6 +471,21 @@ export function WallpaperDetailDialog() {
                             className="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-110"
                             loading="lazy"
                           />
+                        )}
+                        {(r.variationCount ?? r.variations?.length ?? 0) > 1 && (
+                          <div className="absolute inset-x-1 top-1 flex gap-0.5">
+                            {r.variations?.map((variation) =>
+                              variation.preview ? (
+                                <img
+                                  key={variation.index}
+                                  src={variation.preview.objectKey}
+                                  alt=""
+                                  className="h-6 w-8 rounded-sm border border-border/80 object-cover"
+                                  loading="lazy"
+                                />
+                              ) : null,
+                            )}
+                          </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
                         <p className="absolute inset-x-1 bottom-1 truncate text-[10px] font-medium text-foreground">

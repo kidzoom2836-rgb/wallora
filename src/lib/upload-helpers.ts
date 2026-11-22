@@ -1,6 +1,23 @@
 import { z } from "zod";
 
 import { extractMetadata } from "@/lib/image";
+import {
+  ALLOWED_EXTENSIONS,
+  ALLOWED_MIME_TYPES,
+  MAX_DIMENSION,
+  MAX_UPLOAD_BYTES,
+  MAX_VARIATIONS,
+  MIN_DIMENSION,
+} from "@/lib/upload-config";
+
+export {
+  ALLOWED_EXTENSIONS,
+  ALLOWED_MIME_TYPES,
+  MAX_DIMENSION,
+  MAX_UPLOAD_BYTES,
+  MAX_VARIATIONS,
+  MIN_DIMENSION,
+} from "@/lib/upload-config";
 
 /**
  * WALLORA upload validation.
@@ -9,55 +26,88 @@ import { extractMetadata } from "@/lib/image";
  *   1. Client-declared metadata (name, type, size) — Zod
  *   2. File signature (magic bytes) — real content detection
  *   3. Image dimensions — min/max after Sharp reads the buffer
+ *
+ * Multi-variation requests use `sources` (1-3 entries). The original single
+ * fields (filename/contentType/size for presign, key/filename for complete)
+ * remain supported so existing clients are unaffected.
  */
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
-export const MIN_DIMENSION = 512;
-export const MAX_DIMENSION = 8192;
+const filenameSchema = z
+  .string()
+  .trim()
+  .min(1, { message: "Filename is required" })
+  .max(200, { message: "Filename is too long" });
 
-export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp"] as const;
+const contentTypeSchema = z.enum(ALLOWED_MIME_TYPES, {
+  message: "Only JPEG, PNG and WebP images are allowed",
+});
+
+const sizeSchema = z
+  .number()
+  .int()
+  .min(1, { message: "File is empty" })
+  .max(MAX_UPLOAD_BYTES, { message: "File exceeds 10 MB limit" });
+
+const FileMetaSchema = z.object({
+  filename: filenameSchema,
+  contentType: contentTypeSchema,
+  size: sizeSchema,
+});
 
 /** Client-declared metadata validation (used at the presign step). */
-export const PresignSchema = z.object({
-  filename: z
-    .string()
-    .trim()
-    .min(1, { message: "Filename is required" })
-    .max(200, { message: "Filename is too long" }),
-  contentType: z.enum(ALLOWED_MIME_TYPES, {
-    message: "Only JPEG, PNG and WebP images are allowed",
-  }),
-  size: z
-    .number()
-    .int()
-    .min(1, { message: "File is empty" })
-    .max(MAX_UPLOAD_BYTES, { message: "File exceeds 10 MB limit" }),
-});
+export const PresignSchema = z
+  .object({
+    // Legacy single-file fields (kept optional for multi-source requests).
+    filename: filenameSchema.optional(),
+    contentType: contentTypeSchema.optional(),
+    size: sizeSchema.optional(),
+    sources: z.array(FileMetaSchema).min(1).max(MAX_VARIATIONS).optional(),
+    groupId: z.string().trim().min(1).max(80).optional(),
+  })
+  .refine(
+    (data) =>
+      (!!data.sources && data.sources.length > 0) ||
+      (!!data.filename && !!data.contentType && !!data.size),
+    { message: `Provide one to ${MAX_VARIATIONS} source images.` },
+  );
 
 export type PresignInput = z.infer<typeof PresignSchema>;
 
-/** Complete-step metadata (title, category, description). */
-export const CompleteSchema = z.object({
+const CompleteSourceSchema = z.object({
   key: z.string().trim().min(1),
-  filename: z.string().trim().min(1).max(200),
-  title: z
-    .string()
-    .trim()
-    .min(2, { message: "Title must be at least 2 characters" })
-    .max(120, { message: "Title is too long" }),
-  categoryId: z.string().trim().min(1, { message: "Select a category" }),
-  description: z
-    .string()
-    .trim()
-    .max(2000, { message: "Description is too long" })
-    .optional(),
-  tags: z
-    .array(z.string().trim().toLowerCase().min(2).max(30))
-    .max(10, { message: "Maximum 10 tags" })
-    .optional()
-    .default([]),
+  filename: filenameSchema,
+  label: z.string().trim().max(80).optional(),
 });
+
+/** Complete-step metadata (title, category, description, variations). */
+export const CompleteSchema = z
+  .object({
+    // Legacy single-file fields (kept optional for multi-source requests).
+    key: z.string().trim().min(1).optional(),
+    filename: filenameSchema.optional(),
+    sources: z.array(CompleteSourceSchema).min(1).max(MAX_VARIATIONS).optional(),
+    groupId: z.string().trim().min(1).max(80).optional(),
+    title: z
+      .string()
+      .trim()
+      .min(2, { message: "Title must be at least 2 characters" })
+      .max(120, { message: "Title is too long" }),
+    categoryId: z.string().trim().min(1, { message: "Select a category" }),
+    description: z
+      .string()
+      .trim()
+      .max(2000, { message: "Description is too long" })
+      .optional(),
+    tags: z
+      .array(z.string().trim().toLowerCase().min(2).max(30))
+      .max(10, { message: "Maximum 10 tags" })
+      .optional()
+      .default([]),
+  })
+  .refine(
+    (data) => (!!data.sources && data.sources.length > 0) || (!!data.key && !!data.filename),
+    { message: `Provide one to ${MAX_VARIATIONS} uploaded sources.` },
+  );
 
 export type CompleteInput = z.infer<typeof CompleteSchema>;
 

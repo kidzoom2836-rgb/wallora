@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
+import { groupVariationAssets } from "@/lib/wallpaper-variants";
+import { readVariationMetadataMany } from "@/lib/variation-metadata";
 
 /**
  * GET /api/v1/users/me/wallpapers
@@ -50,7 +52,6 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         category: { select: { slug: true, name: true } },
         assets: {
-          where: { variant: { in: ["grid", "detail", "original"] } },
           select: {
             variant: true,
             objectKey: true,
@@ -72,31 +73,43 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  const variationMeta = await readVariationMetadataMany(items.map((w) => w.id));
+
   return NextResponse.json({
     data: {
-      items: items.map((w) => ({
-        id: w.id,
-        slug: w.slug,
-        title: w.title,
-        description: w.description,
-        status: w.status,
-        orientation: w.orientation,
-        dominantColor: w.dominantColor,
-        license: w.license,
-        sourceType: w.sourceType,
-        isPublic: w.isPublic,
-        likeCount: w.likeCount,
-        favoriteCount: w.favoriteCount,
-        downloadCount: w.downloadCount,
-        viewCount: w.viewCount,
-        createdAt: w.createdAt,
-        category: w.category,
-        assets: w.assets,
-        tags: w.tags.map((t) => t.tag),
-        liked: w.likes?.length > 0,
-        favorited: w.favorites?.length > 0,
-        gridAsset: w.assets.find((a) => a.variant === "grid") ?? w.assets[0] ?? null,
-      })),
+      items: items.map((w) => {
+        const groups = groupVariationAssets(w.assets, variationMeta[w.id]);
+        const base = groups[0];
+        return {
+          id: w.id,
+          slug: w.slug,
+          title: w.title,
+          description: w.description,
+          status: w.status,
+          orientation: w.orientation,
+          dominantColor: w.dominantColor,
+          license: w.license,
+          sourceType: w.sourceType,
+          isPublic: w.isPublic,
+          likeCount: w.likeCount,
+          favoriteCount: w.favoriteCount,
+          downloadCount: w.downloadCount,
+          viewCount: w.viewCount,
+          createdAt: w.createdAt,
+          category: w.category,
+          assets: w.assets,
+          variationCount: groups.length,
+          variations: groups.map((group) => ({
+            index: group.index,
+            label: group.label,
+            preview: group.preview,
+          })),
+          tags: w.tags.map((t) => t.tag),
+          liked: w.likes?.length > 0,
+          favorited: w.favorites?.length > 0,
+          gridAsset: base?.preview ?? w.assets.find((a) => a.variant === "grid") ?? w.assets[0] ?? null,
+        };
+      }),
       pagination: {
         page,
         limit,

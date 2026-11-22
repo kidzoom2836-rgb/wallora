@@ -3,34 +3,90 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireVerification } from "@/lib/auth-helpers";
 import { getStorage } from "@/lib/storage";
-import { processImage } from "@/lib/image";
+import { processImage, type ImageMetadata } from "@/lib/image";
 import {
   CompleteSchema,
   validateImageFile,
   buildVariantKey,
+  type CompleteInput,
 } from "@/lib/upload-helpers";
+import {
+  defaultVariationLabel,
+  groupVariationAssets,
+  variationPrefix,
+  buildVariationMetadata,
+  type VariationAsset,
+  type VariationMetaEntry,
+} from "@/lib/wallpaper-variants";
+import { variationMetaKey } from "@/lib/variation-metadata";
 import { slugify } from "@/lib/slugify";
 
 /**
  * POST /api/v1/uploads/complete
  *
  * The core of the upload pipeline:
- *   1. Read the uploaded original from storage
- *   2. Validate the file signature + dimensions
- *   3. Process with Sharp (generate variants, strip EXIF, extract metadata)
- *   4. Pre-store all variants to storage (OUTSIDE the transaction)
- *   5. Run a FAST DB-only transaction (wallpaper + assets + tags + audit)
+ *   1. Read every uploaded source from storage (1-3 for one post)
+ *   2. Validate each file signature + dimensions
+ *   3. Process each with Sharp (responsive variants, strip EXIF, metadata)
+ *   4. Pre-store all assets to storage (OUTSIDE the transaction)
+ *   5. Run a FAST DB-only transaction (one Wallpaper, all assets, tags, audit,
+ *      variation metadata in StoredBlob)
  *
  * Steps 1-4 happen outside the transaction because Neon's PgBouncer pool
- * closes long-running interactive transactions. The transaction uses
- * createMany for assets (1 query instead of N) and an extended timeout
- * (15s) to stay within the PgBouncer connection window.
+ * closes long-running interactive transactions. `maxDuration = 60` gives the
+ * function time for up to three Sharp pipelines.
  *
- * `maxDuration = 60` gives the Vercel serverless function enough time to
- * run Sharp + store variants + commit the transaction (default is 10s which
- * is too tight for image processing through a pooled DB connection).
+ * Legacy clients still send a single `key` + `filename` and get the exact same
+ * response shape (plus additive multi-variation fields).
  */
 export const maxDuration = 60;
+
+type NormalizedSource = {
+  index: number;
+  key: string;
+  filename: string;
+  label?: string;
+  uploadId: string;
+};
+
+type StoredVariant = VariationAsset & {
+  variationIndex: number;
+  fileSize: number;
+  format: string;
+  mimeType: string;
+};
+
+function normalizeSources(parsed: CompleteInput): NormalizedSource[] {
+  if (parsed.sources?.length) {
+    return parsed.sources.map((source, index) => ({
+      index,
+      key: source.key,
+      filename: source.filename,
+      label: source.label,
+      uploadId: uploadIdFromKey(source.key),
+    }));
+  }
+  return [
+    {
+      index: 0,
+      key: parsed.key!,
+      filename: parsed.filename!,
+      uploadId: uploadIdFromKey(parsed.key!),
+    },
+  ];
+}
+
+/** Extract the upload id from a raw key, serving URL or Blob URL. */
+function uploadIdFromKey(key: string): string {
+  const match = key.match(/(?:^|\/)w\/([^/]+)\/([^/]+)\//);
+  return match?.[2] ?? "";
+}
+
+function declaredMimeForKey(key: string): string {
+  if (key.endsWith(".png")) return "image/png";
+  if (key.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
 
 export async function POST(request: NextRequest) {
   const result = await requireVerification();
@@ -61,19 +117,30 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { key, filename, title, categoryId, description, tags } = parsed.data;
+  const { title, categoryId, description, tags } = parsed.data;
+  const sources = normalizeSources(parsed.data);
 
-  // Verify the key belongs to this user. The key may be:
-  //   - raw: w/{userId}/{uploadId}/original.jpg          (local, R2)
-  //   - DB serving URL: /api/v1/storage/w/{userId}/...    (database adapter)
-  //   - Blob URL: https://…/w/{userId}/…                  (Vercel Blob adapter)
-  const keyMatch = key.match(/(?:^|\/)w\/([^/]+)\/([^/]+)\//);
-  const keyUserId = keyMatch?.[1];
-  const keyUploadId = keyMatch?.[2];
-  if (!keyUserId || keyUserId !== userId) {
+  // Verify each key belongs to this user. Keys may be raw, DB serving URLs or
+  // Blob URLs — all contain the same w/{userId}/{uploadId}/ segment.
+  for (const source of sources) {
+    const match = source.key.match(/(?:^|\/)w\/([^/]+)\/([^/]+)\//);
+    if (!match?.[1] || match[1] !== userId || !source.uploadId) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "forbidden",
+            message: `Source ${source.index + 1} does not belong to the authenticated user.`,
+          },
+        },
+        { status: 403 },
+      );
+    }
+  }
+
+  if (new Set(sources.map((source) => source.key)).size !== sources.length) {
     return NextResponse.json(
-      { error: { code: "forbidden", message: "Key does not belong to the authenticated user." } },
-      { status: 403 },
+      { error: { code: "validation_error", message: "Each variation must use a different upload." } },
+      { status: 400 },
     );
   }
 
@@ -81,92 +148,131 @@ export async function POST(request: NextRequest) {
   const category = await db.category.findUnique({ where: { id: categoryId } });
   if (!category) {
     return NextResponse.json(
-      { error: { code: "validation_error", message: "Selected category does not exist." } },
+      {
+        error: { code: "validation_error", message: "Selected category does not exist." },
+      },
       { status: 400 },
     );
   }
 
   const storage = getStorage();
 
-  // 1. Read the uploaded original
-  let originalBuffer: Buffer;
+  // Pre-store every variant (outside the transaction).
+  const storedVariants: StoredVariant[] = [];
+  const variationMetaEntries: VariationMetaEntry[] = [];
+  let baseMetadata: ImageMetadata | null = null;
+
   try {
-    originalBuffer = await storage.getObject(key);
-  } catch {
+    for (const source of sources) {
+      // 1. Read the uploaded source
+      let originalBuffer: Buffer;
+      try {
+        originalBuffer = await storage.getObject(source.key);
+      } catch {
+        return NextResponse.json(
+          {
+            error: {
+              code: "not_found",
+              message: `Uploaded file for variation ${source.index + 1} not found. Please re-upload.`,
+            },
+          },
+          { status: 404 },
+        );
+      }
+
+      // 2. Validate signature + dimensions
+      const validation = await validateImageFile(
+        originalBuffer,
+        declaredMimeForKey(source.key),
+      );
+      if (!validation.ok) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "validation_error",
+              message: `Variation ${source.index + 1}: ${validation.error}`,
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      // 3. Process with Sharp
+      const processed = await processImage(originalBuffer);
+      const { metadata, variants } = processed;
+      if (source.index === 0) baseMetadata = metadata;
+
+      // 4. Store responsive variants under a namespace unique to this source.
+      //    The source object itself is reused as the variation's "original".
+      const prefix = variationPrefix(source.index);
+      for (const variant of variants) {
+        const variantName = `${prefix}${variant.variant}`;
+        const variantKey =
+          variant.variant === "original"
+            ? source.key
+            : buildVariantKey(userId, source.uploadId, variantName);
+
+        let storedKey = variantKey;
+        if (variant.variant !== "original") {
+          try {
+            const stored = await storage.putObject(variantKey, variant.buffer, variant.mimeType);
+            storedKey = stored.key;
+          } catch (err) {
+            console.error("[upload.complete] variant storage failed:", variantName, err);
+            return NextResponse.json(
+              {
+                error: {
+                  code: "server_error",
+                  message: `Failed to store ${variantName} variant.`,
+                },
+              },
+              { status: 500 },
+            );
+          }
+        }
+
+        storedVariants.push({
+          variationIndex: source.index,
+          variant: variantName,
+          objectKey: storedKey,
+          width: variant.width,
+          height: variant.height,
+          fileSize: variant.fileSize,
+          format: variant.format,
+          mimeType: variant.mimeType,
+        });
+      }
+
+      variationMetaEntries.push({
+        index: source.index,
+        prefix,
+        label: source.label?.trim() || defaultVariationLabel(source.index),
+        filename: source.filename,
+      });
+    }
+  } catch (err) {
+    console.error("[upload.complete] image processing failed:", err);
     return NextResponse.json(
-      { error: { code: "not_found", message: "Uploaded file not found. Please re-upload." } },
-      { status: 404 },
+      { error: { code: "server_error", message: "Could not process the image. Please try again." } },
+      { status: 500 },
     );
   }
 
-  // 2. Validate the file (signature + dimensions)
-  const declaredMime = key.endsWith(".png")
-    ? "image/png"
-    : key.endsWith(".webp")
-      ? "image/webp"
-      : "image/jpeg";
-
-  const validation = await validateImageFile(originalBuffer, declaredMime);
-  if (!validation.ok) {
+  if (!baseMetadata) {
     return NextResponse.json(
-      { error: { code: "validation_error", message: validation.error } },
+      { error: { code: "validation_error", message: "No source image was processed." } },
       { status: 400 },
     );
   }
 
-  // 3. Process with Sharp (outside the transaction)
-  const processed = await processImage(originalBuffer);
-  const { metadata, variants } = processed;
-
   // Derive a unique slug from the title
   const baseSlug = slugify(title);
   const slug = `${baseSlug}-${Date.now().toString(36).slice(-6)}`;
+  const metadata = baseMetadata;
 
-  // 4. Pre-store variants to storage (OUTSIDE the transaction)
-  const uploadId = keyUploadId ?? "";
-  type StoredVariant = {
-    variant: string;
-    objectKey: string;
-    width: number;
-    height: number;
-    fileSize: number;
-    format: string;
-    mimeType: string;
-  };
-  const storedVariants: StoredVariant[] = [];
-
-  for (const v of variants) {
-    const variantKey =
-      v.variant === "original" ? key : buildVariantKey(userId, uploadId, v.variant);
-
-    let storedKey = variantKey;
-    if (v.variant !== "original") {
-      try {
-        const stored = await storage.putObject(variantKey, v.buffer, v.mimeType);
-        storedKey = stored.key;
-      } catch (err) {
-        console.error("[upload.complete] variant storage failed:", v.variant, err);
-        return NextResponse.json(
-          { error: { code: "server_error", message: `Failed to store ${v.variant} variant.` } },
-          { status: 500 },
-        );
-      }
-    }
-
-    storedVariants.push({
-      variant: v.variant,
-      objectKey: storedKey,
-      width: v.width,
-      height: v.height,
-      fileSize: v.fileSize,
-      format: v.format,
-      mimeType: v.mimeType,
-    });
-  }
+  const variationMetadata = buildVariationMetadata("", variationMetaEntries);
 
   // 5. Fast DB-only transaction.
-  //    Uses createMany for assets (1 query) and an extended 15s timeout to
-  //    accommodate Neon PgBouncer's higher per-query latency.
   try {
     const wp = await db.$transaction(
       async (tx) => {
@@ -186,7 +292,7 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Bulk-insert all variant assets in a single query
+        // One row per responsive variant per source image.
         await tx.wallpaperAsset.createMany({
           data: storedVariants.map((sv) => ({
             wallpaperId: wallpaper.id,
@@ -200,7 +306,23 @@ export async function POST(request: NextRequest) {
           })),
         });
 
-        // Tags
+        // Per-variation labels/captions in the existing StoredBlob JSON table.
+        const payload = Buffer.from(
+          JSON.stringify({ ...variationMetadata, wallpaperId: wallpaper.id }),
+          "utf8",
+        );
+        const metaKey = variationMetaKey(wallpaper.id);
+        await tx.storedBlob.upsert({
+          where: { key: metaKey },
+          update: { data: payload, contentType: "application/json", size: payload.length },
+          create: {
+            key: metaKey,
+            data: payload,
+            contentType: "application/json",
+            size: payload.length,
+          },
+        });
+
         if (tags && tags.length > 0) {
           for (const tagName of tags) {
             const tagSlug = slugify(tagName);
@@ -228,6 +350,7 @@ export async function POST(request: NextRequest) {
             metadata: JSON.stringify({
               slug,
               title,
+              variationCount: sources.length,
               variants: storedVariants.map((v) => v.variant),
               dimensions: `${metadata.width}x${metadata.height}`,
             }),
@@ -238,6 +361,11 @@ export async function POST(request: NextRequest) {
       },
       { timeout: 15000, maxWait: 10000 },
     );
+
+    const grouped = groupVariationAssets(storedVariants, {
+      ...variationMetadata,
+      wallpaperId: wp.id,
+    });
 
     return NextResponse.json(
       {
@@ -250,6 +378,7 @@ export async function POST(request: NextRequest) {
           dominantColor: wp.dominantColor,
           license: wp.license,
           createdAt: wp.createdAt,
+          // Legacy field: flat list of generated assets (base first).
           assets: storedVariants.map((sv) => ({
             variant: sv.variant,
             objectKey: sv.objectKey,
@@ -257,6 +386,16 @@ export async function POST(request: NextRequest) {
             height: sv.height,
             fileSize: sv.fileSize,
             format: sv.format,
+          })),
+          // Additive: one entry per source image in submission order.
+          variationCount: grouped.length,
+          variations: grouped.map((group) => ({
+            index: group.index,
+            label: group.label,
+            prefix: group.prefix,
+            previewAsset: group.preview,
+            originalAsset: group.original,
+            assets: group.assets,
           })),
           moderationNote:
             "Your upload is pending review. It will appear in discovery once approved.",

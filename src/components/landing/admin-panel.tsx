@@ -121,6 +121,18 @@ type AdminWallpaper = {
     width: number;
     height: number;
   } | null;
+  assets?: Array<{
+    variant: string;
+    objectKey: string;
+    width: number;
+    height: number;
+  }>;
+  variationCount?: number;
+  variations?: Array<{
+    index: number;
+    label: string;
+    preview: { variant: string; objectKey: string; width: number; height: number } | null;
+  }>;
   tags: Array<{ slug: string; name: string }>;
 };
 
@@ -1011,6 +1023,31 @@ function ModerationCard({
             <Download className="h-3 w-3" /> {wallpaper.downloadCount.toLocaleString()}
           </span>
         </div>
+
+        {(wallpaper.variationCount ?? wallpaper.variations?.length ?? 0) > 1 && (
+          <div className="mt-2 flex flex-col gap-1">
+            <p className="text-[10px] uppercase tracking-wide text-secondary-text">
+              Variations ({(wallpaper.variationCount ?? wallpaper.variations?.length)})
+            </p>
+            <div className="flex gap-1 overflow-x-auto">
+              {wallpaper.variations?.map((variation) =>
+                variation.preview ? (
+                  <div key={variation.index} className="shrink-0">
+                    <img
+                      src={variation.preview.objectKey}
+                      alt={variation.label}
+                      className="h-12 w-16 rounded border border-border object-cover"
+                      loading="lazy"
+                    />
+                    <p className="mt-0.5 max-w-16 truncate text-[9px] text-secondary-text">
+                      {variation.label}
+                    </p>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mt-2 flex flex-wrap gap-1">
           {wallpaper.category && (

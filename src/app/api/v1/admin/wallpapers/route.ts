@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireRole, ROLES } from "@/lib/auth-helpers";
+import { groupVariationAssets } from "@/lib/wallpaper-variants";
+import { readVariationMetadataMany } from "@/lib/variation-metadata";
 
 const STATUS_FILTERS = ["pending", "approved", "rejected", "flagged"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -76,8 +78,8 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        // Moderators need to see every variation asset in the pending post.
         assets: {
-          where: { variant: { in: ["grid", "thumbnail", "original"] } },
           select: { variant: true, objectKey: true, width: true, height: true },
           orderBy: { variant: "asc" },
         },
@@ -89,8 +91,12 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  const variationMeta = await readVariationMetadataMany(items.map((w) => w.id));
+
   const data = items.map((w) => {
+    const groups = groupVariationAssets(w.assets, variationMeta[w.id]);
     const previewAsset =
+      groups[0]?.preview ??
       w.assets.find((a) => a.variant === "grid") ??
       w.assets.find((a) => a.variant === "thumbnail") ??
       w.assets.find((a) => a.variant === "original") ??
@@ -129,6 +135,13 @@ export async function GET(request: NextRequest) {
             height: previewAsset.height,
           }
         : null,
+      assets: w.assets,
+      variationCount: groups.length,
+      variations: groups.map((group) => ({
+        index: group.index,
+        label: group.label,
+        preview: group.preview,
+      })),
       tags: w.tags.map((t) => t.tag),
     };
   });

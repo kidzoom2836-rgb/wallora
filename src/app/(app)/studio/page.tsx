@@ -28,6 +28,7 @@ import {
   CheckCircleIcon,
   ImageIcon,
   WandIcon,
+  UploadIcon,
 } from "@/components/icons/wallora-icons";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,8 @@ export default function StudioPage() {
   const [stylePreset, setStylePreset] = React.useState("none");
   const [aspectRatio, setAspectRatio] = React.useState("square");
   const [enhance, setEnhance] = React.useState(true);
+  /** Generation ids already submitted for moderation in this session. */
+  const [publishedIds, setPublishedIds] = React.useState<string[]>([]);
 
   const authenticated = status === "authenticated" && !!session?.user;
 
@@ -149,6 +152,25 @@ export default function StudioPage() {
     onError: (err: Error) => {
       toast.error("Retry failed", { description: err.message });
       queryClient.invalidateQueries({ queryKey: ["generations"] });
+    },
+  });
+
+  // --- Publish to WALLORA ----------------------------------------------------
+  const publishMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/v1/ai/generations/${id}/publish`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message ?? "Publish failed");
+      return data.data as { id: string; slug: string; status: string; moderationNote: string };
+    },
+    onSuccess: (data, id) => {
+      setPublishedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      toast.success("Submitted for review", {
+        description: "Your generation is a private wallpaper until an admin approves it.",
+      });
+    },
+    onError: (err: Error) => {
+      toast.error("Publish failed", { description: err.message });
     },
   });
 
@@ -489,7 +511,10 @@ export default function StudioPage() {
                       onDownload={() => handleDownload(gen)}
                       onRetry={() => retryMutation.mutate(gen.id)}
                       onDelete={() => deleteMutation.mutate(gen.id)}
+                      onPublish={() => publishMutation.mutate(gen.id)}
                       isRetrying={retryMutation.isPending}
+                      isPublishing={publishMutation.isPending && publishMutation.variables === gen.id}
+                      published={publishedIds.includes(gen.id)}
                     />
                   ))}
                 </div>
@@ -511,13 +536,19 @@ function GenerationCard({
   onDownload,
   onRetry,
   onDelete,
+  onPublish,
   isRetrying,
+  isPublishing,
+  published,
 }: {
   gen: Generation;
   onDownload: () => void;
   onRetry: () => void;
   onDelete: () => void;
+  onPublish: () => void;
   isRetrying: boolean;
+  isPublishing: boolean;
+  published: boolean;
 }) {
   const aspectClass =
     gen.aspectRatio === "portrait"
@@ -576,6 +607,20 @@ function GenerationCard({
               >
                 <RefreshIcon size={14} />
               </button>
+              <button
+                type="button"
+                onClick={onPublish}
+                disabled={published || isPublishing}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/80 text-primary backdrop-blur transition-colors hover:bg-background disabled:opacity-50"
+                aria-label="Publish to WALLORA"
+                title={published ? "Submitted for review" : "Publish to WALLORA"}
+              >
+                {isPublishing ? (
+                  <LoaderIcon size={14} className="animate-spin" />
+                ) : (
+                  <UploadIcon size={14} />
+                )}
+              </button>
             </div>
             <button
               type="button"
@@ -609,6 +654,26 @@ function GenerationCard({
           )}
           <span className="text-[10px] text-secondary-text">{gen.creditsUsed} credits</span>
         </div>
+
+        {/* Publish is a first-class action so it is reachable on touch devices. */}
+        {gen.status === "completed" && (
+          <button
+            type="button"
+            onClick={onPublish}
+            disabled={published || isPublishing}
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 py-1 text-[10px] font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-default disabled:opacity-70"
+          >
+            {isPublishing ? (
+              <LoaderIcon size={12} className="animate-spin" />
+            ) : published ? (
+              <CheckCircleIcon size={12} />
+            ) : (
+              <UploadIcon size={12} />
+            )}
+            {published ? "Submitted for review" : "Publish to WALLORA"}
+          </button>
+        )}
+
         {gen.status === "failed" && (
           <button
             type="button"

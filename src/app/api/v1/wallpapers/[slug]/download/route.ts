@@ -27,9 +27,8 @@ export async function POST(
       isPublic: true,
       license: true,
       assets: {
-        where: { variant: "original" },
-        select: { objectKey: true, width: true, height: true, fileSize: true, format: true, mimeType: true },
-        take: 1,
+        select: { variant: true, objectKey: true, width: true, height: true, fileSize: true, format: true, mimeType: true },
+        orderBy: { variant: "asc" },
       },
     },
   });
@@ -41,7 +40,13 @@ export async function POST(
     );
   }
 
-  const asset = wallpaper.assets[0];
+  // `variant` is optional — legacy clients always receive the base original.
+  const requestedVariant =
+    new URL(request.url).searchParams.get("variant")?.trim() || "original";
+  const asset =
+    wallpaper.assets.find((a) => a.variant === requestedVariant) ??
+    wallpaper.assets.find((a) => a.variant === "original") ??
+    wallpaper.assets[0];
   if (!asset) {
     return NextResponse.json(
       { error: { code: "no_asset", message: "No downloadable asset is available." } },
@@ -55,7 +60,7 @@ export async function POST(
       data: {
         wallpaperId: wallpaper.id,
         userId,
-        variant: "original",
+        variant: asset.variant,
       },
     }),
     db.wallpaper.update({
@@ -67,7 +72,10 @@ export async function POST(
   return NextResponse.json({
     data: {
       url: asset.objectKey,
-      filename: `${slug}.${asset.format}`,
+      filename:
+        asset.variant === "original"
+          ? `${slug}.${asset.format}`
+          : `${slug}-${asset.variant}.${asset.format}`,
       width: asset.width,
       height: asset.height,
       fileSize: asset.fileSize,

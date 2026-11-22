@@ -9,13 +9,13 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import {
   UploadIcon,
-  ImageIcon,
   CheckCircleIcon,
   AlertIcon,
   CloseIcon,
   PlusIcon,
   LoaderIcon,
   ArrowRightIcon,
+  ArrowDownIcon,
   SparklesIcon,
   TagIcon,
 } from "@/components/icons/wallora-icons";
@@ -32,6 +32,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useVerificationGate } from "@/components/verification/verification-gate";
+import {
+  ALLOWED_MIME_TYPES,
+  MAX_UPLOAD_BYTES,
+  MAX_VARIATIONS,
+  MIN_DIMENSION,
+  createVariationId,
+  validateClientImage,
+} from "@/lib/upload-config";
+import { defaultVariationLabel } from "@/lib/wallpaper-variants";
 import { cn } from "@/lib/utils";
 
 type CategoryItem = {
@@ -41,6 +50,14 @@ type CategoryItem = {
 };
 
 type Step = "select" | "metadata" | "uploading" | "result" | "error";
+
+type VariationItem = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  /** Optional caption override; empty means use the positional default. */
+  label: string;
+};
 
 type UploadResult = {
   id: string;
@@ -59,22 +76,42 @@ type UploadResult = {
     fileSize: number;
     format: string;
   }[];
+  variationCount?: number;
+  variations?: {
+    index: number;
+    label: string;
+    previewAsset?: { objectKey: string } | null;
+  }[];
   moderationNote: string;
 };
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 10 * 1024 * 1024;
-const MIN_DIMENSION = 512;
+type PresignUpload = {
+  index: number;
+  key: string;
+  uploadId: string;
+  uploadUrl: string;
+  method: string;
+  fields: Record<string, string>;
+  headers: Record<string, string>;
+  adapterType: string;
+  maxBytes: number;
+};
+
+type PresignResponse = {
+  data: PresignUpload & {
+    groupId?: string;
+    count?: number;
+    uploads?: PresignUpload[];
+  };
+};
 
 /**
  * Dedicated upload page for WALLORA.
  *
- * Full-page, multi-step flow with the same upload pipeline as the dialog:
- *   presign → upload-to-receive → complete
- *
- * The pipeline captures the key returned by the receive endpoint
- * (`effectiveKey`) so the Blob adapter — which returns the public URL as
- * the key — is supported transparently.
+ * One post accepts 1-3 images (crops / color edits / alternate treatments),
+ * uploaded as separate source objects but stored as one Wallpaper with
+ * namespaced WallpaperAsset rows. The pipeline is:
+ *   presign (batch) → upload each source → complete (one post)
  */
 export default function UploadPage() {
   const { status } = useSession();
@@ -134,11 +171,17 @@ function SignInGate() {
 /* Upload flow                                                                */
 /* -------------------------------------------------------------------------- */
 
+function titleFromFilename(filename: string): string {
+  return filename
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function UploadFlow() {
   const { guard } = useVerificationGate();
   const [step, setStep] = React.useState<Step>("select");
-  const [file, setFile] = React.useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [variations, setVariations] = React.useState<VariationItem[]>([]);
   const [title, setTitle] = React.useState("");
   const [categoryId, setCategoryId] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -147,6 +190,31 @@ function UploadFlow() {
   const [result, setResult] = React.useState<UploadResult | null>(null);
   const [progress, setProgress] = React.useState(0);
   const [statusText, setStatusText] = React.useState("Uploading…");
+
+  const previewUrls = React.useRef<string[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const releasePreviews = React.useCallback(() => {
+    for (const url of previewUrls.current) URL.revokeObjectURL(url);
+    previewUrls.current = [];
+  }, []);
+
+  const reset = React.useCallback(() => {
+    releasePreviews();
+    setStep("select");
+    setVariations([]);
+    setTitle("");
+    setCategoryId("");
+    setDescription("");
+    setTagsInput("");
+    setError("");
+    setResult(null);
+    setProgress(0);
+    setStatusText("Uploading…");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [releasePreviews]);
+
+  React.useEffect(() => releasePreviews, [releasePreviews]);
 
   // Fetch categories once we reach the metadata step.
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery<{ data: CategoryItem[] }>({
@@ -160,10 +228,8 @@ function UploadFlow() {
   });
   const categories = categoriesData?.data ?? [];
 
-  // Check storage configuration — show a setup banner if no persistent backend
-  // (Blob/R2) is configured in production (the Local adapter can't persist on
-  // Vercel's read-only / ephemeral filesystem).
-  const { data: storageData } = useQuery<{ data: { adapterType: string } }>({
+  // Show a setup banner if no persistent storage backend is configured.
+  const { data: storageData } = useQuery<{ data: { adapterType: string; maxVariations?: number } }>({
     queryKey: ["upload-storage-config"],
     queryFn: async () => {
       const res = await fetch("/api/v1/uploads/presign");
@@ -175,140 +241,176 @@ function UploadFlow() {
   const storageUnconfigured =
     storageAdapter === "local" && process.env.NODE_ENV === "production";
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const handleFiles = React.useCallback(
+    async (files: FileList | File[]) => {
+      const incoming = Array.from(files);
+      if (!incoming.length) return;
 
-  const reset = React.useCallback(() => {
-    setStep("select");
-    setFile(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setTitle("");
-    setCategoryId("");
-    setDescription("");
-    setTagsInput("");
-    setError("");
-    setResult(null);
-    setProgress(0);
-    setStatusText("Uploading…");
-  }, [previewUrl]);
-
-  React.useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
-
-  const handleFileSelect = React.useCallback((selected: File | null) => {
-    if (!selected) return;
-    if (!ACCEPTED_TYPES.includes(selected.type)) {
-      setError("Only JPEG, PNG and WebP images are allowed.");
-      setStep("error");
-      return;
-    }
-    if (selected.size > MAX_BYTES) {
-      setError("File exceeds the 10 MB limit.");
-      setStep("error");
-      return;
-    }
-    // Validate minimum dimensions by loading the image briefly.
-    const url = URL.createObjectURL(selected);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      if (img.width < MIN_DIMENSION || img.height < MIN_DIMENSION) {
-        setError(`Image must be at least ${MIN_DIMENSION}×${MIN_DIMENSION} pixels.`);
-        setStep("error");
-        return;
-      }
-      setError("");
-      setFile(selected);
-      setPreviewUrl(URL.createObjectURL(selected));
-      setStep("metadata");
-      const nameWithoutExt = selected.name.replace(/\.[^.]+$/, "");
-      setTitle(
-        nameWithoutExt
-          .replace(/[-_]+/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase()),
+      const messages: string[] = [];
+      const seen = new Set(
+        variations.map((v) => `${v.file.name}:${v.file.size}:${v.file.lastModified}`),
       );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      setError("Could not read the selected image.");
-      setStep("error");
-    };
-    img.src = url;
-  }, []);
+      const accepted: VariationItem[] = [];
+
+      for (const file of incoming) {
+        if (variations.length + accepted.length >= MAX_VARIATIONS) {
+          messages.push(`A post supports at most ${MAX_VARIATIONS} variations.`);
+          break;
+        }
+        const fingerprint = `${file.name}:${file.size}:${file.lastModified}`;
+        if (seen.has(fingerprint)) {
+          messages.push(`${file.name} is already selected.`);
+          continue;
+        }
+        const check = await validateClientImage(file);
+        if (!check.ok) {
+          messages.push(`${file.name}: ${check.error}`);
+          continue;
+        }
+        seen.add(fingerprint);
+        const previewUrl = URL.createObjectURL(file);
+        previewUrls.current.push(previewUrl);
+        accepted.push({ id: createVariationId(), file, previewUrl, label: "" });
+      }
+
+      setError(messages.slice(0, 2).join(" "));
+      if (!accepted.length) return;
+
+      setVariations((prev) => [...prev, ...accepted]);
+      setStep("metadata");
+      setTitle((prev) => prev || titleFromFilename(accepted[0].file.name));
+    },
+    [variations],
+  );
 
   const handleDrop = React.useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      handleFileSelect(e.dataTransfer.files[0] ?? null);
+      void handleFiles(e.dataTransfer.files);
     },
-    [handleFileSelect],
+    [handleFiles],
   );
 
-  const handleDropZoneClick = () => {
-    fileInputRef.current?.click();
-  };
+  const removeVariation = React.useCallback(
+    (id: string) => {
+      const target = variations.find((v) => v.id === id);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+        previewUrls.current = previewUrls.current.filter((url) => url !== target.previewUrl);
+      }
+      const next = variations.filter((v) => v.id !== id);
+      setVariations(next);
+      if (!next.length) {
+        setError("");
+        setStep("select");
+      }
+    },
+    [variations],
+  );
+
+  const moveVariation = React.useCallback(
+    (id: string, direction: -1 | 1) => {
+      const index = variations.findIndex((v) => v.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= variations.length) return;
+      const next = [...variations];
+      [next[index], next[target]] = [next[target], next[index]];
+      setVariations(next);
+    },
+    [variations],
+  );
+
+  const setVariationLabel = React.useCallback((id: string, label: string) => {
+    setVariations((prev) =>
+      prev.map((variation) =>
+        variation.id === id ? { ...variation, label } : variation,
+      ),
+    );
+  }, []);
 
   /* ---------------------------- upload mutation --------------------------- */
   const uploadMutation = useMutation({
     mutationFn: async () => {
-      if (!file) throw new Error("No file selected");
+      if (!variations.length) throw new Error("No images selected");
 
       setStep("uploading");
       setProgress(0);
-      setStatusText("Uploading…");
+      setStatusText("Preparing uploads…");
 
-      // 1. Presign
+      // 1. Presign all source objects in one request.
       const presignRes = await fetch("/api/v1/uploads/presign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          size: file.size,
+          sources: variations.map((variation) => ({
+            filename: variation.file.name,
+            contentType: variation.file.type,
+            size: variation.file.size,
+          })),
+          // Legacy fields keep older servers / proxies on the same path.
+          filename: variations[0].file.name,
+          contentType: variations[0].file.type,
+          size: variations[0].file.size,
         }),
       });
       if (!presignRes.ok) {
         const err = await presignRes.json().catch(() => ({}));
         throw new Error(err?.error?.message ?? "Presign failed");
       }
-      const presign = await presignRes.json();
-      const { key, uploadUrl, fields } = presign.data;
-      setProgress(15);
+      const presign = (await presignRes.json()) as PresignResponse;
+      const uploads = presign.data.uploads?.length
+        ? presign.data.uploads
+        : [presign.data];
+      setProgress(10);
 
-      // 2. Upload the file to the receive endpoint (local + blob) or to R2
-      //    via presigned POST — same multipart shape in all cases.
-      const formData = new FormData();
-      Object.entries(fields).forEach(([k, v]) => formData.append(k, v as string));
-      formData.append("file", file);
-      const uploadRes = await fetch(uploadUrl, { method: "POST", body: formData });
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json().catch(() => ({}));
-        throw new Error(err?.error?.message ?? "Upload failed");
+      // 2. Upload each source (receive endpoint for local/DB/Blob, R2 direct).
+      const sources: { key: string; filename: string; label?: string }[] = [];
+      for (const [index, upload] of uploads.entries()) {
+        const variation = variations[index];
+        if (!variation) break;
+        setStatusText(`Uploading ${index + 1} of ${uploads.length}…`);
+
+        const formData = new FormData();
+        Object.entries(upload.fields ?? {}).forEach(([key, value]) =>
+          formData.append(key, String(value)),
+        );
+        formData.append("file", variation.file);
+
+        const uploadRes = await fetch(upload.uploadUrl, {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}));
+          throw new Error(err?.error?.message ?? `Upload failed for variation ${index + 1}`);
+        }
+        const uploadData = await uploadRes.json();
+        // The receive endpoint returns the stored key (a public URL for Blob).
+        sources.push({
+          key: uploadData.data?.key ?? upload.key,
+          filename: variation.file.name,
+          label: variation.label || undefined,
+        });
+        setProgress(10 + Math.round(((index + 1) / uploads.length) * 35));
       }
-      // IMPORTANT: the receive endpoint returns the stored key, which for
-      // the Blob adapter is the public URL — not the presign key.
-      const uploadData = await uploadRes.json();
-      const effectiveKey = uploadData.data?.key ?? key;
-      setProgress(45);
-      setStatusText("Processing variants…");
 
-      // 3. Complete (Sharp processing + DB records)
+      // 3. Complete: Sharp processing + one wallpaper + all variation assets.
       const tags = tagsInput
         .split(",")
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length >= 2);
+        .map((tag) => tag.trim().toLowerCase())
+        .filter((tag) => tag.length >= 2);
 
       setProgress(70);
-      setStatusText("Finalizing…");
+      setStatusText("Processing variants…");
       const completeRes = await fetch("/api/v1/uploads/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          key: effectiveKey,
-          filename: file.name,
+          sources,
+          groupId: presign.data.groupId,
+          // Legacy fields keep single-file clients compatible.
+          key: sources[0]?.key,
+          filename: sources[0]?.filename ?? variations[0].file.name,
           title,
           categoryId,
           description: description || undefined,
@@ -329,7 +431,7 @@ function UploadFlow() {
       setResult(data);
       setStep("result");
       toast.success("Upload processed", {
-        description: "Your wallpaper is pending review.",
+        description: `${data.variationCount ?? 1} variation${(data.variationCount ?? 1) > 1 ? "s" : ""} pending review.`,
       });
     },
     onError: (err: Error) => {
@@ -339,7 +441,8 @@ function UploadFlow() {
     },
   });
 
-  const canSubmit = !!file && title.trim().length >= 2 && !!categoryId;
+  const canSubmit =
+    variations.length > 0 && title.trim().length >= 2 && !!categoryId;
 
   /* ------------------------------- render --------------------------------- */
   return (
@@ -353,9 +456,9 @@ function UploadFlow() {
           Upload a wallpaper
         </h1>
         <p className="max-w-2xl text-sm text-secondary-text">
-          Share your work with the WALLORA community. We generate responsive
-          variants, strip EXIF metadata, and extract dominant color
-          automatically. All uploads are reviewed before appearing in discovery.
+          Add up to three variations — different crops, colors or edits — in one
+          post. We generate responsive assets for each, strip EXIF metadata and
+          submit everything as a single wallpaper for review.
         </p>
       </header>
 
@@ -370,12 +473,25 @@ function UploadFlow() {
               Uploads need a storage backend to persist files. Create a{" "}
               <strong className="text-foreground">Vercel Blob store</strong> in the Vercel
               dashboard (Storage &rarr; Blob &rarr; Create) and link it to this project &mdash;
-              Vercel sets the <code className="rounded bg-raised px-1 py-0.5 text-[10px]">BLOB_READ_WRITE_TOKEN</code>{" "}
+              Vercel sets the{" "}
+              <code className="rounded bg-raised px-1 py-0.5 text-[10px]">BLOB_READ_WRITE_TOKEN</code>{" "}
               automatically. Then redeploy and uploads will work immediately.
             </p>
           </div>
         </div>
       )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ALLOWED_MIME_TYPES.join(",")}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void handleFiles(e.target.files ?? []);
+          e.target.value = "";
+        }}
+      />
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -388,16 +504,19 @@ function UploadFlow() {
           {step === "select" && (
             <SelectStep
               onDrop={handleDrop}
-              onClick={handleDropZoneClick}
-              onSelect={handleFileSelect}
-              inputRef={fileInputRef}
+              onClick={() => fileInputRef.current?.click()}
+              error={error}
             />
           )}
 
-          {step === "metadata" && file && previewUrl && (
+          {step === "metadata" && variations.length > 0 && (
             <MetadataStep
-              file={file}
-              previewUrl={previewUrl}
+              variations={variations}
+              onAdd={() => fileInputRef.current?.click()}
+              onRemove={removeVariation}
+              onMove={moveVariation}
+              onLabel={setVariationLabel}
+              error={error}
               title={title}
               setTitle={setTitle}
               categoryId={categoryId}
@@ -411,7 +530,6 @@ function UploadFlow() {
               canSubmit={canSubmit}
               onCancel={reset}
               onSubmit={() => guard(() => uploadMutation.mutate(), { action: "publish a wallpaper" })}
-              onRemove={() => reset()}
             />
           )}
 
@@ -427,7 +545,7 @@ function UploadFlow() {
             <ErrorStep
               message={error}
               onRetry={() => {
-                if (file) setStep("metadata");
+                if (variations.length) setStep("metadata");
                 else reset();
               }}
             />
@@ -442,14 +560,15 @@ function UploadFlow() {
 /* Steps                                                                      */
 /* -------------------------------------------------------------------------- */
 
-type SelectStepProps = {
+function SelectStep({
+  onDrop,
+  onClick,
+  error,
+}: {
   onDrop: (e: React.DragEvent) => void;
   onClick: () => void;
-  onSelect: (file: File | null) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
-};
-
-function SelectStep({ onDrop, onClick, onSelect, inputRef }: SelectStepProps) {
+  error: string;
+}) {
   const [dragging, setDragging] = React.useState(false);
 
   return (
@@ -474,7 +593,7 @@ function SelectStep({ onDrop, onClick, onSelect, inputRef }: SelectStepProps) {
               onClick();
             }
           }}
-          aria-label="Drop an image or click to browse"
+          aria-label={`Drop 1 to ${MAX_VARIATIONS} images or click to browse`}
           className={cn(
             "flex min-h-[340px] cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed bg-surface/60 p-10 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
             dragging
@@ -487,9 +606,11 @@ function SelectStep({ onDrop, onClick, onSelect, inputRef }: SelectStepProps) {
           </span>
           <div>
             <p className="font-display text-base font-semibold text-foreground">
-              Drop an image here
+              Drop 1–{MAX_VARIATIONS} images here
             </p>
-            <p className="mt-1 text-sm text-secondary-text">or click to browse</p>
+            <p className="mt-1 text-sm text-secondary-text">
+              or click to browse · one post, up to {MAX_VARIATIONS} variations
+            </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-secondary-text">
             <Badge variant="outline" className="border-border bg-raised text-secondary-text">
@@ -501,15 +622,16 @@ function SelectStep({ onDrop, onClick, onSelect, inputRef }: SelectStepProps) {
             <Badge variant="outline" className="border-border bg-raised text-secondary-text">
               WebP
             </Badge>
-            <span className="text-secondary-text/80">· up to 10 MB · min 512×512</span>
+            <span className="text-secondary-text/80">
+              · up to {MAX_UPLOAD_BYTES / 1024 / 1024} MB each · min {MIN_DIMENSION}×{MIN_DIMENSION}
+            </span>
           </div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ACCEPTED_TYPES.join(",")}
-            className="hidden"
-            onChange={(e) => onSelect(e.target.files?.[0] ?? null)}
-          />
+          {error && (
+            <p className="flex items-center gap-1.5 text-xs text-destructive">
+              <AlertIcon size={14} />
+              {error}
+            </p>
+          )}
         </div>
       </div>
 
@@ -520,26 +642,10 @@ function SelectStep({ onDrop, onClick, onSelect, inputRef }: SelectStepProps) {
             What happens next
           </div>
           <ol className="mt-4 flex flex-col gap-4 text-sm text-secondary-text">
-            <PipelineStep
-              index={1}
-              title="Validate"
-              desc="We check the file type, size, and minimum dimensions."
-            />
-            <PipelineStep
-              index={2}
-              title="Process"
-              desc="Sharp generates responsive variants and strips EXIF metadata."
-            />
-            <PipelineStep
-              index={3}
-              title="Extract"
-              desc="We capture orientation, dominant color, and asset dimensions."
-            />
-            <PipelineStep
-              index={4}
-              title="Review"
-              desc="Your wallpaper enters the moderation queue for approval."
-            />
+            <PipelineStep index={1} title="Validate" desc="Type, size and dimensions of every image." />
+            <PipelineStep index={2} title="Process" desc="Sharp generates responsive assets per variation." />
+            <PipelineStep index={3} title="Extract" desc="Orientation and dominant color from the first image." />
+            <PipelineStep index={4} title="Review" desc="One post enters the moderation queue." />
           </ol>
         </div>
       </aside>
@@ -570,27 +676,34 @@ function PipelineStep({
 }
 
 type MetadataStepProps = {
-  file: File;
-  previewUrl: string;
+  variations: VariationItem[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, direction: -1 | 1) => void;
+  onLabel: (id: string, label: string) => void;
+  error: string;
   title: string;
-  setTitle: (v: string) => void;
+  setTitle: (value: string) => void;
   categoryId: string;
-  setCategoryId: (v: string) => void;
+  setCategoryId: (value: string) => void;
   description: string;
-  setDescription: (v: string) => void;
+  setDescription: (value: string) => void;
   tagsInput: string;
-  setTagsInput: (v: string) => void;
+  setTagsInput: (value: string) => void;
   categories: CategoryItem[];
   categoriesLoading: boolean;
   canSubmit: boolean;
   onCancel: () => void;
   onSubmit: () => void;
-  onRemove: () => void;
 };
 
 function MetadataStep({
-  file,
-  previewUrl,
+  variations,
+  onAdd,
+  onRemove,
+  onMove,
+  onLabel,
+  error,
   title,
   setTitle,
   categoryId,
@@ -604,41 +717,101 @@ function MetadataStep({
   canSubmit,
   onCancel,
   onSubmit,
-  onRemove,
 }: MetadataStepProps) {
   return (
     <section className="grid gap-6 lg:grid-cols-5">
-      {/* Left: preview + file info */}
+      {/* Left: variation previews */}
       <div className="lg:col-span-2">
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-          <div className="relative aspect-square w-full overflow-hidden bg-raised">
-            <img
-              src={previewUrl}
-              alt={file.name}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <button
-              type="button"
-              onClick={onRemove}
-              className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background/80 text-secondary-text backdrop-blur transition-colors hover:text-foreground"
-              aria-label="Remove file"
-            >
-              <CloseIcon size={16} />
-            </button>
-          </div>
-          <div className="flex items-start gap-3 border-t border-border p-4">
-            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-raised text-secondary-text">
-              <ImageIcon size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground" title={file.name}>
-                {file.name}
-              </p>
-              <p className="mt-0.5 text-xs text-secondary-text">
-                {(file.size / 1024).toFixed(0)} KB · {file.type.replace("image/", "").toUpperCase()}
-              </p>
+        <div className="rounded-2xl border border-border bg-surface p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-sm font-medium text-foreground">
+              Variations <span className="text-secondary-text">({variations.length}/{MAX_VARIATIONS})</span>
             </div>
+            <span className="text-[11px] text-secondary-text">drag-free ordering</span>
           </div>
+
+          <div className="flex flex-col gap-3">
+            {variations.map((variation, index) => (
+              <div
+                key={variation.id}
+                className="flex gap-3 rounded-xl border border-border bg-raised/50 p-2"
+              >
+                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-surface">
+                  <img
+                    src={variation.previewUrl}
+                    alt={variation.file.name}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <span className="absolute left-1 top-1 rounded bg-background/85 px-1.5 py-0.5 text-[9px] font-medium text-foreground">
+                    {index + 1}
+                  </span>
+                </div>
+
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <p className="truncate text-xs font-medium text-foreground" title={variation.file.name}>
+                    {variation.label || defaultVariationLabel(index)}
+                  </p>
+                  <p className="truncate text-[10px] text-secondary-text">
+                    {variation.file.name} · {(variation.file.size / 1024).toFixed(0)} KB
+                  </p>
+                  <Input
+                    value={variation.label}
+                    onChange={(e) => onLabel(variation.id, e.target.value)}
+                    placeholder={defaultVariationLabel(index)}
+                    maxLength={80}
+                    className="h-7 border-border bg-surface text-[11px]"
+                    aria-label={`Label for variation ${index + 1}`}
+                  />
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onMove(variation.id, -1)}
+                      disabled={index === 0}
+                      className="rounded border border-border p-1 text-secondary-text transition-colors hover:text-foreground disabled:opacity-30"
+                      aria-label={`Move variation ${index + 1} up`}
+                    >
+                      <ArrowDownIcon size={13} className="rotate-180" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onMove(variation.id, 1)}
+                      disabled={index === variations.length - 1}
+                      className="rounded border border-border p-1 text-secondary-text transition-colors hover:text-foreground disabled:opacity-30"
+                      aria-label={`Move variation ${index + 1} down`}
+                    >
+                      <ArrowDownIcon size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemove(variation.id)}
+                      className="ml-auto rounded border border-border p-1 text-secondary-text transition-colors hover:text-destructive"
+                      aria-label={`Remove variation ${index + 1}`}
+                    >
+                      <CloseIcon size={13} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {variations.length < MAX_VARIATIONS && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onAdd}
+              className="mt-3 w-full border-border bg-surface text-secondary-text hover:text-foreground"
+            >
+              <PlusIcon size={15} className="mr-1.5" />
+              Add another variation
+            </Button>
+          )}
+          {error && (
+            <p className="mt-3 flex items-start gap-1.5 text-xs text-destructive">
+              <AlertIcon size={14} className="mt-0.5" />
+              {error}
+            </p>
+          )}
         </div>
       </div>
 
@@ -677,9 +850,9 @@ function MetadataStep({
                 />
               </SelectTrigger>
               <SelectContent className="border-border bg-popover">
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -688,8 +861,7 @@ function MetadataStep({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="upload-description" className="text-xs font-medium uppercase tracking-wide text-secondary-text">
-              Description{" "}
-              <span className="text-secondary-text/60">(optional)</span>
+              Description <span className="text-secondary-text/60">(optional)</span>
             </Label>
             <Textarea
               id="upload-description"
@@ -703,8 +875,7 @@ function MetadataStep({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="upload-tags" className="text-xs font-medium uppercase tracking-wide text-secondary-text">
-              Tags{" "}
-              <span className="text-secondary-text/60">(optional, comma-separated)</span>
+              Tags <span className="text-secondary-text/60">(optional, comma-separated)</span>
             </Label>
             <div className="relative">
               <TagIcon
@@ -765,8 +936,8 @@ function UploadingStep({ progress, statusText }: { progress: number; statusText:
         </div>
       </div>
       <p className="max-w-sm text-xs text-secondary-text">
-        Generating responsive variants, stripping EXIF, extracting metadata.
-        This usually takes a few seconds.
+        Generating responsive assets for every variation, stripping EXIF and
+        extracting metadata. This usually takes a few seconds.
       </p>
     </section>
   );
@@ -775,6 +946,7 @@ function UploadingStep({ progress, statusText }: { progress: number; statusText:
 function ResultStep({ result, onReset }: { result: UploadResult; onReset: () => void }) {
   const gridAsset =
     result.assets.find((a) => a.variant === "grid") ?? result.assets[0];
+  const variationCount = result.variationCount ?? result.variations?.length ?? 1;
 
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -796,6 +968,9 @@ function ResultStep({ result, onReset }: { result: UploadResult; onReset: () => 
         >
           Pending review
         </Badge>
+        <p className="text-xs text-secondary-text">
+          1 post · {variationCount} variation{variationCount > 1 ? "s" : ""}
+        </p>
       </div>
 
       {gridAsset && (
@@ -808,16 +983,29 @@ function ResultStep({ result, onReset }: { result: UploadResult; onReset: () => 
         </div>
       )}
 
+      {(result.variations?.length ?? 0) > 1 && (
+        <div className="flex gap-2 overflow-x-auto">
+          {result.variations?.map((variation) =>
+            variation.previewAsset ? (
+              <div key={variation.index} className="shrink-0">
+                <img
+                  src={variation.previewAsset.objectKey}
+                  alt={variation.label}
+                  className="h-20 w-28 rounded-lg border border-border object-cover"
+                />
+                <p className="mt-1 max-w-28 truncate text-[10px] text-secondary-text">
+                  {variation.label}
+                </p>
+              </div>
+            ) : null,
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <InfoCard label="Status" value={<span className="capitalize">{result.status}</span>} />
-        <InfoCard
-          label="Variants"
-          value={`${result.assets.length} generated`}
-        />
-        <InfoCard
-          label="Orientation"
-          value={<span className="capitalize">{result.orientation}</span>}
-        />
+        <InfoCard label="Variants" value={`${result.assets.length} generated`} />
+        <InfoCard label="Orientation" value={<span className="capitalize">{result.orientation}</span>} />
         <InfoCard
           label="Dominant color"
           value={

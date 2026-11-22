@@ -34,6 +34,12 @@ export type WallpaperSummary = {
     tier?: "free" | "verified" | "premium" | "supreme";
   };
   asset: { objectKey: string; width: number; height: number } | null;
+  variationCount?: number;
+  variations?: {
+    index: number;
+    label: string;
+    preview: { variant: string; objectKey: string; width: number; height: number } | null;
+  }[];
   tags: { slug: string; name: string }[];
   liked: boolean;
   favorited: boolean;
@@ -201,10 +207,15 @@ export function WallpaperCard({ wallpaper, index = 0 }: WallpaperCardProps) {
         </div>
 
         {/* Source badge */}
-        <div className="absolute left-2 top-2">
+        <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
           <span className="rounded-full border border-border bg-background/70 px-2 py-0.5 text-[10px] font-medium text-secondary-text backdrop-blur">
             {wallpaper.sourceType === "showcase" ? "Showcase" : wallpaper.sourceType}
           </span>
+          {(wallpaper.variationCount ?? wallpaper.variations?.length ?? 0) > 1 && (
+            <span className="rounded-full border border-primary/30 bg-background/80 px-2 py-0.5 text-[10px] font-medium text-primary backdrop-blur">
+              {wallpaper.variationCount ?? wallpaper.variations?.length} variations
+            </span>
+          )}
         </div>
       </div>
 

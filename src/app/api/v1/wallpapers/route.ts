@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth-helpers";
 import { getTiersForUsers } from "@/lib/verification/store";
+import { groupVariationAssets } from "@/lib/wallpaper-variants";
+import { readVariationMetadataMany } from "@/lib/variation-metadata";
 
 /**
  * GET /api/v1/wallpapers
@@ -94,8 +96,9 @@ export async function GET(request: NextRequest) {
             profile: { select: { username: true, displayName: true, verified: true } },
           },
         },
+        // All variation assets are read so cards can expose every approved
+        // source image; `asset` below stays the representative base grid.
         assets: {
-          where: { variant: { in: ["grid", "original"] } },
           select: { variant: true, objectKey: true, width: true, height: true },
           orderBy: { variant: "asc" },
         },
@@ -113,10 +116,20 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  const tiers = await getTiersForUsers(items.map((w) => w.user.id));
+  const [tiers, variationMeta] = await Promise.all([
+    getTiersForUsers(items.map((w) => w.user.id)),
+    readVariationMetadataMany(items.map((w) => w.id)),
+  ]);
 
   const data = items.map((w) => {
-    const gridAsset = w.assets.find((a) => a.variant === "grid") ?? w.assets[0];
+    const groups = groupVariationAssets(w.assets, variationMeta[w.id]);
+    const base = groups[0];
+    const gridAsset =
+      base?.grid ??
+      base?.detail ??
+      base?.original ??
+      w.assets.find((a) => a.variant === "grid") ??
+      w.assets[0];
     return {
       id: w.id,
       slug: w.slug,
@@ -146,6 +159,19 @@ export async function GET(request: NextRequest) {
             height: gridAsset.height,
           }
         : null,
+      variationCount: groups.length,
+      variations: groups.map((group) => ({
+        index: group.index,
+        label: group.label,
+        preview: group.preview
+          ? {
+              variant: group.preview.variant,
+              objectKey: group.preview.objectKey,
+              width: group.preview.width,
+              height: group.preview.height,
+            }
+          : null,
+      })),
       tags: w.tags.map((t) => t.tag),
       liked: userId ? w.likes?.length > 0 : false,
       favorited: userId ? w.favorites?.length > 0 : false,

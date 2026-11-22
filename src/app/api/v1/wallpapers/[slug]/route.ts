@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth-helpers";
 import { getTier } from "@/lib/verification/store";
+import { groupVariationAssets } from "@/lib/wallpaper-variants";
+import {
+  readVariationMetadata,
+  readVariationMetadataMany,
+} from "@/lib/variation-metadata";
 
 /**
  * GET /api/v1/wallpapers/[slug]
@@ -72,15 +77,20 @@ export async function GET(
           dominantColor: true,
           likeCount: true,
           assets: {
-            where: { variant: "grid" },
-            select: { objectKey: true, width: true, height: true },
-            take: 1,
+            select: { variant: true, objectKey: true, width: true, height: true },
+            orderBy: { variant: "asc" },
           },
         },
       })
     : [];
 
-  const tier = await getTier(wallpaper.user.id);
+  const [tier, variationMeta, relatedMeta] = await Promise.all([
+    getTier(wallpaper.user.id),
+    readVariationMetadata(wallpaper.id),
+    readVariationMetadataMany(related.map((r) => r.id)),
+  ]);
+
+  const groups = groupVariationAssets(wallpaper.assets, variationMeta);
 
   return NextResponse.json({
     data: {
@@ -110,18 +120,40 @@ export async function GET(
         tier,
       },
       assets: wallpaper.assets,
+      // Additive: one gallery entry per source image, in submission order.
+      variationCount: groups.length,
+      variations: groups.map((group) => ({
+        index: group.index,
+        label: group.label,
+        prefix: group.prefix,
+        previewAsset: group.preview,
+        originalAsset: group.original,
+        gridAsset: group.grid,
+        detailAsset: group.detail,
+        assets: group.assets,
+      })),
       tags: wallpaper.tags.map((t) => t.tag),
       liked: userId ? wallpaper.likes?.length > 0 : false,
       favorited: userId ? wallpaper.favorites?.length > 0 : false,
-      related: related.map((r) => ({
-        id: r.id,
-        slug: r.slug,
-        title: r.title,
-        orientation: r.orientation,
-        dominantColor: r.dominantColor,
-        likeCount: r.likeCount,
-        asset: r.assets[0] ?? null,
-      })),
+      related: related.map((r) => {
+        const relatedGroups = groupVariationAssets(r.assets, relatedMeta[r.id]);
+        const base = relatedGroups[0];
+        return {
+          id: r.id,
+          slug: r.slug,
+          title: r.title,
+          orientation: r.orientation,
+          dominantColor: r.dominantColor,
+          likeCount: r.likeCount,
+          asset: base?.preview ?? r.assets[0] ?? null,
+          variationCount: relatedGroups.length,
+          variations: relatedGroups.map((group) => ({
+            index: group.index,
+            label: group.label,
+            preview: group.preview,
+          })),
+        };
+      }),
     },
   });
 }
