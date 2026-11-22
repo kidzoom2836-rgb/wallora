@@ -584,7 +584,7 @@ function VerificationTab() {
     <div className="space-y-5">
       <SectionTitle
         title="Verification applications"
-        subtitle="Real review queue. Approving grants the blue tick or premium gold badge instantly."
+        subtitle="Every account already has the free grey tick. This queue is only for blue verified and gold premium applications."
       />
       <div className="flex items-center gap-2">
         <Badge variant="default">{pending} pending</Badge>
@@ -597,7 +597,8 @@ function VerificationTab() {
       {requests.length === 0 ? (
         <Panel title="No applications yet">
           <p className="text-sm text-secondary-text">
-            Users can apply at <code className="text-primary">/verification</code>. Requests will appear here.
+            Every account already has the free grey verification tick. Users can apply for blue or gold at{' '}
+            <code className="text-primary">/verification</code>. Requests will appear here.
           </p>
         </Panel>
       ) : (
