@@ -1,0 +1,28 @@
+{
+  "name": "wallora",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WALLORA — AI-powered creative ecosystem and visual social platform",
+  "scripts": {
+    "dev:web": "pnpm --filter @wallora/web dev",
+    "dev:mobile": "pnpm --filter @wallora/mobile start",
+    "dev:worker": "pnpm --filter @wallora/worker dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @wallora/database generate",
+    "db:migrate": "pnpm --filter @wallora/database migrate",
+    "db:studio": "pnpm --filter @wallora/database studio"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}
