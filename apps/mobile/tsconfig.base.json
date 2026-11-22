@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@wallora/shared": ["packages/shared/src/index.ts"],
+      "@wallora/shared/*": ["packages/shared/src/*"],
+      "@wallora/validation": ["packages/validation/src/index.ts"],
+      "@wallora/validation/*": ["packages/validation/src/*"],
+      "@wallora/domain": ["packages/domain/src/index.ts"],
+      "@wallora/domain/*": ["packages/domain/src/*"],
+      "@wallora/design-tokens": ["packages/design-tokens/src/index.ts"],
+      "@wallora/design-tokens/*": ["packages/design-tokens/src/*"],
+      "@wallora/api-client": ["packages/api-client/src/index.ts"],
+      "@wallora/api-client/*": ["packages/api-client/src/*"],
+      "@wallora/database": ["packages/database/src/index.ts"],
+      "@wallora/database/*": ["packages/database/src/*"],
+      "@wallora/auth": ["packages/auth/src/index.ts"],
+      "@wallora/auth/*": ["packages/auth/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next", "out", "build"]
+}
