@@ -81,7 +81,7 @@ export type PublicProject = {
     bio: string | null;
     avatarUrl: string | null;
     verified: boolean;
-    tier: "free" | "verified" | "premium";
+    tier: "free" | "verified" | "premium" | "supreme";
   };
 };
 

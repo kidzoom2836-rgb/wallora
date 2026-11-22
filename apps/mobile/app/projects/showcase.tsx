@@ -18,7 +18,7 @@ type ShowcaseItem = {
   noteCount: number;
   shoutoutCount: number;
   meta: { status: keyof typeof STATUS_LABEL; progress: number };
-  owner: { username: string | null; displayName: string | null; verified: boolean; tier: "free" | "verified" | "premium" };
+  owner: { username: string | null; displayName: string | null; verified: boolean; tier: "free" | "verified" | "premium" | "supreme" };
 };
 
 export default function ProjectShowcaseScreen() {
