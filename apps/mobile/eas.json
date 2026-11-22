@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 27.11.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "debug": {
+      "withoutCredentials": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

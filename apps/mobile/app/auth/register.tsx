@@ -20,7 +20,7 @@ export default function RegisterScreen() {
   const submit = async () => {
     if (!name.trim() || !username.trim() || !email.trim() || !password) { setError("All fields required"); return; }
     if (name.trim().length < 2) { setError("Display name must be at least 2 characters"); return; }
-    if (!/^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$/.test(username.trim().toLowerCase())) {
+    if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(username.trim().toLowerCase())) {
       setError("Username: 3–32 lowercase letters, numbers or dashes");
       return;
     }

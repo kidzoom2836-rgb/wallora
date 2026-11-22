@@ -23,6 +23,7 @@ import {
   ChatIcon,
   SparklesIcon,
   StoreIcon,
+  SmartphoneIcon,
 } from "@/components/icons/wallora-icons";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ const NAV_LINKS = [
   { href: "/ai", label: "AI Chat", icon: ChatIcon },
   { href: "/studio", label: "Studio", icon: SparklesIcon },
   { href: "/marketplace", label: "Marketplace", icon: StoreIcon },
+  { href: "/get-app", label: "Get App", icon: SmartphoneIcon },
 ];
 
 export function SiteHeader() {

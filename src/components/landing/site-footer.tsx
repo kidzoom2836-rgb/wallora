@@ -16,6 +16,7 @@ const PRODUCT_LINKS = [
   { href: "#collections", label: "Collections" },
   { href: "#marketplace", label: "Marketplace" },
   { href: "#pricing", label: "Pricing" },
+  { href: "/get-app", label: "Get Android App" },
 ];
 
 const COMPANY_LINKS = [

@@ -17,6 +17,7 @@ import {
   Download,
   UploadCloud,
   Globe2,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -151,6 +152,10 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem onClick={() => router.push("/sites")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <Globe2 className="mr-2 h-4 w-4" />
           Explore sites
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/get-app")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <Smartphone className="mr-2 h-4 w-4" />
+          Get Android app
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push(profileHref)} className="text-secondary-text focus:text-foreground cursor-pointer">
           <UserIcon className="mr-2 h-4 w-4" />
