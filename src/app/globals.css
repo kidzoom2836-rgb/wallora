@@ -273,3 +273,22 @@
   background-size: 200% 100%;
   animation: wallora-shimmer 1.6s ease-in-out infinite;
 }
+
+/* Continuous horizontal marquee for the live trending ticker */
+@keyframes wallora-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: wallora-marquee 32s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-shimmer {
+    animation: none !important;
+  }
+}

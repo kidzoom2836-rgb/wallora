@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { Search, Loader2, RefreshCw, ImageIcon, ArrowDown, UploadCloud } from "lucide-react";
 
 import { SectionHeading } from "./section-heading";
@@ -27,6 +28,18 @@ type WallpapersResponse = {
     items: WallpaperSummary[];
     pagination: { page: number; limit: number; total: number; totalPages: number };
   };
+};
+
+type CreatorResult = {
+  id: string;
+  username: string;
+  displayName: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  verified: boolean;
+  tier: string;
+  wallpaperCount: number;
+  followerCount: number;
 };
 
 const SORT_LABELS: { value: SortOption; label: string }[] = [
@@ -78,6 +91,23 @@ export function DiscoveryFeed() {
 
   const total = data?.pages[0]?.data.pagination.total ?? 0;
 
+  // Creator search: a leading @ is a hint, but any 2+ char query returns
+  // matching people alongside wallpaper results.
+  const creatorQuery = React.useMemo(
+    () => query.replace(/^@+/, "").trim(),
+    [query],
+  );
+  const { data: creatorData } = useQuery<{ data: CreatorResult[] }>({
+    queryKey: ["creator-search", creatorQuery],
+    enabled: creatorQuery.length >= 2,
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/users/search?q=${encodeURIComponent(creatorQuery)}&limit=8`);
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+  });
+  const creators = creatorData?.data ?? [];
+
   return (
     <section id="discover" className="relative py-20 sm:py-24" aria-labelledby="discover-heading">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -94,7 +124,7 @@ export function DiscoveryFeed() {
             <Input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search wallpapers, descriptions, moods…"
+              placeholder="Search wallpapers, moods or @creators…"
               className="border-border bg-surface pl-9"
               aria-label="Search wallpapers"
             />
@@ -172,6 +202,45 @@ export function DiscoveryFeed() {
             </span>
           )}
         </div>
+
+        {/* Creator results */}
+        {creators.length > 0 && (
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+              Creators
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {creators.map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/profile/${c.username}`}
+                  className="group flex items-center gap-3 rounded-xl border border-border bg-surface p-3 transition hover:border-primary/40 hover:bg-raised"
+                >
+                  <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-sm font-semibold text-primary">
+                    {c.avatarUrl ? (
+                      <img src={c.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      `@${c.username.slice(0, 2)}`
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                        {c.displayName ?? c.username}
+                      </span>
+                      {c.verified && (
+                        <span className="inline-block size-3.5 shrink-0 rounded-full bg-primary" aria-label="Verified" />
+                      )}
+                    </span>
+                    <span className="block truncate text-xs text-secondary-text">
+                      @{c.username} · {c.wallpaperCount} walls · {c.followerCount} followers
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* States */}
         {isLoading ? (

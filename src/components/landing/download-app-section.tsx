@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { SectionHeading } from "./section-heading";
 
 export const APP_APK_URL =
-  "https://expo.dev/artifacts/eas/-dpwID8-fxszLYSlY82Y6knQWs-x92qxt3zMQlulnD8.apk";
+  "https://expo.dev/artifacts/eas/c50C5i9y6ydbMJMOqEqYIbdakTdSr3wJi28nB22RpbA.apk";
 export const APP_VERSION = "1.0.0";
 
 const HIGHLIGHTS = [
@@ -52,7 +52,7 @@ export function DownloadAppSection() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs text-secondary-text">
-              <span>Android debug build</span>
+              <span>Standalone Android build</span>
               <span className="hidden h-3 w-px bg-border sm:block" />
               <span>Version {APP_VERSION}</span>
               <span className="hidden h-3 w-px bg-border sm:block" />

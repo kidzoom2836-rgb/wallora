@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/landing/site-header";
 import { Hero } from "@/components/landing/hero";
+import { LiveShowcase } from "@/components/landing/live-showcase";
 import { FeaturesShowcase } from "@/components/landing/features-showcase";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { DownloadAppSection } from "@/components/landing/download-app-section";
@@ -15,6 +16,7 @@ export default function Home() {
       <SiteHeader />
       <main className="flex-1">
         <Hero />
+        <LiveShowcase />
         <FeaturesShowcase />
         <HowItWorks />
         <DownloadAppSection />

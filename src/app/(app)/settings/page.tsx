@@ -3,6 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   BadgeCheck,
@@ -20,6 +22,8 @@ import {
   Sparkles,
   Trash2,
   UserRound,
+  LogOut,
+  AlertTriangle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -79,6 +83,7 @@ const SECTIONS = [
 
 export default function SettingsPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [active, setActive] = React.useState<string>("profile");
   const [displayName, setDisplayName] = React.useState("");
   const [bio, setBio] = React.useState("");
@@ -93,6 +98,8 @@ export default function SettingsPage() {
   const [uploading, setUploading] = React.useState<"avatar" | "cover" | null>(null);
   const [savingProfile, setSavingProfile] = React.useState(false);
   const [savingSettings, setSavingSettings] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   const meQuery = useQuery<{ data: Me }>({
     queryKey: ["auth", "me"],
@@ -194,6 +201,29 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : "Could not save settings");
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    router.push("/");
+    router.refresh();
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/v1/account", { method: "DELETE" });
+      const payload = (await res.json()) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(payload.error?.message ?? "Could not delete account");
+      toast.success("Your account has been deleted");
+      await signOut({ redirect: false });
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete account");
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -505,10 +535,53 @@ export default function SettingsPage() {
                 <InfoRow icon={ShieldCheck} label="Status" value={<Badge variant="outline" className="border-success/30 bg-success/10 capitalize text-success">{me.status}</Badge>} />
                 <InfoRow icon={Crown} label="Verification" value={<span className="capitalize">{tier}</span>} />
               </div>
-              <p className="mt-5 flex items-center gap-2 text-xs text-secondary-text">
-                <Trash2 className="h-3.5 w-3.5" />
-                Account deletion is handled by WALLORA support and is not self-service in this release.
-              </p>
+              <div className="mt-6 space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full border-border bg-surface text-foreground hover:bg-raised"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
+
+                {!confirmDelete ? (
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive/40 bg-destructive/5 text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete account
+                  </Button>
+                ) : (
+                  <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4">
+                    <p className="flex items-start gap-2 text-sm text-destructive">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      This permanently disables your account. Your public wallpapers stay in the
+                      library, but your profile and sign-in are removed. This cannot be undone.
+                    </p>
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={handleDeleteAccount}
+                        disabled={deleting}
+                      >
+                        {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        {deleting ? "Deleting…" : "Yes, delete my account"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="text-secondary-text hover:text-foreground"
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={deleting}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </section>
           </div>
         </div>
