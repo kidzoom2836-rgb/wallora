@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
@@ -102,10 +101,8 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
+    const prismaErr = err as { code?: string } | null;
+    if (prismaErr?.code === "P2002") {
       return errorResponse(
         409,
         "This email is already on the WALLORA waitlist. We will be in touch soon.",

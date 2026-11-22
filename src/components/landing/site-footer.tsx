@@ -166,7 +166,7 @@ export function SiteFooter() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-secondary-text">
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              Phase 1 · Design system live
+              All systems live · Web + Android
             </span>
             <Link
               href="#top"

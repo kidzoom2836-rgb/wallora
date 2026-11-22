@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth-helpers";
-import { getTier, hasClaimed } from "@/lib/verification/store";
+import { getTier, hasClaimed, TIER_LIMITS, TIER_PERKS } from "@/lib/verification/store";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +13,7 @@ export async function GET() {
     getTier(auth.session.user.id),
     hasClaimed(auth.session.user.id),
   ]);
-  return NextResponse.json({ data: { tier, claimed } });
+  return NextResponse.json({
+    data: { tier, claimed, limits: TIER_LIMITS[tier], perks: TIER_PERKS[tier] },
+  });
 }

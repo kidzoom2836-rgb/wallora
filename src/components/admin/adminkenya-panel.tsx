@@ -541,7 +541,7 @@ function UploadsTab() {
 type VerificationRequest = {
   id: string;
   userId: string;
-  tier: "verified" | "premium";
+  tier: "verified" | "premium" | "supreme";
   reason: string;
   portfolio: string;
   status: "pending" | "approved" | "rejected";
@@ -584,7 +584,7 @@ function VerificationTab() {
     <div className="space-y-5">
       <SectionTitle
         title="Verification applications"
-        subtitle="Every account already has the free grey tick. This queue is only for blue verified and gold premium applications."
+        subtitle="Every account already has the free grey tick. This queue is for blue verified, gold premium and violet supreme applications."
       />
       <div className="flex items-center gap-2">
         <Badge variant="default">{pending} pending</Badge>
@@ -608,7 +608,13 @@ function VerificationTab() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold">
-                    {r.tier === "premium" ? <Crown className="size-4 text-[#D7B879]" /> : <BadgeCheck className="size-4 text-[#3B9EFF]" />}
+                    {r.tier === "supreme" ? (
+                      <Sparkles className="size-4 text-[#B98CFF]" />
+                    ) : r.tier === "premium" ? (
+                      <Crown className="size-4 text-[#D7B879]" />
+                    ) : (
+                      <BadgeCheck className="size-4 text-[#3B9EFF]" />
+                    )}
                     {r.displayName || r.username || r.email || "Applicant"}
                     <Badge
                       variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}

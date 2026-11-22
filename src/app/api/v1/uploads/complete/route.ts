@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { requireVerification } from "@/lib/auth-helpers";
@@ -267,7 +266,8 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    const prismaErr = err as { code?: string } | null;
+    if (prismaErr?.code === "P2002") {
       return NextResponse.json(
         { error: { code: "conflict", message: "A wallpaper with this title already exists. Try a different title." } },
         { status: 409 },

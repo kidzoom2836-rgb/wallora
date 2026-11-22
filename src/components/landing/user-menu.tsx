@@ -11,6 +11,8 @@ import {
   FolderKanban,
   LayoutDashboard,
   BadgeCheck,
+  MessageCircle,
+  Images,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,11 +59,7 @@ export function UserMenu({ user }: UserMenuProps) {
     });
   };
 
-  const comingSoon = (feature: string) => () => {
-    toast.info(`${feature} opens in a later phase`, {
-      description: "Your account is ready — the dashboard ships in the next phase.",
-    });
-  };
+  const profileHref = user.username ? `/profile/${user.username}` : "/settings";
 
   return (
     <DropdownMenu>
@@ -126,7 +124,15 @@ export function UserMenu({ user }: UserMenuProps) {
           <LayoutDashboard className="mr-2 h-4 w-4" />
           Explore showcases
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={comingSoon("Your profile")} className="text-secondary-text focus:text-foreground cursor-pointer">
+        <DropdownMenuItem onClick={() => router.push("/community")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <MessageCircle className="mr-2 h-4 w-4" />
+          Community
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/showroom")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <Images className="mr-2 h-4 w-4" />
+          Showroom
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push(profileHref)} className="text-secondary-text focus:text-foreground cursor-pointer">
           <UserIcon className="mr-2 h-4 w-4" />
           Your profile
         </DropdownMenuItem>
@@ -138,7 +144,7 @@ export function UserMenu({ user }: UserMenuProps) {
           <Shield className="mr-2 h-4 w-4" />
           Why verification?
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={comingSoon("Settings")} className="text-secondary-text focus:text-foreground cursor-pointer">
+        <DropdownMenuItem onClick={() => router.push("/settings")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <Settings className="mr-2 h-4 w-4" />
           Settings
         </DropdownMenuItem>

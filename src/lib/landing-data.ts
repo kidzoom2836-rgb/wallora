@@ -296,11 +296,11 @@ export const FAQS: Faq[] = [
   },
   {
     q: "When does AI Studio launch?",
-    a: "AI Studio and the WALLORA AI conversation engine are scheduled for Phase 5 and Phase 6 of our development roadmap. Right now we are in Phase 1 — the design system and brand foundation. Join the waitlist to be notified the moment early access opens.",
+    a: "AI Chat and AI Studio are live. Sign in to chat with the WALLORA assistant, enhance prompts and generate wallpapers — daily credit limits depend on your verification tier and role.",
   },
   {
     q: "Can I sell my creations on WALLORA?",
-    a: "Yes. The creator marketplace and Creator Pro plan are designed to let you sell wallpaper packs, premium artwork and digital products. Marketplace launch is planned for Phase 9. Creator earnings are tracked in a real ledger — never fabricated.",
+    a: "Yes. The marketplace is live with real listings, purchases and entitlements. Creators can publish their own products, and purchases are recorded in a real ledger — never fabricated. Card payments are not connected yet.",
   },
   {
     q: "What AI models does WALLORA use?",
@@ -312,7 +312,7 @@ export const FAQS: Faq[] = [
   },
   {
     q: "Can I use WALLORA on mobile?",
-    a: "The web app is installable as a Progressive Web App on any device. A native Android app built with Expo is planned for Phase 11. Both share the same backend contracts.",
+    a: "The web app is installable as a Progressive Web App on any device, and the native Android client is built with Expo. Both share the same backend contracts and your account.",
   },
   {
     q: "How do I join early access?",

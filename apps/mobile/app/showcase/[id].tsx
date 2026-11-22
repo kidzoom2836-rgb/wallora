@@ -18,7 +18,7 @@ const C = {
   blue: "#5B9EEA",
 };
 
-const TIER_COLOR: Record<string, string> = { free: C.muted, verified: C.blue, premium: C.accent };
+const TIER_COLOR: Record<string, string> = { free: C.muted, verified: C.blue, premium: C.accent, supreme: "#B98CFF" };
 
 export default function PublicShowcaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -127,7 +127,15 @@ export default function PublicShowcaseScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ownerName}>{ownerName}</Text>
-              <Text style={styles.ownerTier}>{owner?.tier === "premium" ? "Premium creator" : owner?.tier === "verified" ? "Verified creator" : "Free verified creator"}</Text>
+              <Text style={styles.ownerTier}>
+                {owner?.tier === "supreme"
+                  ? "Supreme creator"
+                  : owner?.tier === "premium"
+                    ? "Premium creator"
+                    : owner?.tier === "verified"
+                      ? "Verified creator"
+                      : "Free verified creator"}
+              </Text>
             </View>
             <Ionicons name="checkmark-circle" size={19} color={tierColor} />
           </View>

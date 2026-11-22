@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,18 +13,16 @@ import {
   ArrowRight,
   CheckCircle2,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { WalloraMonogram } from "@/components/brand/wallora-logo";
-import { useAuthDialog } from "@/stores/auth-dialog";
 
-const UPCOMING = [
-  { icon: LayoutDashboard, label: "Dashboard", phase: "Phase 3" },
-  { icon: MessageSquare, label: "AI Chat", phase: "Phase 5" },
-  { icon: Wand2, label: "AI Studio", phase: "Phase 6" },
-  { icon: FolderKanban, label: "Projects", phase: "Phase 7" },
+const WORKSPACE = [
+  { icon: LayoutDashboard, label: "Discover", detail: "Real wallpapers", href: "/discover" },
+  { icon: MessageSquare, label: "AI Chat", detail: "Your creative assistant", href: "/ai" },
+  { icon: Wand2, label: "AI Studio", detail: "Generate artwork", href: "/studio" },
+  { icon: FolderKanban, label: "Projects", detail: "Build your showcase", href: "/projects" },
 ];
 
 /**
@@ -33,17 +32,10 @@ const UPCOMING = [
  */
 export function AuthenticatedPanel() {
   const { data: session, status } = useSession();
-  const openRegister = useAuthDialog((s) => s.openRegister);
 
   if (status !== "authenticated" || !session?.user) return null;
 
   const user = session.user;
-
-  const handleUpcoming = (label: string, phase: string) => () => {
-    toast.info(`${label} launches in ${phase}`, {
-      description: "You are signed in — your account is ready for the next phase.",
-    });
-  };
 
   return (
     <AnimatePresence>
@@ -104,24 +96,23 @@ export function AuthenticatedPanel() {
                 Account active
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs text-secondary-text">
-                Phase 2 · Authentication live
+                Web + Android · live
               </span>
             </div>
           </div>
 
-          {/* Upcoming features */}
+          {/* Your workspace */}
           <div className="mt-8">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-secondary-text">
-              Your creative workspace — coming next
+              Your creative workspace
             </p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {UPCOMING.map((item) => {
+              {WORKSPACE.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <button
+                  <Link
                     key={item.label}
-                    type="button"
-                    onClick={handleUpcoming(item.label, item.phase)}
+                    href={item.href}
                     className="group flex items-center gap-3 rounded-xl border border-border bg-raised/60 p-4 text-left transition-colors hover:border-primary/40"
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-primary">
@@ -131,10 +122,10 @@ export function AuthenticatedPanel() {
                       <span className="block text-sm font-medium text-foreground">
                         {item.label}
                       </span>
-                      <span className="block text-xs text-secondary-text">{item.phase}</span>
+                      <span className="block text-xs text-secondary-text">{item.detail}</span>
                     </span>
                     <ArrowRight className="h-4 w-4 text-secondary-text transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -144,15 +135,10 @@ export function AuthenticatedPanel() {
           <div className="mt-8 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background/60 p-4">
             <Sparkles className="h-5 w-5 shrink-0 text-primary" />
             <p className="flex-1 text-sm text-secondary-text">
-              Your account is ready. Join the Studio waitlist to get early access
-              the moment AI generation ships.
+              Your account is live. Build a showcase, publish a project and grow your tier.
             </p>
-            <Button
-              size="sm"
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => toast.info("Studio waitlist opens from the hero or AI Studio section.")}
-            >
-              Join the waitlist
+            <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" asChild>
+              <Link href="/projects">Open Projects</Link>
             </Button>
           </div>
         </div>

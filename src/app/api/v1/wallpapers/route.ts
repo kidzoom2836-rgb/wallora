@@ -11,6 +11,7 @@ import { getTiersForUsers } from "@/lib/verification/store";
  *   q          — search title + description
  *   category   — category slug filter
  *   tag        — tag slug filter
+ *   creator    — creator username filter
  *   orientation — portrait | landscape | square
  *   sort       — newest | popular | downloads | likes (default: newest)
  *   page       — 1-based page (default 1)
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get("q")?.trim() ?? "";
   const category = searchParams.get("category")?.trim() ?? "";
   const tag = searchParams.get("tag")?.trim() ?? "";
+  const creator = searchParams.get("creator")?.trim() ?? "";
   const orientation = searchParams.get("orientation")?.trim() ?? "";
   const sort = searchParams.get("sort")?.trim() ?? "newest";
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
@@ -52,6 +54,9 @@ export async function GET(request: NextRequest) {
   }
   if (tag) {
     where.tags = { some: { tag: { slug: tag } } };
+  }
+  if (creator) {
+    where.user = { profile: { username: creator } };
   }
 
   // Sort

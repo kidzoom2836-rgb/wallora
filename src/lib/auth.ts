@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await db.user.findUnique({
           where: { email },
-          include: { profile: { select: { username: true } } },
+          include: { profile: { select: { username: true, avatarUrl: true } } },
         });
 
         if (!user || !user.passwordHash) {
@@ -65,7 +65,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
-          image: user.image,
+          image: user.profile?.avatarUrl ?? user.image,
           role: user.role,
           username: user.profile?.username ?? null,
         };
@@ -79,6 +79,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = user.role;
         token.username = user.username;
+        token.image = user.image;
       }
       return token;
     },

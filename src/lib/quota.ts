@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getTier, TIER_LIMITS, type VerificationTier } from "@/lib/verification/store";
 
 /**
  * WALLORA quota system.
@@ -18,11 +19,18 @@ const ACTION_CREDITS: Record<string, number> = {
   ai_analyze: 2,
 };
 
-/** Returns the daily message limit for the user's role. */
-export function getDailyLimit(role: string): number {
+/** Returns the daily credit limit for a role + verification tier. */
+export function getDailyLimit(role: string, tier: VerificationTier = "free"): number {
   if (role === "admin" || role === "super_admin") return Infinity;
-  if (role === "creator" || role === "moderator") return PLUS_DAILY_MESSAGE_LIMIT;
-  return FREE_DAILY_MESSAGE_LIMIT;
+  // Privileged roles keep their legacy floor; verification can only raise it.
+  const roleFloor =
+    role === "creator" || role === "moderator" ? PLUS_DAILY_MESSAGE_LIMIT : FREE_DAILY_MESSAGE_LIMIT;
+  return Math.max(roleFloor, TIER_LIMITS[tier].dailyCredits);
+}
+
+/** Resolves the effective daily limit for a user. */
+export async function getDailyLimitForUser(userId: string, role: string): Promise<number> {
+  return getDailyLimit(role, await getTier(userId));
 }
 
 /** Count today's usage for a user. */
@@ -46,7 +54,7 @@ export async function getTodayUsage(userId: string): Promise<number> {
  * suitable for returning from a route handler.
  */
 export async function checkQuota(userId: string, role: string, action: string = "ai_message") {
-  const limit = getDailyLimit(role);
+  const limit = await getDailyLimitForUser(userId, role);
   if (limit === Infinity) return { ok: true as const, remaining: Infinity, limit };
 
   const used = await getTodayUsage(userId);

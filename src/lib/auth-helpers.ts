@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import type { VerificationTier } from "@/lib/verification/store";
 
 /**
  * WALLORA server-side authorization primitives.
@@ -96,7 +97,7 @@ export async function requireRole(required: Role) {
  * a consistent enforcement point across posting, following, chat and projects.
  * It becomes a real gate the day email verification is introduced.
  */
-export async function requireVerification(minimum: "free" | "verified" | "premium" = "free") {
+export async function requireVerification(minimum: VerificationTier = "free") {
   const result = await requireUser();
   if (!result.ok) return result;
 

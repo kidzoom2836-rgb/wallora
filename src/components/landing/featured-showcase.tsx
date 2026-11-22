@@ -23,13 +23,13 @@ export function FeaturedShowcase() {
           <SectionHeading
             eyebrow="Featured showcase"
             title={<>A concept gallery of what WALLORA can imagine</>}
-            subtitle="These are AI-generated sample visuals — clearly labeled. The community wallpaper library, real creators and uploads open in Phase 3."
+            subtitle="A concept gallery of AI-generated sample visuals. Explore real creator wallpapers in the live library."
           />
           <Badge
             variant="outline"
             className="hidden w-fit border-border bg-surface text-secondary-text sm:inline-flex"
           >
-            Phase 3 · library opens
+            Live library in Discover
           </Badge>
         </div>
 

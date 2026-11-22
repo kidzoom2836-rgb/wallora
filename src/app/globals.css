@@ -191,6 +191,12 @@
 
 /* WALLORA utility primitives */
 @layer utilities {
+  .settings-card {
+    border: 1px solid #292C33;
+    border-radius: 1rem;
+    background-color: #14161B;
+    padding: 1.5rem;
+  }
   .text-gold {
     color: #D7B879;
   }

@@ -31,7 +31,7 @@ export type WallpaperSummary = {
     username: string | null;
     displayName: string | null;
     verified: boolean;
-    tier?: "free" | "verified" | "premium";
+    tier?: "free" | "verified" | "premium" | "supreme";
   };
   asset: { objectKey: string; width: number; height: number } | null;
   tags: { slug: string; name: string }[];

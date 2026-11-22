@@ -51,7 +51,7 @@ type PublicProject = {
     displayName: string | null;
     bio: string | null;
     avatarUrl: string | null;
-    tier: "free" | "verified" | "premium";
+    tier: "free" | "verified" | "premium" | "supreme";
   };
 };
 

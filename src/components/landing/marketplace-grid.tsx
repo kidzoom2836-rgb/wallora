@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
   Store,
-  BadgeCheck,
   ShoppingCart,
   Loader2,
   PackageOpen,
@@ -16,15 +16,30 @@ import {
   Users,
   Info,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  ArrowUpRight,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { useAuthDialog } from "@/stores/auth-dialog";
+import { VerifiedTick } from "@/components/brand/verified-badge";
+import type { VerificationTier } from "@/lib/verification/store";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +65,8 @@ type ProductSummary = {
     username: string | null;
     displayName: string | null;
     verified: boolean;
+    avatarUrl: string | null;
+    tier: VerificationTier;
   };
   purchaseCount: number;
 };
@@ -82,6 +99,7 @@ type ProductDetail = {
     verified: boolean;
     bio: string | null;
     avatarUrl: string | null;
+    tier: VerificationTier;
   };
   purchaseCount: number;
   owned: boolean;
@@ -131,39 +149,103 @@ function formatPrice(cents: number): string {
  * Phase 9: lists published products, opens a detail dialog with full info,
  * and supports a simplified demo purchase flow (no real payment gateway).
  */
-export function MarketplaceGrid() {
+export function MarketplaceGrid({ showHeading = true }: { showHeading?: boolean }) {
   const { data: session } = useSession();
   const authenticated = !!session?.user;
   const openSignIn = useAuthDialog((s) => s.openSignIn);
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [query, setQuery] = React.useState("");
+  const [debounced, setDebounced] = React.useState("");
+  const [license, setLicense] = React.useState("all");
+  const [sort, setSort] = React.useState("newest");
+  const [page, setPage] = React.useState(1);
 
-  // Fetch the published products.
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebounced(query.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  React.useEffect(() => setPage(1), [license, sort]);
+
+  // All filtering and sorting happens on the API, so shareable URLs and
+  // pagination stay consistent with the storefront data.
   const productsQuery = useQuery<ListResponse>({
-    queryKey: ["marketplace-products", { limit: 12 }],
+    queryKey: ["marketplace-products", { q: debounced, license, sort, page }],
     queryFn: async () => {
-      const res = await fetch("/api/v1/products?limit=12");
+      const params = new URLSearchParams({ limit: "12", page: String(page), sort });
+      if (debounced) params.set("q", debounced);
+      if (license !== "all") params.set("license", license);
+      const res = await fetch(`/api/v1/products?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load marketplace products");
       return res.json();
     },
   });
 
   const products = productsQuery.data?.data.items ?? [];
+  const pagination = productsQuery.data?.data.pagination;
 
   return (
     <section
       id="marketplace-grid"
       className="relative border-y border-border bg-background py-20 sm:py-24"
-      aria-labelledby="marketplace-grid-heading"
+      aria-labelledby={showHeading ? "marketplace-grid-heading" : undefined}
+      aria-label={showHeading ? undefined : "Marketplace listings"}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading
-          eyebrow="Marketplace"
-          title={<>Premium packs, real storefronts</>}
-          subtitle="Curated wallpaper packs from verified creators. Browse the showcase inventory below — every pack carries a clear license and an honest purchase count."
-        />
+        {showHeading && (
+          <SectionHeading
+            eyebrow="Marketplace"
+            title={<>Premium packs, real storefronts</>}
+            subtitle="Real listings from WALLORA creators, each with a clear license and an honest purchase count. Search the inventory, open a full listing, or sell your own work."
+          />
+        )}
 
-        <div className="mt-10">
+        <div className="mt-8 flex flex-wrap items-center gap-2">
+          <div className="flex min-w-[190px] flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-3">
+            <Search className="size-4 shrink-0 text-secondary-text" aria-hidden />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search packs"
+              aria-label="Search marketplace listings"
+              className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+          <Select value={license} onValueChange={setLicense}>
+            <SelectTrigger className="w-[150px] border-border bg-surface" aria-label="Filter by license">
+              <SelectValue placeholder="License" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All licenses</SelectItem>
+              <SelectItem value="Personal">Personal</SelectItem>
+              <SelectItem value="Commercial">Commercial</SelectItem>
+              <SelectItem value="Extended">Extended</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="w-[170px] border-border bg-surface" aria-label="Sort listings">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="popular">Most purchased</SelectItem>
+              <SelectItem value="price-asc">Price: low to high</SelectItem>
+              <SelectItem value="price-desc">Price: high to low</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" className="border-border" asChild>
+            <Link href="/marketplace/manage">Manage listings</Link>
+          </Button>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" asChild>
+            <Link href="/marketplace/new"><Store className="size-4" /> Sell here</Link>
+          </Button>
+        </div>
+
+        <div className="mt-6">
           {productsQuery.isLoading ? (
             <MarketplaceSkeleton />
           ) : productsQuery.isError ? (
@@ -174,16 +256,43 @@ export function MarketplaceGrid() {
           ) : products.length === 0 ? (
             <MarketplaceEmpty />
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
-              {products.map((p, idx) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  index={idx}
-                  onSelect={() => setSelectedId(p.id)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+                {products.map((p, idx) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    index={idx}
+                    onSelect={() => setSelectedId(p.id)}
+                  />
+                ))}
+              </div>
+              {pagination && pagination.totalPages > 1 && (
+                <div className="mt-8 flex items-center justify-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border"
+                    disabled={page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    <ChevronLeft className="size-4" /> Previous
+                  </Button>
+                  <span className="text-xs text-secondary-text">
+                    Page {pagination.page} of {pagination.totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border"
+                    disabled={page >= pagination.totalPages}
+                    onClick={() => setPage((current) => current + 1)}
+                  >
+                    Next <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -219,6 +328,7 @@ function ProductCard({
   const priceLabel = formatPrice(product.price);
   const isFree = product.price === 0;
   const creatorName = product.creator.displayName ?? product.creator.username ?? "WALLORA";
+  const creatorHref = product.creator.username ? `/profile/${product.creator.username}` : null;
 
   return (
     <motion.article
@@ -230,11 +340,15 @@ function ProductCard({
         "group relative cursor-pointer overflow-hidden rounded-xl border border-border bg-surface",
         "transition-colors hover:border-primary/40",
       )}
-      onClick={onSelect}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a")) return;
+        onSelect();
+      }}
       role="button"
       tabIndex={0}
       aria-label={`View ${product.title} — ${priceLabel}`}
       onKeyDown={(e) => {
+        if ((e.target as HTMLElement).closest("a")) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();
@@ -284,25 +398,41 @@ function ProductCard({
             {product.title}
           </h3>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-secondary-text">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
-            {creatorName.charAt(0).toUpperCase()}
-          </span>
-          <span className="truncate">{creatorName}</span>
-          {product.creator.verified && (
-            <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Verified creator" />
-          )}
-        </div>
+        {creatorHref ? (
+          <Link href={creatorHref} className="flex min-w-0 items-center gap-1.5 text-xs text-secondary-text hover:text-foreground">
+            <Avatar className="size-5 border border-border">
+              <AvatarImage src={product.creator.avatarUrl ?? undefined} alt={creatorName} />
+              <AvatarFallback className="bg-raised text-[9px] text-foreground">
+                {creatorName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span className="truncate">{creatorName}</span>
+            <VerifiedTick tier={product.creator.tier} className="size-3.5 shrink-0" />
+          </Link>
+        ) : (
+          <div className="flex min-w-0 items-center gap-1.5 text-xs text-secondary-text">
+            <Avatar className="size-5 border border-border">
+              <AvatarFallback className="bg-raised text-[9px] text-foreground">
+                {creatorName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span className="truncate">{creatorName}</span>
+            <VerifiedTick tier={product.creator.tier} className="size-3.5 shrink-0" />
+          </div>
+        )}
         <Separator className="bg-border" />
         <div className="flex items-center justify-between text-[11px] text-secondary-text">
           <span className="flex items-center gap-1">
             <Users className="h-3 w-3" />
             {product.purchaseCount} {product.purchaseCount === 1 ? "purchase" : "purchases"}
           </span>
-          <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <ShoppingCart className="h-3 w-3" />
-            View pack
-          </span>
+          <Link
+            href={`/marketplace/${product.id}`}
+            className="flex items-center gap-1 text-primary/80 hover:text-primary"
+          >
+            <ArrowUpRight className="h-3 w-3" />
+            Full listing
+          </Link>
         </div>
       </div>
     </motion.article>
@@ -446,16 +576,24 @@ function MarketplaceDetailDialog({
                   {product.title}
                 </h2>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                    {creatorName.charAt(0).toUpperCase()}
-                  </span>
+                  <Avatar className="size-8 border border-border">
+                    <AvatarImage src={product.creator.avatarUrl ?? undefined} alt={creatorName} />
+                    <AvatarFallback className="bg-raised text-xs text-foreground">
+                      {creatorName.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1 truncate text-sm font-medium text-foreground">
-                      {creatorName}
-                      {product.creator.verified && (
-                        <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Verified creator" />
-                      )}
-                    </p>
+                    {product.creator.username ? (
+                      <Link href={`/profile/${product.creator.username}`} className="flex items-center gap-1 truncate text-sm font-medium text-foreground hover:text-primary">
+                        {creatorName}
+                        <VerifiedTick tier={product.creator.tier} className="size-3.5 shrink-0" />
+                      </Link>
+                    ) : (
+                      <p className="flex items-center gap-1 truncate text-sm font-medium text-foreground">
+                        {creatorName}
+                        <VerifiedTick tier={product.creator.tier} className="size-3.5 shrink-0" />
+                      </p>
+                    )}
                     <p className="truncate text-xs text-secondary-text">
                       @{product.creator.username ?? "wallora"}
                     </p>
@@ -469,6 +607,12 @@ function MarketplaceDetailDialog({
                   {product.description}
                 </p>
               )}
+
+              <Button variant="link" className="h-auto justify-start p-0 text-xs text-primary" asChild>
+                <Link href={`/marketplace/${product.id}`}>
+                  Open full listing <ArrowUpRight className="size-3.5" />
+                </Link>
+              </Button>
 
               {/* Price block */}
               <div className="rounded-lg border border-border bg-surface p-4">
@@ -534,8 +678,8 @@ function MarketplaceDetailDialog({
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-secondary-text" />
                   <span>
                     <span className="font-medium text-foreground">Demo purchase flow.</span>{" "}
-                    No real payment gateway is wired up — purchases are recorded as
-                    completed so the entitlement flow can be demonstrated honestly.
+                    No payment is charged: no gateway is connected, but the entitlement is
+                    recorded as completed in WALLORA and the pack appears in your library.
                   </span>
                 </p>
               </div>
@@ -598,9 +742,11 @@ function MarketplaceEmpty() {
       </span>
       <p className="font-medium text-foreground">No packs in the marketplace yet</p>
       <p className="max-w-sm text-sm text-secondary-text">
-        Verified creators haven't listed any packs. Check back once the
-        storefront inventory is seeded.
+        No listing matches these filters. Clear the search or be the first creator to sell here.
       </p>
+      <Button className="mt-2 bg-primary text-primary-foreground hover:bg-primary/90" asChild>
+        <Link href="/marketplace/new">Create a listing</Link>
+      </Button>
     </div>
   );
 }

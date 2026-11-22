@@ -25,7 +25,7 @@ const FALLBACK_ICONS = ["Leaf", "Cpu", "Car", "Sparkles", "Gamepad2", "Building2
 
 function getIcon(name: string | null, index: number) {
   const iconName = name ?? FALLBACK_ICONS[index % FALLBACK_ICONS.length];
-  const Icon = (LucideIcons as Record<string, React.ComponentType<{ className?: string }>>)[iconName];
+  const Icon = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[iconName];
   return Icon ?? LucideIcons.Tag;
 }
 

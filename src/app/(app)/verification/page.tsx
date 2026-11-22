@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { VerifiedTick } from "@/components/brand/verified-badge";
 import { cn } from "@/lib/utils";
 
-type Tier = "free" | "verified" | "premium";
+type Tier = "free" | "verified" | "premium" | "supreme";
 type Request = {
   id: string;
   tier: Exclude<Tier, "free">;
@@ -60,7 +60,8 @@ export default function VerificationPage() {
   const tierMeta: Record<Tier, { name: string; detail: string }> = {
     free: { name: "Free verified", detail: "Your grey tick — active on every account." },
     verified: { name: "Verified creator", detail: "Blue tick, reviewed by our team." },
-    premium: { name: "Premium verified", detail: "Gold tick with Pro perks." },
+    premium: { name: "Premium verified", detail: "Gold badge with Pro perks and higher limits." },
+    supreme: { name: "Supreme creator", detail: "Violet badge with the highest WALLORA limits." },
   };
 
   return (
@@ -126,9 +127,17 @@ export default function VerificationPage() {
             active={tier === "premium"}
             icon={<VerifiedTick tier="premium" className="size-5" />}
             title="Premium verified"
-            subtitle="Gold badge + Pro perks"
-            points={["Gold badge with priority placement", "Direct external links for built sites", "Founding-creator storefront treatment"]}
+            subtitle="Gold badge + 7× limits"
+            points={["Gold badge across WALLORA", "150 daily AI credits", "Higher daily post limit"]}
             onClick={() => setTier("premium")}
+          />
+          <TierCard
+            active={tier === "supreme"}
+            icon={<VerifiedTick tier="supreme" className="size-5" />}
+            title="Supreme creator"
+            subtitle="Violet badge + 20× limits"
+            points={["Supreme badge across WALLORA", "400 daily AI credits", "Highest post, upload and project limits"]}
+            onClick={() => setTier("supreme")}
           />
         </div>
       </div>
@@ -168,7 +177,9 @@ export default function VerificationPage() {
         }}
       >
         <div>
-          <h2 className="font-display text-lg font-semibold">Apply for {tier === "premium" ? "Premium" : "Verified"}</h2>
+          <h2 className="font-display text-lg font-semibold">
+            Apply for {tier === "supreme" ? "Supreme" : tier === "premium" ? "Premium" : "Verified"}
+          </h2>
           <p className="mt-1 text-xs text-secondary-text">
             Tell us what you create and link real work. Applications are reviewed manually.
           </p>
@@ -177,7 +188,7 @@ export default function VerificationPage() {
           <label className="text-xs text-secondary-text">Why should you be verified?</label>
           <Textarea
             required
-            minLength={20}
+            minLength={tier === "supreme" ? 40 : 20}
             rows={4}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -189,6 +200,7 @@ export default function VerificationPage() {
           <label className="text-xs text-secondary-text">Portfolio or profile link</label>
           <Input
             required
+            minLength={tier === "supreme" ? 16 : 8}
             value={portfolio}
             onChange={(e) => setPortfolio(e.target.value)}
             placeholder="https://… or @username on WALLORA"

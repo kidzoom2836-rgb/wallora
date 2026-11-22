@@ -33,7 +33,7 @@ type ShowcaseItem = {
   noteCount: number;
   shoutoutCount: number;
   meta: { status: string; progress: number; targetDate: string | null };
-  owner: { username: string | null; displayName: string | null; tier: "free" | "verified" | "premium" };
+  owner: { username: string | null; displayName: string | null; tier: "free" | "verified" | "premium" | "supreme" };
 };
 
 const STATUS_LABEL: Record<string, string> = {

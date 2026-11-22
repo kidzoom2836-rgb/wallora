@@ -7,6 +7,7 @@ import { Search, Loader2, RefreshCw, ImageIcon, ArrowDown, UploadCloud } from "l
 
 import { SectionHeading } from "./section-heading";
 import { WallpaperCard, type WallpaperSummary } from "./wallpaper-card";
+import { WallpaperDetailDialog } from "./wallpaper-detail-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -214,6 +215,8 @@ export function DiscoveryFeed() {
           </>
         )}
       </div>
+
+      <WallpaperDetailDialog />
     </section>
   );
 }

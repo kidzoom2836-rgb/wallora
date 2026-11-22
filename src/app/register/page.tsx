@@ -141,7 +141,7 @@ export default function RegisterPage() {
 
           <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
             {loading ? (
-              <><LoaderIcon size={16} style={{ animation: "spin 1s linear infinite" }} /> Creating account…</>
+              <><LoaderIcon size={16} className="animate-spin" /> Creating account…</>
             ) : (
               <>Create account <ArrowRightIcon size={16} /></>
             )}

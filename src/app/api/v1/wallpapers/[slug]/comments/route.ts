@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/lib/db";
 import { requireVerification } from "@/lib/auth-helpers";
+import { getTiersForUsers } from "@/lib/verification/store";
 
 /**
  * GET  /api/v1/wallpapers/[slug]/comments  — list comments (public)
@@ -64,6 +65,7 @@ export async function GET(
     },
   });
 
+  const tiers = await getTiersForUsers(comments.map((c) => c.user.id));
   const items = comments.map((c) => ({
     id: c.id,
     content: c.content,
@@ -74,6 +76,7 @@ export async function GET(
       displayName: c.user.profile?.displayName ?? null,
       avatarUrl: c.user.profile?.avatarUrl ?? null,
       verified: c.user.profile?.verified ?? false,
+      tier: tiers[c.user.id] ?? "free",
     },
   }));
 
@@ -147,6 +150,8 @@ export async function POST(
     },
   });
 
+  const tier = (await getTiersForUsers([comment.user.id]))[comment.user.id] ?? "free";
+
   return NextResponse.json(
     {
       data: {
@@ -159,6 +164,7 @@ export async function POST(
           displayName: comment.user.profile?.displayName ?? null,
           avatarUrl: comment.user.profile?.avatarUrl ?? null,
           verified: comment.user.profile?.verified ?? false,
+          tier,
         },
       },
     },

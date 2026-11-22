@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth-helpers";
+import { getTier } from "@/lib/verification/store";
 
 /**
  * GET /api/v1/users/[username]
@@ -73,6 +74,7 @@ export async function GET(
 
   const isFollowing = viewerId ? profile.user.followers?.length > 0 : false;
   const isSelf = viewerId === profile.user.id;
+  const tier = await getTier(profile.user.id);
 
   return NextResponse.json({
     data: {
@@ -83,6 +85,7 @@ export async function GET(
       avatarUrl: profile.avatarUrl,
       coverUrl: profile.coverUrl,
       verified: profile.verified,
+      tier,
       creatorStatus: profile.creatorStatus,
       createdAt: profile.createdAt,
       stats: {

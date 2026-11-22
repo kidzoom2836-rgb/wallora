@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth-helpers";
+import { getTier } from "@/lib/verification/store";
 
 /**
  * GET /api/v1/wallpapers/[slug]
@@ -79,6 +80,8 @@ export async function GET(
       })
     : [];
 
+  const tier = await getTier(wallpaper.user.id);
+
   return NextResponse.json({
     data: {
       id: wallpaper.id,
@@ -104,6 +107,7 @@ export async function GET(
         bio: wallpaper.user.profile?.bio ?? null,
         verified: wallpaper.user.profile?.verified ?? false,
         avatarUrl: wallpaper.user.profile?.avatarUrl ?? null,
+        tier,
       },
       assets: wallpaper.assets,
       tags: wallpaper.tags.map((t) => t.tag),

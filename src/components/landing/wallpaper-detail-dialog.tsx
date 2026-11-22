@@ -17,8 +17,11 @@ import {
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 
 import { VerifiedTick } from "@/components/brand/verified-badge";
+import { CommentsSection } from "./comments-section";
+import { FollowButton } from "./follow-button";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +68,7 @@ type DetailResponse = {
       bio: string | null;
       verified: boolean;
       avatarUrl: string | null;
+      tier: "free" | "verified" | "premium" | "supreme";
     };
     assets: DetailAsset[];
     tags: { slug: string; name: string }[];
@@ -192,7 +196,7 @@ export function WallpaperDetailDialog() {
   };
   const handleShare = async () => {
     if (!wallpaper) return;
-    const url = `${window.location.origin}/#discover`;
+    const url = `${window.location.origin}/wallpaper/${wallpaper.slug}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: wallpaper.title, url });
@@ -252,16 +256,37 @@ export function WallpaperDetailDialog() {
                   {wallpaper.title}
                 </h2>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                    {(wallpaper.creator.displayName ?? "W")[0]?.toUpperCase()}
+                  {wallpaper.creator.username && (
+                    <div className="ml-auto">
+                      <FollowButton
+                        username={wallpaper.creator.username}
+                        initialFollowing={false}
+                        isSelf={session?.user?.id === wallpaper.creator.id}
+                      />
+                    </div>
+                  )}
+                  <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                    {wallpaper.creator.avatarUrl ? (
+                      <img
+                        src={wallpaper.creator.avatarUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      (wallpaper.creator.displayName ?? "W")[0]?.toUpperCase()
+                    )}
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {wallpaper.creator.displayName ?? "WALLORA"}
-                      {wallpaper.creator.verified && (
-                        <span className="ml-1 inline-flex align-middle"><VerifiedTick /></span>
-                      )}
-                    </p>
+                    <Link
+                      href={`/profile/${wallpaper.creator.username ?? ""}`}
+                      onClick={() => setSelectedSlug(null)}
+                      className="flex items-center gap-1 truncate text-sm font-medium text-foreground hover:text-primary"
+                    >
+                      <span className="truncate">
+                        {wallpaper.creator.displayName ?? "WALLORA"}
+                      </span>
+                      <VerifiedTick tier={wallpaper.creator.tier} className="size-3.5" />
+                    </Link>
                     <p className="truncate text-xs text-secondary-text">
                       @{wallpaper.creator.username ?? "wallora"}
                     </p>
@@ -383,6 +408,10 @@ export function WallpaperDetailDialog() {
                   </div>
                 </div>
               )}
+
+              <Separator className="bg-border" />
+
+              <CommentsSection slug={wallpaper.slug} />
             </div>
           </div>
         )}

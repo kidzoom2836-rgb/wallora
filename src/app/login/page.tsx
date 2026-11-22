@@ -129,7 +129,7 @@ function LoginForm() {
         disabled={loading}
       >
         {loading ? (
-          <><LoaderIcon size={16} style={{ animation: "spin 1s linear infinite" }} /> Signing in…</>
+          <><LoaderIcon size={16} className="animate-spin" /> Signing in…</>
         ) : (
           <>Sign in <ArrowRightIcon size={16} /></>
         )}

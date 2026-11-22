@@ -76,7 +76,7 @@ export function MarketplacePreview() {
                 Join as a creator
               </Button>
               <Badge variant="outline" className="border-border bg-surface text-secondary-text">
-                Launches in Phase 9
+                Open in Marketplace
               </Badge>
             </div>
           </div>

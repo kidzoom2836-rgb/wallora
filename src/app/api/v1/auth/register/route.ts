@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
@@ -190,12 +189,10 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (err) {
-    if (
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
+    const prismaErr = err as { code?: string; meta?: { target?: string[] } } | null;
+    if (prismaErr?.code === "P2002") {
       // Unique constraint violation — figure out which field.
-      const target = (err.meta as { target?: string[] })?.target?.[0] ?? "email";
+      const target = prismaErr.meta?.target?.[0] ?? "email";
       const message =
         target === "email"
           ? "An account with this email already exists."

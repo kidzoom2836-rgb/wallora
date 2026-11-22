@@ -27,6 +27,7 @@ import {
   MenuIcon,
   UploadIcon,
   CodeIcon,
+  ImageIcon,
 } from "@/components/icons/wallora-icons";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,8 @@ const NAV_LINKS = [
   { href: "/builder", label: "Builder", icon: CodeIcon },
   { href: "/marketplace", label: "Marketplace", icon: StoreIcon },
   { href: "/projects", label: "Projects", icon: FolderIcon },
+  { href: "/community", label: "Community", icon: ChatIcon },
+  { href: "/showroom", label: "Showroom", icon: ImageIcon },
 ];
 
 export function AppHeader() {

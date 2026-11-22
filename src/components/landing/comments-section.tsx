@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuthDialog } from "@/stores/auth-dialog";
 import { VerifiedTick } from "@/components/brand/verified-badge";
 import { useVerificationGate } from "@/components/verification/verification-gate";
+import type { VerificationTier } from "@/lib/verification/tiers";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,6 +33,7 @@ export type CommentAuthor = {
   displayName: string | null;
   avatarUrl: string | null;
   verified: boolean;
+  tier?: VerificationTier;
 };
 
 export type CommentItem = {
@@ -119,6 +121,7 @@ export function CommentsSection({ slug, className }: CommentsSectionProps) {
           displayName: session?.user?.name ?? null,
           avatarUrl: null,
           verified: false,
+          tier: "free",
         },
       };
       queryClient.setQueryData<CommentsResponse>(queryKey, (prev) => ({
@@ -274,12 +277,21 @@ function CommentRow({ comment }: { comment: CommentItem }) {
 
   return (
     <li className="flex gap-3 rounded-lg border border-border bg-surface p-3">
-      {/* Avatar (initials fallback) */}
+      {/* Avatar (image when available, initials fallback) */}
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
+        className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold text-primary"
         aria-hidden
       >
-        {initialsFrom(comment.author.displayName)}
+        {comment.author.avatarUrl ? (
+          <img
+            src={comment.author.avatarUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          initialsFrom(comment.author.displayName)
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -287,9 +299,10 @@ function CommentRow({ comment }: { comment: CommentItem }) {
           <span className="truncate text-sm font-medium text-foreground">
             {displayName}
           </span>
-          {comment.author.verified && (
-            <VerifiedTick className="size-3.5" />
-          )}
+          <VerifiedTick
+            tier={comment.author.tier ?? "free"}
+            className="size-3.5"
+          />
           {comment.author.username && (
             <span className="truncate text-xs text-secondary-text">
               @{comment.author.username}

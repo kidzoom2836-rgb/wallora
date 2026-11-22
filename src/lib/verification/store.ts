@@ -1,26 +1,14 @@
 import { db } from "@/lib/db";
+import { TIER_RANK, type VerificationStatus, type VerificationTier } from "./tiers";
 
-/**
- * WALLORA verification.
- *
- * Tiers (lowest first):
- *   free     — grey tick, granted to every account automatically. Baseline
- *              authenticity marker; required before posting/following/chatting.
- *   verified — blue tick, applied for and approved by an admin.
- *   premium  — gold tick, applied for and approved by an admin.
- *
- * Stored in StoredBlob so no Prisma migration is needed. `profile.verified`
- * remains the blue-tick source of truth; only verified/premium paint it.
- */
-
-export type VerificationTier = "free" | "verified" | "premium";
-export type VerificationStatus = "pending" | "approved" | "rejected";
-
-export const TIER_RANK: Record<VerificationTier, number> = {
-  free: 0,
-  verified: 1,
-  premium: 2,
-};
+/** Server-side verification store. Tier constants live in client-safe `tiers.ts`. */
+export {
+  TIER_LIMITS,
+  TIER_PERKS,
+  TIER_RANK,
+  type VerificationStatus,
+  type VerificationTier,
+} from "./tiers";
 
 export type VerificationRequest = {
   id: string;
@@ -118,7 +106,8 @@ export async function reviewRequest(
 
   if (decision === "approved") {
     // Only blue/gold paint profile.verified. Free never gets the blue tick.
-    const paintsBlue = updated.tier === "verified" || updated.tier === "premium";
+    const paintsBlue =
+      updated.tier === "verified" || updated.tier === "premium" || updated.tier === "supreme";
     if (paintsBlue) {
       await db.profile
         .update({ where: { userId: updated.userId }, data: { verified: true } })
@@ -151,7 +140,7 @@ export async function setTier(userId: string, tier: VerificationTier | null): Pr
   else delete tiers[userId];
   await write(TIERS_KEY, tiers);
 
-  const paintsBlue = tier === "verified" || tier === "premium";
+  const paintsBlue = tier === "verified" || tier === "premium" || tier === "supreme";
   await db.profile
     .update({ where: { userId }, data: { verified: paintsBlue } })
     .catch(() => {});

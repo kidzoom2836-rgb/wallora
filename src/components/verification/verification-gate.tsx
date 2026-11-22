@@ -18,7 +18,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { VerifiedTick } from "@/components/brand/verified-badge";
-import type { VerificationTier } from "@/lib/verification/store";
+import type { VerificationTier } from "@/lib/verification/tiers";
 import { cn } from "@/lib/utils";
 
 type GateState = {

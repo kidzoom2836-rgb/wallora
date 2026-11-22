@@ -196,20 +196,21 @@ export function AiChatPanel() {
     setInput("");
 
     // If no active conversation, create one first
-    let convId = conversationId;
-    if (!convId) {
+    let activeId: string | null = conversationId ?? null;
+    if (!activeId) {
       setIsCreating(true);
       try {
         const created = await createMutation.mutateAsync();
-        convId = created.data.id;
+        activeId = created.data.id;
       } catch {
         setIsCreating(false);
         return;
       }
       setIsCreating(false);
     }
+    if (!activeId) return;
 
-    sendMutation.mutate({ content, convId });
+    sendMutation.mutate({ content, convId: activeId });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

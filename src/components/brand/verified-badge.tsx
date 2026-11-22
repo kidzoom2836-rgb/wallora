@@ -1,13 +1,14 @@
-import { BadgeCheck, Crown } from "lucide-react";
+import { BadgeCheck, Crown, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { VerificationTier } from "@/lib/verification/store";
+import type { VerificationTier } from "@/lib/verification/tiers";
 
 /**
  * WALLORA verification marks — always real SVG icons, never emoji or text.
  *   free     → grey tick (baseline authenticity, every account)
  *   verified → blue tick (admin approved)
  *   premium  → gold crown (admin approved)
+ *   supreme  → violet spark (admin approved, highest limits)
  */
 export function VerifiedTick({
   tier = "free",
@@ -20,6 +21,18 @@ export function VerifiedTick({
   className?: string;
 }) {
   const resolved: VerificationTier = premium ? "premium" : tier;
+
+  if (resolved === "supreme") {
+    return (
+      <span
+        className={cn("inline-flex items-center text-[#B98CFF]", className)}
+        title="WALLORA Supreme creator"
+        aria-label="WALLORA Supreme creator"
+      >
+        <Sparkles className="size-3.5" strokeWidth={2.5} />
+      </span>
+    );
+  }
 
   if (resolved === "premium") {
     return (
