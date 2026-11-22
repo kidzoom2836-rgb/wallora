@@ -8,6 +8,12 @@ import { generateImage, getGenerationCost } from "@/lib/ai/image-generation";
 import { getSizeForAspect, type AspectRatio } from "@/lib/ai/presets";
 import { getConfiguredAIProvider } from "@/lib/ai/provider";
 import { getAIConfig } from "@/lib/ai/admin-config";
+import { getStorage } from "@/lib/storage";
+import {
+  attachmentToContext,
+  readAttachmentMeta,
+} from "@/lib/ai/attachments";
+import { notifyGenerationComplete } from "@/lib/push/send";
 
 /**
  * POST /api/v1/ai/generations
@@ -34,6 +40,8 @@ const GenerateSchema = z.object({
   stylePreset: z.string().default("none"),
   aspectRatio: z.enum(["square", "portrait", "landscape"]).default("square"),
   enhance: z.boolean().default(false),
+  /** References uploaded through /api/v1/ai/attachments. */
+  attachmentIds: z.array(z.string().min(1)).max(4).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -87,17 +95,57 @@ export async function POST(request: NextRequest) {
 
   // Optionally enhance the prompt first
   let enhancedPrompt: string | null = null;
+  let aiProvider: Awaited<ReturnType<typeof getConfiguredAIProvider>> | null = null;
   if (enhance) {
     try {
-      const provider = await getConfiguredAIProvider();
-      const enhanced = await provider.enhancePrompt!({ prompt });
+      aiProvider = await getConfiguredAIProvider();
+      const enhanced = await aiProvider.enhancePrompt!({ prompt });
       enhancedPrompt = enhanced.enhanced;
     } catch {
       // Enhancement failure is non-fatal — fall back to the original prompt
     }
   }
 
-  const finalPrompt = enhancedPrompt ?? prompt;
+  // Reference files are folded into the generation prompt. The image provider
+  // only accepts text, so photos are described with the configured vision model
+  // and documents are decoded by the shared attachment helpers.
+  let referenceContext = "";
+  if (parsed.data.attachmentIds?.length) {
+    const storage = getStorage();
+    try {
+      aiProvider ??= await getConfiguredAIProvider();
+    } catch {
+      aiProvider = null;
+    }
+    const parts = await Promise.all(
+      parsed.data.attachmentIds.slice(0, 4).map(async (id) => {
+        const attachment = await readAttachmentMeta(userId, id);
+        if (!attachment) return null;
+        if (attachment.kind === "image" && aiProvider?.analyzeImage) {
+          try {
+            const buffer = await storage.getObject(attachment.key);
+            const described = await aiProvider.analyzeImage({
+              imageBase64: buffer.toString("base64"),
+              prompt: `Describe this reference image for an image generation prompt. Focus on subject, colors, style, lighting, composition, textures and any visible text. Attached file: ${attachment.name}`,
+            });
+            return `[Reference image: ${attachment.name}]\n${described.description || "Visual reference supplied."}`;
+          } catch {
+            return `[Reference image: ${attachment.name} — could not be analyzed]`;
+          }
+        }
+        return attachmentToContext(attachment, (key) => storage.getObject(key));
+      }),
+    );
+    referenceContext = parts
+      .filter((part): part is string => !!part?.trim())
+      .join("\n\n");
+  }
+
+  const finalPrompt = `${enhancedPrompt ?? prompt}${
+    referenceContext
+      ? `\n\n--- REFERENCE MATERIAL ---\n${referenceContext}\n--- END REFERENCE MATERIAL ---`
+      : ""
+  }`;
 
   // Create the generation record (status=processing)
   const generation = await db.aiGeneration.create({
@@ -160,6 +208,12 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
     });
+
+    void notifyGenerationComplete({
+      userId,
+      generationId: generation.id,
+      prompt,
+    }).catch(() => {});
 
     return NextResponse.json({ data: updated }, { status: 201 });
   } catch (err) {

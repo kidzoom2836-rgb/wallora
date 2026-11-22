@@ -30,6 +30,7 @@ export async function GET() {
       !!process.env.R2_BUCKET_NAME &&
       !!process.env.R2_PUBLIC_BASE_URL,
     BLOB_CONFIGURED: !!process.env.BLOB_READ_WRITE_TOKEN,
+    EXPO_ACCESS_TOKEN: !!process.env.EXPO_ACCESS_TOKEN,
     NODE_ENV: process.env.NODE_ENV ?? null,
   };
 

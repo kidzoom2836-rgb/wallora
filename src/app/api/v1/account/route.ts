@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth-helpers";
+import { clearPushTokensForUser } from "@/lib/push/store";
 
 /**
  * DELETE /api/v1/account
@@ -39,6 +40,8 @@ export async function DELETE(_request: NextRequest) {
       data: { displayName: "Deleted user", bio: null, avatarUrl: null, coverUrl: null },
     });
   });
+
+  await clearPushTokensForUser(userId).catch(() => {});
 
   return NextResponse.json({ data: { deleted: true } });
 }
