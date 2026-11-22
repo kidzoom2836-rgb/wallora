@@ -89,6 +89,38 @@ export async function requireRole(required: Role) {
   return result;
 }
 
+/**
+ * Require at least baseline (free) verification.
+ *
+ * Every active account receives the free grey tick automatically, so this is
+ * a consistent enforcement point across posting, following, chat and projects.
+ * It becomes a real gate the day email verification is introduced.
+ */
+export async function requireVerification(minimum: "free" | "verified" | "premium" = "free") {
+  const result = await requireUser();
+  if (!result.ok) return result;
+
+  const { hasVerification } = await import("@/lib/verification/store");
+  if (!(await hasVerification(result.session.user.id, minimum))) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        {
+          error: {
+            code: "verification_required",
+            message:
+              minimum === "free"
+                ? "Verify your free account to continue."
+                : `A ${minimum} badge is required for this action.`,
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  return result;
+}
+
 /** Hash a password for storage. */
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);

@@ -31,6 +31,7 @@ export type WallpaperSummary = {
     username: string | null;
     displayName: string | null;
     verified: boolean;
+    tier?: "free" | "verified" | "premium";
   };
   asset: { objectKey: string; width: number; height: number } | null;
   tags: { slug: string; name: string }[];
@@ -213,9 +214,14 @@ export function WallpaperCard({ wallpaper, index = 0 }: WallpaperCardProps) {
           <p className="truncate text-sm font-semibold text-foreground">{wallpaper.title}</p>
           <p className="truncate text-xs text-secondary-text">
             @{wallpaper.creator.username ?? "wallora"}
-            {wallpaper.creator.verified && (
-              <span className="ml-1 inline-flex align-middle"><VerifiedTick /></span>
-            )}
+            <span className="ml-1 inline-flex align-middle">
+              <VerifiedTick
+                tier={
+                  wallpaper.creator.tier ??
+                  (wallpaper.creator.verified ? "verified" : "free")
+                }
+              />
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-secondary-text">

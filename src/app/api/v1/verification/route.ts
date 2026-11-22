@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { createRequest, getMyRequest, getTier } from "@/lib/verification/store";
+import { createRequest, getMyRequest, getTier, hasClaimed } from "@/lib/verification/store";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const auth = await requireUser();
   if (!auth.ok) return auth.response;
-  const [request, tier] = await Promise.all([
+  const [request, tier, claimed] = await Promise.all([
     getMyRequest(auth.session.user.id),
     getTier(auth.session.user.id),
+    hasClaimed(auth.session.user.id),
   ]);
-  return NextResponse.json({ data: { request, tier } });
+  return NextResponse.json({ data: { request, tier, claimed } });
 }
 
 /** POST /api/v1/verification — apply for Verified or Premium. */

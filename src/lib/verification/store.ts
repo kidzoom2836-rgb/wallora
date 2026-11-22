@@ -1,13 +1,26 @@
 import { db } from "@/lib/db";
 
 /**
- * Verification applications and tiers, stored in StoredBlob so no Prisma
- * migration is needed. The existing `profile.verified` boolean remains the
- * source of truth for the blue tick; the tier adds a Premium level.
+ * WALLORA verification.
+ *
+ * Tiers (lowest first):
+ *   free     — grey tick, granted to every account automatically. Baseline
+ *              authenticity marker; required before posting/following/chatting.
+ *   verified — blue tick, applied for and approved by an admin.
+ *   premium  — gold tick, applied for and approved by an admin.
+ *
+ * Stored in StoredBlob so no Prisma migration is needed. `profile.verified`
+ * remains the blue-tick source of truth; only verified/premium paint it.
  */
 
-export type VerificationTier = "verified" | "premium";
+export type VerificationTier = "free" | "verified" | "premium";
 export type VerificationStatus = "pending" | "approved" | "rejected";
+
+export const TIER_RANK: Record<VerificationTier, number> = {
+  free: 0,
+  verified: 1,
+  premium: 2,
+};
 
 export type VerificationRequest = {
   id: string;
@@ -27,6 +40,7 @@ export type VerificationRequest = {
 
 const REQUESTS_KEY = "system:verification-requests";
 const TIERS_KEY = "system:verification-tiers";
+const CLAIMED_KEY = "system:verification-claimed";
 
 function write(key: string, value: unknown) {
   const body = Buffer.from(JSON.stringify(value), "utf8");
@@ -103,22 +117,32 @@ export async function reviewRequest(
   await write(REQUESTS_KEY, requests);
 
   if (decision === "approved") {
-    await db.profile
-      .update({
-        where: { userId: updated.userId },
-        data: { verified: true },
-      })
-      .catch(() => {});
-    const tiers = await read<Record<string, VerificationTier>>(TIERS_KEY, {});
-    tiers[updated.userId] = updated.tier;
-    await write(TIERS_KEY, tiers);
+    // Only blue/gold paint profile.verified. Free never gets the blue tick.
+    const paintsBlue = updated.tier === "verified" || updated.tier === "premium";
+    if (paintsBlue) {
+      await db.profile
+        .update({ where: { userId: updated.userId }, data: { verified: true } })
+        .catch(() => {});
+    }
+    await setTier(updated.userId, updated.tier);
   }
   return updated;
 }
 
-export async function getTier(userId: string): Promise<VerificationTier | null> {
+/** The tier stored for a user, or "free" as the universal baseline. */
+export async function getTier(userId: string): Promise<VerificationTier> {
   const tiers = await read<Record<string, VerificationTier>>(TIERS_KEY, {});
-  return tiers[userId] ?? null;
+  return tiers[userId] ?? "free";
+}
+
+/** Batch tier lookup for feed responses (one blob read, no N+1). */
+export async function getTiersForUsers(
+  userIds: string[],
+): Promise<Record<string, VerificationTier>> {
+  const tiers = await read<Record<string, VerificationTier>>(TIERS_KEY, {});
+  const out: Record<string, VerificationTier> = {};
+  for (const id of new Set(userIds)) out[id] = tiers[id] ?? "free";
+  return out;
 }
 
 export async function setTier(userId: string, tier: VerificationTier | null): Promise<void> {
@@ -126,10 +150,33 @@ export async function setTier(userId: string, tier: VerificationTier | null): Pr
   if (tier) tiers[userId] = tier;
   else delete tiers[userId];
   await write(TIERS_KEY, tiers);
+
+  const paintsBlue = tier === "verified" || tier === "premium";
   await db.profile
-    .update({
-      where: { userId },
-      data: { verified: !!tier },
-    })
+    .update({ where: { userId }, data: { verified: paintsBlue } })
     .catch(() => {});
+}
+
+/** Every active account has at least free verification. */
+export async function hasVerification(
+  userId: string,
+  minimum: VerificationTier = "free",
+): Promise<boolean> {
+  return TIER_RANK[await getTier(userId)] >= TIER_RANK[minimum];
+}
+
+/** Has the user acknowledged the verification explainer popup? */
+export async function hasClaimed(userId: string): Promise<boolean> {
+  const claimed = await read<string[]>(CLAIMED_KEY, []);
+  return claimed.includes(userId);
+}
+
+export async function claimVerification(userId: string): Promise<void> {
+  const claimed = await read<string[]>(CLAIMED_KEY, []);
+  if (!claimed.includes(userId)) {
+    claimed.push(userId);
+    await write(CLAIMED_KEY, claimed);
+  }
+  // Ensure the baseline tier is explicitly recorded.
+  await setTier(userId, await getTier(userId));
 }

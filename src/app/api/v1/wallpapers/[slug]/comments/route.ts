@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireVerification } from "@/lib/auth-helpers";
 
 /**
  * GET  /api/v1/wallpapers/[slug]/comments  — list comments (public)
@@ -91,7 +91,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   const { slug } = await params;

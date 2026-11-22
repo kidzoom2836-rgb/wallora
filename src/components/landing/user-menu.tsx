@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { useProjects } from "@/stores/projects";
+import { useVerificationGate } from "@/components/verification/verification-gate";
 import { cn } from "@/lib/utils";
 
 type UserMenuProps = {
@@ -47,7 +47,7 @@ export function UserMenu({ user }: UserMenuProps) {
   const role = user.role ?? "user";
   const isSuperAdmin = role === "super_admin";
   const router = useRouter();
-  const openProjects = useProjects((s) => s.openPanel);
+  const { explain } = useVerificationGate();
 
   const handleSignOut = async () => {
     toast.info("Signing out…");
@@ -118,9 +118,13 @@ export function UserMenu({ user }: UserMenuProps) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-border" />
-        <DropdownMenuItem onClick={openProjects} className="text-secondary-text focus:text-foreground cursor-pointer">
+        <DropdownMenuItem onClick={() => router.push("/projects")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <FolderKanban className="mr-2 h-4 w-4" />
           My Projects
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/projects/showcase")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <LayoutDashboard className="mr-2 h-4 w-4" />
+          Explore showcases
         </DropdownMenuItem>
         <DropdownMenuItem onClick={comingSoon("Your profile")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <UserIcon className="mr-2 h-4 w-4" />
@@ -129,6 +133,10 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem onClick={() => router.push("/verification")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <BadgeCheck className="mr-2 h-4 w-4" />
           Get verified
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={explain} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <Shield className="mr-2 h-4 w-4" />
+          Why verification?
         </DropdownMenuItem>
         <DropdownMenuItem onClick={comingSoon("Settings")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <Settings className="mr-2 h-4 w-4" />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireRole, ROLES } from "@/lib/auth-helpers";
+import { hasVerification } from "@/lib/verification/store";
 
 const ALLOWED_STATUSES = ["approved", "rejected", "flagged"] as const;
 type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
@@ -63,12 +64,27 @@ export async function PATCH(
   // audit log metadata.
   const existing = await db.wallpaper.findUnique({
     where: { id },
-    select: { id: true, status: true, title: true, slug: true },
+    select: { id: true, status: true, title: true, slug: true, userId: true },
   });
   if (!existing) {
     return NextResponse.json(
       { error: { code: "not_found", message: "Wallpaper not found." } },
       { status: 404 },
+    );
+  }
+
+  // A post may only go public when its creator holds at least the free
+  // verification tier. Every account gets free automatically, but this keeps
+  // the publish boundary explicit for future (email/blue) requirements.
+  if (nextStatus === "approved" && !(await hasVerification(existing.userId))) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "verification_required",
+          message: "Creator must hold at least free verification before this post can go public.",
+        },
+      },
+      { status: 403 },
     );
   }
 

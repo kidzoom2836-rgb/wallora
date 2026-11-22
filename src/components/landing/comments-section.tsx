@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthDialog } from "@/stores/auth-dialog";
 import { VerifiedTick } from "@/components/brand/verified-badge";
+import { useVerificationGate } from "@/components/verification/verification-gate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -69,6 +70,7 @@ export function CommentsSection({ slug, className }: CommentsSectionProps) {
   const { data: session } = useSession();
   const authenticated = !!session?.user;
   const openSignIn = useAuthDialog((s) => s.openSignIn);
+  const { guard } = useVerificationGate();
   const queryClient = useQueryClient();
 
   const [draft, setDraft] = React.useState("");
@@ -170,7 +172,7 @@ export function CommentsSection({ slug, className }: CommentsSectionProps) {
       openSignIn();
       return;
     }
-    submitMutation.mutate(content);
+    guard(() => submitMutation.mutate(content), { action: "join the conversation" });
   };
 
   const remaining = MAX_LEN - draft.length;

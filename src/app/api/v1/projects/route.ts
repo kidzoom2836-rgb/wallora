@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireVerification } from "@/lib/auth-helpers";
+import { getProjectMetas, getShoutoutCounts } from "@/lib/projects-meta";
 
 /**
  * Creative Projects (Phase 7)
@@ -18,7 +19,7 @@ import { requireUser } from "@/lib/auth-helpers";
  * asset and note counts for the sidebar list.
  */
 export async function GET() {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   const userId = result.session.user.id;
@@ -43,6 +44,12 @@ export async function GET() {
     },
   });
 
+  const ids = projects.map((p) => p.id);
+  const [metas, shoutouts] = await Promise.all([
+    getProjectMetas(ids),
+    getShoutoutCounts(ids),
+  ]);
+
   return NextResponse.json({
     data: projects.map((p) => ({
       id: p.id,
@@ -54,6 +61,8 @@ export async function GET() {
       updatedAt: p.updatedAt,
       assetCount: p._count.assets,
       noteCount: p._count.notes,
+      shoutoutCount: shoutouts[p.id] ?? 0,
+      meta: metas[p.id],
     })),
   });
 }
@@ -84,7 +93,7 @@ const CreateSchema = z.object({
  * Creates a new project owned by the authenticated user. Returns 201.
  */
 export async function POST(request: NextRequest) {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   let body: unknown;

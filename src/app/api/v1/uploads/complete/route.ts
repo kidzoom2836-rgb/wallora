@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireVerification } from "@/lib/auth-helpers";
 import { getStorage } from "@/lib/storage";
 import { processImage } from "@/lib/image";
 import {
@@ -34,7 +34,7 @@ import { slugify } from "@/lib/slugify";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   const userId = result.session.user.id;

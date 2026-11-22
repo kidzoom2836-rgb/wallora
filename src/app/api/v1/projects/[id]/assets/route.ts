@@ -221,3 +221,40 @@ export async function POST(
     { status: 201 },
   );
 }
+
+/** DELETE /api/v1/projects/[id]/assets?assetId=... — remove an asset. Owner only. */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const result = await requireUser();
+  if (!result.ok) return result.response;
+
+  const { id } = await params;
+  const assetId = new URL(request.url).searchParams.get("assetId")?.trim();
+  if (!assetId) {
+    return NextResponse.json(
+      { error: { code: "bad_request", message: "assetId is required." } },
+      { status: 400 },
+    );
+  }
+
+  const project = await db.creativeProject.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+  if (!project || project.userId !== result.session.user.id) {
+    return NextResponse.json({ error: { code: "not_found", message: "Project not found." } }, { status: 404 });
+  }
+
+  const asset = await db.projectAsset.findFirst({
+    where: { id: assetId, projectId: id },
+    select: { id: true },
+  });
+  if (!asset) {
+    return NextResponse.json({ error: { code: "not_found", message: "Asset not found." } }, { status: 404 });
+  }
+  await db.projectAsset.delete({ where: { id: assetId } });
+  return NextResponse.json({ data: { deleted: true }, message: "Asset removed." });
+}
+

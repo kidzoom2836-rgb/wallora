@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireVerification } from "@/lib/auth-helpers";
 
 /**
  * POST   /api/v1/users/[username]/follow  — follow a user (auth required)
@@ -26,7 +26,7 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   const { username } = await params;
@@ -73,7 +73,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ username: string }> },
 ) {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   const { username } = await params;

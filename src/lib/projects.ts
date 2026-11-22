@@ -57,6 +57,23 @@ export async function enrichProjectAssets(
     .map((a) => a.generationId)
     .filter((v): v is string => !!v);
 
+  type WallpaperRow = {
+    id: string;
+    slug: string;
+    title: string;
+    orientation: string;
+    dominantColor: string | null;
+    assets: { objectKey: string; width: number; height: number }[];
+  };
+  type GenerationRow = {
+    id: string;
+    prompt: string;
+    publicUrl: string | null;
+    width: number;
+    height: number;
+    aspectRatio: string;
+  };
+
   const [wallpapers, generations] = await Promise.all([
     wallpaperIds.length
       ? db.wallpaper.findMany({
@@ -87,8 +104,8 @@ export async function enrichProjectAssets(
             aspectRatio: true,
           },
         })
-      : [],
-  ]);
+      : ([] as WallpaperRow[]),
+  ] as [WallpaperRow[], GenerationRow[]]);
 
   const wallpaperById = new Map(wallpapers.map((w) => [w.id, w]));
   const generationById = new Map(generations.map((g) => [g.id, g]));

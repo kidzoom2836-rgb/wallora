@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireVerification } from "@/lib/auth-helpers";
 import { getConfiguredAIProvider } from "@/lib/ai/provider";
 import { getMode } from "@/lib/ai/modes";
 import { checkQuota, recordUsage } from "@/lib/quota";
@@ -36,7 +36,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const result = await requireUser();
+  const result = await requireVerification();
   if (!result.ok) return result.response;
 
   const { id } = await params;

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { WalloraMonogram } from "@/components/brand/wallora-logo";
+import { useVerificationGate } from "@/components/verification/verification-gate";
 import { useDiscovery } from "@/stores/discovery";
 import {
   SendIcon,
@@ -170,6 +171,7 @@ export default function AiChatPage() {
   });
 
   const isBusy = createMutation.isPending || !!sendingTo;
+  const { guard } = useVerificationGate();
 
   const sendMutation = useMutation({
     mutationFn: async ({ content, convId }: { content: string; convId: string }) => {
@@ -241,20 +243,22 @@ export default function AiChatPage() {
   const handleSend = async () => {
     const content = input.trim();
     if (!content || isBusy) return;
-    setInput("");
-    try {
-      let convId: string;
-      if (activeId) {
-        convId = activeId;
-      } else {
-        const created = await createMutation.mutateAsync();
-        convId = String(created.data.id);
+    guard(async () => {
+      setInput("");
+      try {
+        let convId: string;
+        if (activeId) {
+          convId = activeId;
+        } else {
+          const created = await createMutation.mutateAsync();
+          convId = String(created.data.id);
+        }
+        setSendingTo(convId);
+        sendMutation.mutate({ content, convId });
+      } catch {
+        setInput(content);
       }
-      setSendingTo(convId);
-      sendMutation.mutate({ content, convId });
-    } catch {
-      setInput(content);
-    }
+    }, { action: "chat with WALLORA AI" });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -10,11 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { VerifiedTick } from "@/components/brand/verified-badge";
 import { cn } from "@/lib/utils";
 
+type Tier = "free" | "verified" | "premium";
 type Request = {
   id: string;
-  tier: "verified" | "premium";
+  tier: Exclude<Tier, "free">;
   status: "pending" | "approved" | "rejected";
   reason: string;
   portfolio: string;
@@ -24,11 +26,11 @@ type Request = {
 
 export default function VerificationPage() {
   const qc = useQueryClient();
-  const [tier, setTier] = React.useState<"verified" | "premium">("verified");
+  const [tier, setTier] = React.useState<Exclude<Tier, "free">>("verified");
   const [reason, setReason] = React.useState("");
   const [portfolio, setPortfolio] = React.useState("");
 
-  const query = useQuery<{ data: { request: Request | null; tier: string | null } }>({
+  const query = useQuery<{ data: { request: Request | null; tier: Tier; claimed: boolean } }>({
     queryKey: ["verification-me"],
     queryFn: () => fetch("/api/v1/verification").then((r) => r.json()),
   });
@@ -46,13 +48,20 @@ export default function VerificationPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["verification-me"] });
+      qc.invalidateQueries({ queryKey: ["verification-state"] });
       toast.success("Application submitted for review");
     },
     onError: (e: Error) => toast.error("Could not submit", { description: e.message }),
   });
 
   const current = query.data?.data.request;
-  const currentTier = query.data?.data.tier;
+  const currentTier = query.data?.data.tier ?? "free";
+
+  const tierMeta: Record<Tier, { name: string; detail: string }> = {
+    free: { name: "Free verified", detail: "Your grey tick — active on every account." },
+    verified: { name: "Verified creator", detail: "Blue tick, reviewed by our team." },
+    premium: { name: "Premium verified", detail: "Gold tick with Pro perks." },
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -61,42 +70,67 @@ export default function VerificationPage() {
           <BadgeCheck className="size-6" />
         </span>
         <div>
-          <h1 className="font-display text-2xl font-bold">Creator verification</h1>
+          <h1 className="font-display text-2xl font-bold">Verification on WALLORA</h1>
           <p className="mt-1 text-sm text-secondary-text">
-            A real review process for the WALLORA badge — applied for by you, decided by the platform.
+            Verification helps the authenticity of our program — for creators and the community.
           </p>
         </div>
       </div>
 
-      {currentTier && (
-        <div className="mt-6 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
-          {currentTier === "premium" ? <Crown className="size-5 text-[#D7B879]" /> : <BadgeCheck className="size-5 text-[#3B9EFF]" />}
+      {/* Baseline tier — always active */}
+      <div className="mt-6 rounded-2xl border border-border bg-surface p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <VerifiedTick tier="free" className="size-6" />
+            <div>
+              <p className="text-sm font-semibold">Free verified — active</p>
+              <p className="text-xs text-secondary-text">
+                Your grey tick is applied automatically. It lets you post, follow creators, chat with
+                AI and build projects.
+              </p>
+            </div>
+          </div>
+          <Badge variant="secondary">Baseline</Badge>
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-secondary-text">
+          We&apos;ll add email verification later — there&apos;s nothing you need to do now to keep
+          your free tick.
+        </p>
+      </div>
+
+      {currentTier !== "free" && (
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <VerifiedTick tier={currentTier} className="size-5" />
           <div>
-            <p className="text-sm font-semibold">
-              {currentTier === "premium" ? "WALLORA Premium verified" : "Verified creator"}
-            </p>
-            <p className="text-xs text-secondary-text">Your badge is active across WALLORA.</p>
+            <p className="text-sm font-semibold">{tierMeta[currentTier].name} active</p>
+            <p className="text-xs text-secondary-text">Your badge is shown across WALLORA.</p>
           </div>
         </div>
       )}
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <TierCard
-          active={tier === "verified"}
-          icon={<BadgeCheck className="size-5 text-[#3B9EFF]" />}
-          title="Verified"
-          subtitle="Blue tick on your work"
-          points={["Blue badge on wallpapers and comments", "Appears on your public profile", "Eligible for marketplace uploads"]}
-          onClick={() => setTier("verified")}
-        />
-        <TierCard
-          active={tier === "premium"}
-          icon={<Crown className="size-5 text-[#D7B879]" />}
-          title="Premium verified"
-          subtitle="Gold badge + Pro perks"
-          points={["Gold badge with priority placement", "Direct external links for built sites", "Founding-creator storefront treatment"]}
-          onClick={() => setTier("premium")}
-        />
+      <div className="mt-8">
+        <h2 className="font-display text-lg font-semibold">Upgrade your badge</h2>
+        <p className="mt-1 text-xs text-secondary-text">
+          Apply with real work — a profile, portfolio, store or published site. Reviewed by our team.
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <TierCard
+            active={tier === "verified"}
+            icon={<VerifiedTick tier="verified" className="size-5" />}
+            title="Verified creator"
+            subtitle="Blue tick on your work"
+            points={["Blue badge on wallpapers and comments", "Appears on your public profile", "Priority marketplace review"]}
+            onClick={() => setTier("verified")}
+          />
+          <TierCard
+            active={tier === "premium"}
+            icon={<VerifiedTick tier="premium" className="size-5" />}
+            title="Premium verified"
+            subtitle="Gold badge + Pro perks"
+            points={["Gold badge with priority placement", "Direct external links for built sites", "Founding-creator storefront treatment"]}
+            onClick={() => setTier("premium")}
+          />
+        </div>
       </div>
 
       {current?.status === "pending" && (
@@ -136,7 +170,7 @@ export default function VerificationPage() {
         <div>
           <h2 className="font-display text-lg font-semibold">Apply for {tier === "premium" ? "Premium" : "Verified"}</h2>
           <p className="mt-1 text-xs text-secondary-text">
-            Link real work — a profile, portfolio, store or published site. Applications are reviewed manually.
+            Tell us what you create and link real work. Applications are reviewed manually.
           </p>
         </div>
         <div>

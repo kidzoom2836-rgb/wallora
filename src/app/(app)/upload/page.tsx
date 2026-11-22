@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useVerificationGate } from "@/components/verification/verification-gate";
 import { cn } from "@/lib/utils";
 
 type CategoryItem = {
@@ -134,6 +135,7 @@ function SignInGate() {
 /* -------------------------------------------------------------------------- */
 
 function UploadFlow() {
+  const { guard } = useVerificationGate();
   const [step, setStep] = React.useState<Step>("select");
   const [file, setFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
@@ -408,7 +410,7 @@ function UploadFlow() {
               categoriesLoading={categoriesLoading}
               canSubmit={canSubmit}
               onCancel={reset}
-              onSubmit={() => uploadMutation.mutate()}
+              onSubmit={() => guard(() => uploadMutation.mutate(), { action: "publish a wallpaper" })}
               onRemove={() => reset()}
             />
           )}

@@ -130,13 +130,45 @@ export async function POST(request: NextRequest) {
         data: { userId: user.id },
       });
 
+      // Every account receives the free (grey tick) verification tier at
+      // signup — the baseline required to post, follow, chat and build.
+      const tierBlob = Buffer.from(JSON.stringify({ [user.id]: "free" }), "utf8");
+      const existingTiers = await tx.storedBlob.findUnique({
+        where: { key: "system:verification-tiers" },
+      });
+      if (existingTiers) {
+        try {
+          const parsed = JSON.parse(Buffer.from(existingTiers.data).toString("utf8")) as Record<string, string>;
+          parsed[user.id] = "free";
+          const merged = Buffer.from(JSON.stringify(parsed), "utf8");
+          await tx.storedBlob.update({
+            where: { key: "system:verification-tiers" },
+            data: { data: merged, size: merged.length },
+          });
+        } catch {
+          await tx.storedBlob.update({
+            where: { key: "system:verification-tiers" },
+            data: { data: tierBlob, size: tierBlob.length },
+          });
+        }
+      } else {
+        await tx.storedBlob.create({
+          data: {
+            key: "system:verification-tiers",
+            data: tierBlob,
+            contentType: "application/json",
+            size: tierBlob.length,
+          },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           actorId: user.id,
           action: "auth.register",
           targetType: "user",
           targetId: user.id,
-          metadata: JSON.stringify({ username }),
+          metadata: JSON.stringify({ username, verificationTier: "free" }),
         },
       });
 

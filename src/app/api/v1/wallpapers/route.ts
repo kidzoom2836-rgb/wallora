@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth-helpers";
+import { getTiersForUsers } from "@/lib/verification/store";
 
 /**
  * GET /api/v1/wallpapers
@@ -107,6 +108,8 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  const tiers = await getTiersForUsers(items.map((w) => w.user.id));
+
   const data = items.map((w) => {
     const gridAsset = w.assets.find((a) => a.variant === "grid") ?? w.assets[0];
     return {
@@ -129,6 +132,7 @@ export async function GET(request: NextRequest) {
         username: w.user.profile?.username ?? null,
         displayName: w.user.profile?.displayName ?? null,
         verified: w.user.profile?.verified ?? false,
+        tier: tiers[w.user.id] ?? "free",
       },
       asset: gridAsset
         ? {

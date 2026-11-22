@@ -3,6 +3,7 @@
 import * as React from "react";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { VerificationProvider } from "@/components/verification/verification-gate";
 
 /**
  * Client providers wrapper. Mounted once in the root layout so that
@@ -24,7 +25,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionProvider>{children}</SessionProvider>
+      <SessionProvider>
+        <VerificationProvider>{children}</VerificationProvider>
+      </SessionProvider>
     </QueryClientProvider>
   );
 }

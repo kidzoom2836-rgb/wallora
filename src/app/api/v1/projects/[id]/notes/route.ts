@@ -119,3 +119,40 @@ export async function POST(
     { status: 201 },
   );
 }
+
+/** DELETE /api/v1/projects/[id]/notes?noteId=... — remove a note. Owner only. */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const result = await requireUser();
+  if (!result.ok) return result.response;
+
+  const { id } = await params;
+  const noteId = new URL(request.url).searchParams.get("noteId")?.trim();
+  if (!noteId) {
+    return NextResponse.json(
+      { error: { code: "bad_request", message: "noteId is required." } },
+      { status: 400 },
+    );
+  }
+
+  const project = await db.creativeProject.findUnique({
+    where: { id },
+    select: { userId: true },
+  });
+  if (!project || project.userId !== result.session.user.id) {
+    return NextResponse.json({ error: { code: "not_found", message: "Project not found." } }, { status: 404 });
+  }
+
+  const note = await db.projectNote.findFirst({
+    where: { id: noteId, projectId: id },
+    select: { id: true },
+  });
+  if (!note) {
+    return NextResponse.json({ error: { code: "not_found", message: "Note not found." } }, { status: 404 });
+  }
+  await db.projectNote.delete({ where: { id: noteId } });
+  return NextResponse.json({ data: { deleted: true }, message: "Note removed." });
+}
+

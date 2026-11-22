@@ -7,6 +7,7 @@ import { Loader2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useVerificationGate } from "@/components/verification/verification-gate";
 import { useAuthDialog } from "@/stores/auth-dialog";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export function FollowButton({
   const { data: session } = useSession();
   const authenticated = !!session?.user;
   const openSignIn = useAuthDialog((s) => s.openSignIn);
+  const { guard } = useVerificationGate();
 
   const [following, setFollowing] = React.useState(initialFollowing);
 
@@ -84,7 +86,7 @@ export function FollowButton({
       openSignIn();
       return;
     }
-    toggleMutation.mutate();
+    guard(() => toggleMutation.mutate(), { action: "follow creators" });
   };
 
   return (

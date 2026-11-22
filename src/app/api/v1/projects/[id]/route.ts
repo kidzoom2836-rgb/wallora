@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { enrichProjectAssets } from "@/lib/projects";
+import { deleteProjectMeta, getProjectMeta } from "@/lib/projects-meta";
 
 /**
  * Creative Projects (Phase 7) — single project endpoints.
@@ -71,7 +72,10 @@ export async function GET(
     );
   }
 
-  const enrichedAssets = await enrichProjectAssets(project.assets);
+  const [enrichedAssets, meta] = await Promise.all([
+    enrichProjectAssets(project.assets),
+    getProjectMeta(id),
+  ]);
 
   return NextResponse.json({
     data: {
@@ -84,6 +88,7 @@ export async function GET(
       updatedAt: project.updatedAt,
       assets: enrichedAssets,
       notes: project.notes,
+      meta,
     },
   });
 }
@@ -222,6 +227,7 @@ export async function DELETE(
 
   // Prisma cascade deletes handle ProjectAsset and ProjectNote automatically.
   await db.creativeProject.delete({ where: { id } });
+  await deleteProjectMeta(id);
 
   return NextResponse.json({
     data: { deleted: true },
