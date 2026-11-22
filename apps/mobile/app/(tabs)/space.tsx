@@ -385,9 +385,9 @@ export default function SpaceScreen() {
           </Pressable>
         )}
         {tab === "websites" && (
-          <Pressable onPress={() => router.push("/builder")} style={styles.fullCta}>
-            <Ionicons name="code-slash-outline" size={17} color={C.accent} />
-            <Text style={styles.fullCtaText}>Open website builder</Text>
+          <Pressable onPress={() => router.push("/sites")} style={styles.fullCta}>
+            <Ionicons name="globe-outline" size={17} color={C.accent} />
+            <Text style={styles.fullCtaText}>Explore all sites</Text>
             <Ionicons name="chevron-forward" size={16} color={C.muted} />
           </Pressable>
         )}

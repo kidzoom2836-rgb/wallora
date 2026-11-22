@@ -59,6 +59,10 @@ export default function LoginScreen() {
           {loading ? <ActivityIndicator color={C.bg} /> : <Text style={styles.btnText}>Sign in</Text>}
         </Pressable>
 
+        <Pressable onPress={() => router.push("/auth/forgot-password")} style={styles.forgotRow}>
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </Pressable>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>No account? </Text>
           <Pressable onPress={() => router.push("/auth/register")}>
@@ -88,6 +92,8 @@ const styles = StyleSheet.create({
   eyeBtn: { padding: 14 },
   btn: { backgroundColor: C.accent, paddingVertical: 15, borderRadius: 12, alignItems: "center", marginTop: 8 },
   btnText: { color: C.bg, fontWeight: "700", fontSize: 16 },
+  forgotRow: { alignItems: "flex-end", marginTop: 12 },
+  forgotText: { color: C.muted, fontSize: 13, textDecorationLine: "underline" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   footerText: { color: C.muted, fontSize: 14 },
   link: { color: C.accent, fontSize: 14, fontWeight: "600" },
