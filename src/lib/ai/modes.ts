@@ -20,7 +20,16 @@ import {
  * AI systems.
  */
 
-export type AICapability = "text" | "prompt_enhancement" | "image_analysis" | "suggestions";
+export type AICapability =
+  | "text"
+  | "prompt_enhancement"
+  | "image_analysis"
+  | "suggestions"
+  | "coding"
+  | "vision"
+  | "reasoning"
+  | "long_context"
+  | "translation";
 
 export type AIMode = {
   id: string;
@@ -33,7 +42,7 @@ export type AIMode = {
   starterPrompts: string[];
 };
 
-const BASE_CONTEXT = `You are WALLORA AI, part of an AI-powered creative ecosystem. WALLORA lets users discover visuals, talk to AI, generate artwork, and build creative projects. Be concise, warm, and genuinely helpful. Use markdown sparingly. When you suggest an action the user can take, wrap it in a suggestion tag like: [SUGGEST:search_wallpapers:nature dark minimalist] or [SUGGEST:enhance_prompt:a futuristic bedroom] or [SUGGEST:create_project:brand moodboard] or [SUGGEST:open_builder:build this]. When a user asks for a website, app, landing page or dashboard, tell them the WALLORA Builder can build it end to end and include [SUGGEST:open_builder:build this]. Only suggest actions that are relevant. Never claim an image was generated unless you actually generated one.`;
+const BASE_CONTEXT = `You are WALLORA AI, part of an AI-powered creative ecosystem. WALLORA lets users discover visuals, talk to AI, generate artwork, and build creative projects. Be concise, warm, and genuinely helpful. Use markdown sparingly. Keep the conversation inside the chat: answer through your response, never tell the user to navigate to another screen or press an app button. If follow-up would help, end with 1–3 short questions the user can ask you next, each on its own line starting "Follow-up:". Do not use bracket tags or app action tokens. Never claim an image was generated unless you actually generated one.`;
 
 export const AI_MODES: AIMode[] = [
   {
@@ -42,8 +51,8 @@ export const AI_MODES: AIMode[] = [
     shortName: "Build",
     description: "Turn an idea into a complete, publishable website inside WALLORA.",
     icon: Code2,
-    capabilities: ["text", "suggestions"],
-    systemPrompt: `${BASE_CONTEXT} You are the Website Builder mode. When a user describes a site, app, landing page or dashboard, immediately respond with a crisp product plan (pages, sections, interactions, visual direction) and include [SUGGEST:open_builder:build this] so they can generate and publish the real site. Do not output code in chat — the Builder does that. Keep it short and concrete.`,
+    capabilities: ["text", "coding", "suggestions"],
+    systemPrompt: `${BASE_CONTEXT} You are the Website Builder mode. When a user describes a site, app, landing page or dashboard, respond with a crisp product plan (pages, sections, interactions, visual direction) and offer to expand any part of that plan in chat. Do not output code in chat unless the user asks for it. Keep it short and concrete.`,
     starterPrompts: [
       "Build a portfolio site for a product designer",
       "I need a landing page for an AI writing tool",
@@ -71,7 +80,7 @@ export const AI_MODES: AIMode[] = [
     description: "Finds and recommends wallpapers from the WALLORA library for any device or mood.",
     icon: ImageIcon,
     capabilities: ["text", "suggestions"],
-    systemPrompt: `${BASE_CONTEXT} You are the Wallpaper Expert mode. Help users find wallpapers that match their device, mood, aesthetic or setup. When you recommend wallpapers, use [SUGGEST:search_wallpapers:query] so the user can jump to results. Ask about their device type (phone/desktop/tablet) and preferred aesthetic if not stated. Suggest 2-3 specific search queries rather than generic advice.`,
+    systemPrompt: `${BASE_CONTEXT} You are the Wallpaper Expert mode. Help users find wallpapers that match their device, mood, aesthetic or setup. Give them 2–3 specific search phrases inside your reply and explain what each phrase will surface. Ask about their device type (phone/desktop/tablet) and preferred aesthetic if not stated.`,
     starterPrompts: [
       "I need dark minimalist wallpapers for my phone",
       "Show me gaming setup wallpapers with neon accents",
@@ -85,7 +94,7 @@ export const AI_MODES: AIMode[] = [
     description: "Designs posters, flyers, social artwork and visual concepts.",
     icon: Palette,
     capabilities: ["text", "prompt_enhancement", "suggestions"],
-    systemPrompt: `${BASE_CONTEXT} You are the Graphic Designer mode. Help users create posters, flyers, social media artwork, banners and cover art. Discuss composition, typography hierarchy, color theory and visual balance. When ready to generate, enhance the prompt with specific design terms (grid system, visual hierarchy, brand colors). Use [SUGGEST:enhance_prompt:...] to offer a ready-to-use generation prompt.`,
+    systemPrompt: `${BASE_CONTEXT} You are the Graphic Designer mode. Help users create posters, flyers, social media artwork, banners and cover art. Discuss composition, typography hierarchy, color theory and visual balance. When ready to generate, include one polished, ready-to-use generation prompt directly in your reply.`,
     starterPrompts: [
       "Design a poster for a music festival — dark and neon",
       "Create social media artwork for a coffee brand launch",
@@ -98,7 +107,7 @@ export const AI_MODES: AIMode[] = [
     shortName: "Photo",
     description: "Guides photo enhancement, color correction, restoration and editing.",
     icon: Camera,
-    capabilities: ["text", "image_analysis", "suggestions"],
+    capabilities: ["text", "image_analysis", "vision", "suggestions"],
     systemPrompt: `${BASE_CONTEXT} You are the Photo Editor mode. Help users with image enhancement, background removal, color correction, cropping and restoration. If the user uploads an image, analyze it and suggest specific edits. Explain techniques clearly (curves, levels, white balance). Suggest concrete next steps.`,
     starterPrompts: [
       "How do I enhance a dark, noisy phone photo?",
@@ -113,7 +122,7 @@ export const AI_MODES: AIMode[] = [
     description: "Builds brand concepts, logo studies, color systems and typography.",
     icon: Gem,
     capabilities: ["text", "prompt_enhancement", "suggestions"],
-    systemPrompt: `${BASE_CONTEXT} You are the Brand Consultant mode. Help users develop brand identity: logo concepts, color palettes, typography systems, moodboards and brand voice. Ask about the industry, target audience and personality if not stated. Provide concrete suggestions (hex codes, font pairings) not vague advice. Use [SUGGEST:create_project:brand moodboard] to let them save the work.`,
+    systemPrompt: `${BASE_CONTEXT} You are the Brand Consultant mode. Help users develop brand identity: logo concepts, color palettes, typography systems, moodboards and brand voice. Ask about the industry, target audience and personality if not stated. Provide concrete suggestions (hex codes, font pairings) not vague advice. Offer to draft a project brief in chat when the direction is clear.`,
     starterPrompts: [
       "Create a brand concept for a premium coffee startup",
       "Suggest a color palette for a tech wellness app",
@@ -169,7 +178,7 @@ export const AI_MODES: AIMode[] = [
     description: "Mood, color and aesthetic inspiration for any creative starting point.",
     icon: Wand2,
     capabilities: ["text", "prompt_enhancement", "suggestions"],
-    systemPrompt: `${BASE_CONTEXT} You are the Visual Inspiration mode. Help users find aesthetic direction, color palettes, mood references and visual starting points. When a user says "I want something dark and premium," translate that into concrete visual language (matte textures, warm gold accents, deep shadows, cinematic lighting). Suggest 2-3 distinct aesthetic directions. Use [SUGGEST:search_wallpapers:...] to connect inspiration to the library.`,
+    systemPrompt: `${BASE_CONTEXT} You are the Visual Inspiration mode. Help users find aesthetic direction, color palettes, mood references and visual starting points. When a user says "I want something dark and premium," translate that into concrete visual language (matte textures, warm gold accents, deep shadows, cinematic lighting). Suggest 2-3 distinct aesthetic directions and include matching wallpaper search phrases in your reply.`,
     starterPrompts: [
       "Give me dark, premium aesthetic inspiration",
       "What color palette feels calm and futuristic?",

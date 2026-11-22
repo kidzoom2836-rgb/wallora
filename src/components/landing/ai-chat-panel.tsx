@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { WalloraMonogram } from "@/components/brand/wallora-logo";
 import { useAiChat } from "@/stores/ai-chat";
-import { useDiscovery } from "@/stores/discovery";
 import { cn } from "@/lib/utils";
 
 type Mode = {
@@ -80,14 +79,39 @@ function parseSuggestions(content: string): { text: string; suggestions: Suggest
     suggestions.push({ action, params, label });
   }
 
-  text = content.replace(regex, "").trim();
-  return { text, suggestions };
+  const followRegex = /^\s*Follow-up:\s*(.+)$/gim;
+  text = content
+    .replace(regex, "")
+    .replace(followRegex, (_line, question: string) => {
+      const params = question.trim();
+      if (params) suggestions.push({ action: "follow_up", params, label: params });
+      return "";
+    })
+    .trim();
+  return { text, suggestions: suggestions.slice(0, 3) };
+}
+
+/** Legacy action tokens become model questions — never app navigation. */
+function followUpPrompt(suggestion: Suggestion): string {
+  const value = suggestion.params;
+  switch (suggestion.action) {
+    case "search_wallpapers":
+      return `Recommend WALLORA wallpapers for "${value}". Give me 2-3 specific search phrases and explain what each one will find.`;
+    case "enhance_prompt":
+      return `Enhance this image generation prompt and explain the changes: ${value}`;
+    case "create_project":
+      return `Help me plan a WALLORA project called "${value}". Include a brief, deliverables and the next three steps.`;
+    case "open_builder":
+      return `Create a detailed build plan for: ${value}. Include pages, sections, interactions and visual direction.`;
+    case "follow_up":
+      return value;
+    default:
+      return `Tell me more about ${value}.`;
+  }
 }
 
 export function AiChatPanel() {
   const { open, conversationId, mode, closeChat, setConversationId, setMode } = useAiChat();
-  const setDiscoveryQuery = useDiscovery((s) => s.setQuery);
-  const setDiscoveryCategory = useDiscovery((s) => s.setCategory);
   const queryClient = useQueryClient();
 
   const [input, setInput] = React.useState("");
@@ -189,8 +213,8 @@ export function AiChatPanel() {
     },
   });
 
-  const handleSend = async () => {
-    const content = input.trim();
+  const handleSend = async (override?: string) => {
+    const content = (override ?? input).trim();
     if (!content || sendMutation.isPending) return;
 
     setInput("");
@@ -221,19 +245,7 @@ export function AiChatPanel() {
   };
 
   const handleSuggestion = (suggestion: Suggestion) => {
-    if (suggestion.action === "search_wallpapers") {
-      closeChat();
-      setDiscoveryQuery(suggestion.params);
-      setTimeout(() => {
-        document.getElementById("discover")?.scrollIntoView({ behavior: "smooth" });
-      }, 300);
-    } else if (suggestion.action === "enhance_prompt") {
-      setInput(suggestion.params);
-    } else if (suggestion.action === "create_project") {
-      toast.info("Projects launch in Phase 7", {
-        description: `Saved idea: ${suggestion.params}`,
-      });
-    }
+    void handleSend(followUpPrompt(suggestion));
   };
 
   const handleNewConversation = () => {
@@ -411,7 +423,7 @@ export function AiChatPanel() {
                   <Button
                     size="icon"
                     className="h-9 w-9 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
-                    onClick={handleSend}
+                    onClick={() => void handleSend()}
                     disabled={!input.trim() || sendMutation.isPending || isCreating}
                     aria-label="Send message"
                   >
@@ -423,7 +435,7 @@ export function AiChatPanel() {
                   </Button>
                 </div>
                 <p className="mt-1.5 px-2 text-[11px] text-secondary-text">
-                  Press Enter to send · Shift+Enter for new line · WALLORA AI may suggest actions
+                  Press Enter to send · Shift+Enter for new line · Follow-ups stay in this chat
                 </p>
               </div>
             </div>

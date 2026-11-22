@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/select";
 import { WalloraMonogram } from "@/components/brand/wallora-logo";
 import { useVerificationGate } from "@/components/verification/verification-gate";
-import { useDiscovery } from "@/stores/discovery";
 import {
   SendIcon,
   PlusIcon,
@@ -82,13 +81,37 @@ function parseSuggestions(content: string): { text: string; suggestions: Suggest
     else if (action === "open_builder") label = "Open website builder";
     suggestions.push({ action, params, label });
   }
-  return { text: content.replace(regex, "").trim(), suggestions };
+  const followRegex = /^\s*Follow-up:\s*(.+)$/gim;
+  const text = content.replace(regex, "").replace(followRegex, (_line, question: string) => {
+    const params = question.trim();
+    if (params) suggestions.push({ action: "follow_up", params, label: params });
+    return "";
+  }).trim();
+  return { text, suggestions: suggestions.slice(0, 3) };
+}
+
+/** Legacy action tokens become model questions — never app navigation. */
+function followUpPrompt(suggestion: Suggestion): string {
+  const value = suggestion.params;
+  switch (suggestion.action) {
+    case "search_wallpapers":
+      return `Recommend WALLORA wallpapers for "${value}". Give me 2-3 specific search phrases and explain what each one will find.`;
+    case "enhance_prompt":
+      return `Enhance this image generation prompt and explain the changes: ${value}`;
+    case "create_project":
+      return `Help me plan a WALLORA project called "${value}". Include a brief, deliverables and the next three steps.`;
+    case "open_builder":
+      return `Create a detailed build plan for: ${value}. Include pages, sections, interactions and visual direction.`;
+    case "follow_up":
+      return value;
+    default:
+      return `Tell me more about ${value}.`;
+  }
 }
 
 export default function AiChatPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const setDiscoveryQuery = useDiscovery((s) => s.setQuery);
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [mode, setMode] = React.useState("creative-assistant");
@@ -240,8 +263,8 @@ export default function AiChatPage() {
     setActiveId(id);
   };
 
-  const handleSend = async () => {
-    const content = input.trim();
+  const handleSend = async (override?: string) => {
+    const content = (override ?? input).trim();
     if (!content || isBusy) return;
     guard(async () => {
       setInput("");
@@ -269,16 +292,7 @@ export default function AiChatPage() {
   };
 
   const handleSuggestion = (s: Suggestion) => {
-    if (s.action === "search_wallpapers") {
-      setDiscoveryQuery(s.params);
-      router.push("/discover");
-    } else if (s.action === "enhance_prompt") {
-      setInput(s.params);
-    } else if (s.action === "create_project") {
-      router.push("/projects");
-    } else if (s.action === "open_builder") {
-      router.push("/builder");
-    }
+    void handleSend(followUpPrompt(s));
   };
 
   return (
@@ -427,7 +441,7 @@ export default function AiChatPage() {
               <Button
                 size="icon"
                 className="h-9 w-9 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleSend}
+                onClick={() => void handleSend()}
                 disabled={!input.trim() || isBusy}
                 aria-label="Send"
               >

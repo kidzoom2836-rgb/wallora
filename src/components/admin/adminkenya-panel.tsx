@@ -133,6 +133,14 @@ type AIConfig = {
   nvidiaKeyConfigured: boolean;
   textModels: { id: string; provider: string; label: string; note: string }[];
   imageModels: { id: string; provider: string; label: string; note: string }[];
+  nvidiaCatalog?: {
+    id: string;
+    label: string;
+    capabilities: string[];
+    note: string;
+    chatCompatible: boolean;
+  }[];
+  capabilityGroups?: { id: string; label: string; description: string }[];
 };
 
 type TabId = "overview" | "uploads" | "verification" | "people" | "ai" | "audit";
@@ -841,6 +849,7 @@ function AITab() {
   });
 
   const [draft, setDraft] = useState<Partial<AIConfig> | null>(null);
+  const [customModel, setCustomModel] = useState("");
   const [testResult, setTestResult] = useState<{
     keyConfigured: boolean;
     models: string[];
@@ -849,9 +858,11 @@ function AITab() {
   const config = { ...(query.data?.data ?? ({} as AIConfig)), ...(draft ?? {}) } as AIConfig;
 
   const test = useMutation({
-    mutationFn: () =>
+    mutationFn: (model?: string) =>
       jsonFetch<{ data: typeof testResult }>("/api/v1/admin/ai-config/test", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(model ? { model } : {}),
       }),
     onSuccess: (payload) => {
       setTestResult(payload.data);
@@ -928,7 +939,7 @@ function AITab() {
             size="sm"
             variant="outline"
             disabled={test.isPending || !config.nvidiaKeyConfigured}
-            onClick={() => { setTestResult(null); test.mutate(); }}
+            onClick={() => { setTestResult(null); test.mutate(config.textModel); }}
           >
             {test.isPending ? <Loader2 className="size-4 animate-spin" /> : <Activity className="size-4" />}
             Test connection
@@ -952,6 +963,59 @@ function AITab() {
             </p>
           </div>
         )}
+      </Panel>
+
+      <Panel
+        title="Capability catalog"
+        subtitle="Public NIM models grouped by what they can do. Select a chat-compatible model to test it with your key."
+      >
+        <div className="max-h-72 space-y-4 overflow-y-auto pr-1">
+          {(config.capabilityGroups ?? []).map((group) => {
+            const models = (config.nvidiaCatalog ?? []).filter((m) =>
+              m.capabilities.includes(group.id),
+            );
+            if (!models.length) return null;
+            return (
+              <div key={group.id}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-foreground">{group.label}</p>
+                  <Badge variant="outline">{models.length}</Badge>
+                </div>
+                <p className="mt-0.5 text-[11px] text-secondary-text">{group.description}</p>
+                <div className="mt-2 grid gap-1.5">
+                  {models.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      disabled={!model.chatCompatible}
+                      onClick={() => set({ textModel: model.id, textProvider: "nvidia" })}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-2 text-left transition-colors",
+                        model.chatCompatible
+                          ? "border-border bg-background hover:border-primary/40 hover:bg-primary/5"
+                          : "cursor-not-allowed border-border/60 bg-background/40 opacity-60",
+                        config.textModel === model.id && "border-primary/50 bg-primary/10",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-foreground">{model.label}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-secondary-text">
+                          {model.chatCompatible ? "Chat ready" : "Specialized"}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 break-all font-mono text-[10px] text-secondary-text">{model.id}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-secondary-text">{model.note}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-secondary-text">
+          The public catalog is not an entitlement list. A model can appear here and still return
+          “not found for account”. Use Test connection after selecting one.
+        </p>
       </Panel>
 
       <Panel
@@ -1015,6 +1079,30 @@ function AITab() {
                 label: `${m.label} · ${m.note}`,
               }))}
             />
+            <div>
+              <label className="text-xs text-secondary-text">Custom NVIDIA model ID</label>
+              <div className="mt-1 flex gap-2">
+                <Input
+                  placeholder="vendor/model-name"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  disabled={!customModel.trim().includes("/")}
+                  onClick={() => {
+                    const model = customModel.trim().slice(0, 200);
+                    set({ textModel: model, textProvider: "nvidia" });
+                    test.mutate(model);
+                  }}
+                >
+                  Use & test
+                </Button>
+              </div>
+              <p className="mt-1 text-[11px] text-secondary-text">
+                For newly published NIM models that are not in the curated list yet.
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-secondary-text">Temperature</label>

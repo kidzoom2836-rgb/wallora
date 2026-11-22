@@ -3,7 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   CalendarDays,
   Camera,
@@ -50,7 +51,11 @@ type ProjectItem = {
 export default function ProfilePage() {
   const params = useParams<{ username: string }>();
   const username = params?.username;
+  const qc = useQueryClient();
   const [tab, setTab] = React.useState<"wallpapers" | "projects">("wallpapers");
+  const [uploadingMedia, setUploadingMedia] = React.useState<"avatar" | "cover" | null>(null);
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
+  const coverInputRef = React.useRef<HTMLInputElement>(null);
 
   const profileQuery = useQuery<{ data: ProfileData }>({
     queryKey: ["public-profile", username],
@@ -90,6 +95,27 @@ export default function ProfilePage() {
     (p) => p.owner?.username === username,
   );
 
+  const uploadMedia = async (kind: "avatar" | "cover", file: File) => {
+    setUploadingMedia(kind);
+    try {
+      const form = new FormData();
+      form.set("kind", kind);
+      form.set("file", file);
+      const res = await fetch("/api/v1/profile/media", { method: "POST", body: form });
+      const payload = (await res.json()) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(payload.error?.message ?? "Upload failed");
+      toast.success(kind === "avatar" ? "Profile photo updated" : "Cover updated");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["public-profile", username] }),
+        qc.invalidateQueries({ queryKey: ["auth", "me"] }),
+      ]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingMedia(null);
+    }
+  };
+
   if (profileQuery.isLoading) {
     return (
       <main className="flex min-h-[60vh] items-center justify-center bg-background">
@@ -117,6 +143,33 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-background pb-20">
+      {profile.isSelf ? (
+        <>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadMedia("avatar", file);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void uploadMedia("cover", file);
+              e.target.value = "";
+            }}
+          />
+        </>
+      ) : null}
+
       {/* Cover */}
       <div className="relative h-44 w-full overflow-hidden bg-raised sm:h-60">
         {profile.coverUrl ? (
@@ -125,6 +178,16 @@ export default function ProfilePage() {
           <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,rgba(122,92,255,0.25),transparent_55%),radial-gradient(circle_at_80%_80%,rgba(48,209,196,0.18),transparent_50%)]" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
+        {profile.isSelf ? (
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="absolute bottom-3 right-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-3 py-1.5 text-xs font-medium text-foreground backdrop-blur transition-colors hover:border-primary/50 hover:text-primary"
+          >
+            {uploadingMedia === "cover" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+            Change cover
+          </button>
+        ) : null}
       </div>
 
       <div className="mx-auto -mt-16 max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -138,9 +201,19 @@ export default function ProfilePage() {
                   {displayName.slice(0, 1).toUpperCase()}
                 </div>
               )}
-              <span className="absolute bottom-1 right-1 rounded-full border border-border bg-background/90 p-1">
+              <span className="absolute bottom-1 left-1 rounded-full border border-border bg-background/90 p-1">
                 <VerifiedTick tier={profile.tier} className="size-4" />
               </span>
+              {profile.isSelf ? (
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  aria-label="Change profile photo"
+                  className="absolute bottom-1 right-1 rounded-full border border-primary/40 bg-background/90 p-1.5 text-primary backdrop-blur transition-colors hover:bg-primary/20"
+                >
+                  {uploadingMedia === "avatar" ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                </button>
+              ) : null}
             </div>
             <div className="pb-1">
               <div className="flex items-center gap-2">
@@ -159,7 +232,7 @@ export default function ProfilePage() {
             {profile.isSelf ? (
               <>
                 <Link
-                  href="/settings"
+                  href="/settings#profile"
                   className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground hover:bg-raised"
                 >
                   <Settings className="h-4 w-4" />

@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireRole, ROLES } from "@/lib/auth-helpers";
 import {
+  CAPABILITY_GROUPS,
   DEFAULT_AI_CONFIG,
   getAIConfig,
   IMAGE_MODELS,
+  NVIDIA_MODEL_CATALOG,
   nvidiaKeyConfigured,
   saveAIConfig,
   TEXT_MODELS,
@@ -31,6 +33,8 @@ export async function GET() {
       nvidiaKeyConfigured: nvidiaKeyConfigured(),
       textModels: TEXT_MODELS,
       imageModels: IMAGE_MODELS,
+      nvidiaCatalog: NVIDIA_MODEL_CATALOG,
+      capabilityGroups: CAPABILITY_GROUPS,
       defaults: DEFAULT_AI_CONFIG,
     },
   });

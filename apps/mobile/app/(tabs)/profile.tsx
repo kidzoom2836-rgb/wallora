@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -14,6 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { apiJson } from "../../lib/api";
 import { assetUrl } from "../../lib/config";
+import { uploadProfileMedia } from "../../lib/profile-media";
+import { pickImages } from "../../lib/uploads";
+import { withVerification } from "../../lib/verification";
 import { useAuth } from "../../lib/auth";
 import { C, R, S, SHADOW, tierMeta } from "../../lib/theme";
 import { VerifiedBadge } from "../../components/ui/VerifiedBadge";
@@ -47,6 +51,7 @@ export default function ProfileScreen() {
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   const load = useCallback(async () => {
@@ -86,6 +91,25 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
+  const changePhoto = async () => {
+    if (uploadingPhoto) return;
+    try {
+      const picked = (
+        await pickImages("library", { max: 1, quality: 0.85, aspect: [1, 1] })
+      )[0];
+      if (!picked) return;
+      setUploadingPhoto(true);
+      const url = await withVerification(() => uploadProfileMedia("avatar", picked));
+      if (!url) return;
+      await Promise.all([load(), refresh()]);
+      Alert.alert("Profile photo updated.");
+    } catch (e: any) {
+      Alert.alert("Could not update photo", e?.message ?? "Please try again.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const doSignOut = async () => {
     setSigningOut(true);
     try {
@@ -114,12 +138,27 @@ export default function ProfileScreen() {
             <ActivityIndicator color={C.accent} size="large" />
           ) : (
             <>
-              <View style={styles.avatarWrap}>
-                {stats?.avatarUrl || user?.avatarUrl ? (
-                  <Image source={{ uri: assetUrl(stats?.avatarUrl ?? user?.avatarUrl) }} style={styles.avatar} />
-                ) : (
-                  <Ionicons name="person" size={36} color={C.accent} />
-                )}
+              <View style={styles.avatarContainer}>
+                <View style={styles.avatarWrap}>
+                  {stats?.avatarUrl || user?.avatarUrl ? (
+                    <Image source={{ uri: assetUrl(stats?.avatarUrl ?? user?.avatarUrl) }} style={styles.avatar} />
+                  ) : (
+                    <Ionicons name="person" size={36} color={C.accent} />
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => void changePhoto()}
+                  disabled={uploadingPhoto}
+                  hitSlop={8}
+                  accessibilityLabel="Change profile photo"
+                  style={styles.avatarEdit}
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator size="small" color={C.bg} />
+                  ) : (
+                    <Ionicons name="camera" size={14} color={C.bg} />
+                  )}
+                </Pressable>
               </View>
               <View style={styles.identity}>
                 <View style={styles.nameRow}>
@@ -249,7 +288,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   hero: { minHeight: 200, padding: 20, paddingTop: 26, backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   heroGlow: { position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(215,184,121,0.12)", top: -150 },
+  avatarContainer: { position: "relative" },
   avatarWrap: { width: 76, height: 76, borderRadius: 38, backgroundColor: C.raised, borderWidth: 2, borderColor: C.accent, alignItems: "center", justifyContent: "center", overflow: "hidden", ...SHADOW.glowGold },
+  avatarEdit: { position: "absolute", right: -2, bottom: -2, width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent, borderWidth: 2, borderColor: C.card, alignItems: "center", justifyContent: "center" },
   avatar: { width: 76, height: 76 },
   identity: { alignItems: "center", marginTop: 12 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 7 },

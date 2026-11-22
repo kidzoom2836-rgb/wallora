@@ -170,7 +170,7 @@ export async function generateNvidiaImage(params: {
  * Diagnostic used by /adminkenya. Returns the live model list and whether the
  * currently selected text model actually accepts a chat completion.
  */
-export async function testNvidiaConnection(): Promise<{
+export async function testNvidiaConnection(modelOverride?: string): Promise<{
   keyConfigured: boolean;
   models: string[];
   modelTest: { model: string; ok: boolean; detail: string };
@@ -185,6 +185,10 @@ export async function testNvidiaConnection(): Promise<{
   }
 
   const config = await getAIConfig();
+  const modelToTest =
+    typeof modelOverride === "string" && modelOverride.trim()
+      ? modelOverride.trim().slice(0, 200)
+      : config.textModel;
   let models: string[] = [];
   try {
     const res = await fetch(`${config.nvidiaBaseUrl}/models`, {
@@ -204,7 +208,7 @@ export async function testNvidiaConnection(): Promise<{
   let modelTest: { model: string; ok: boolean; detail: string };
   try {
     const json = await nvidiaFetch(config.nvidiaBaseUrl, "/chat/completions", {
-      model: config.textModel,
+      model: modelToTest,
       messages: [{ role: "user", content: "Reply with OK" }],
       max_tokens: 512,
       stream: false,
@@ -212,13 +216,13 @@ export async function testNvidiaConnection(): Promise<{
     const msg = json?.choices?.[0]?.message ?? {};
     const content = (msg.content || msg.reasoning_content || "").trim();
     modelTest = {
-      model: config.textModel,
+      model: modelToTest,
       ok: !!content,
       detail: content ? `Responded: ${content.slice(0, 60)}` : "Empty response",
     };
   } catch (err) {
     modelTest = {
-      model: config.textModel,
+      model: modelToTest,
       ok: false,
       detail: err instanceof Error ? err.message.slice(0, 300) : "Request failed",
     };
