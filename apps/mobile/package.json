@@ -1,28 +1,35 @@
 {
-  "name": "wallora",
+  "name": "@wallora/mobile",
   "version": "0.0.0",
-  "private": true,
-  "description": "WALLORA — AI-powered creative ecosystem and visual social platform",
-  "scripts": {
-    "dev:web": "pnpm --filter @wallora/web dev",
-    "dev:mobile": "pnpm --filter @wallora/mobile start",
-    "dev:worker": "pnpm --filter @wallora/worker dev",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "db:generate": "pnpm --filter @wallora/database generate",
-    "db:migrate": "pnpm --filter @wallora/database migrate",
-    "db:studio": "pnpm --filter @wallora/database studio"
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "expo": "~58.0.26",
+    "expo-constants": "~58.0.16",
+    "expo-font": "~58.0.12",
+    "expo-image": "~58.0.18",
+    "expo-linking": "~58.0.17",
+    "expo-router": "~58.0.32",
+    "expo-secure-store": "~58.0.3",
+    "expo-status-bar": "~58.0.5",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1"
   },
   "devDependencies": {
-    "prettier": "^3.3.3",
-    "typescript": "^5.6.3"
+    "@types/react": "~19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~58.0.4",
+    "typescript": "~6.0.3"
   },
-  "engines": {
-    "node": ">=20",
-    "pnpm": ">=9"
-  }
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "expo lint"
+  },
+  "private": true
 }
