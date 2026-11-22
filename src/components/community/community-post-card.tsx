@@ -209,7 +209,7 @@ export function CommunityPostCard({
           <div className="ml-[52px] mt-4 overflow-hidden rounded-xl border border-border bg-raised">
             <Image
               src={post.imageUrl}
-              alt="Wallpaper shared with this post"
+              alt="Image shared with this post"
               width={1200}
               height={800}
               unoptimized

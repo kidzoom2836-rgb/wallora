@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { apiFetch, apiJson } from "../../lib/api";
-import { assetUrl } from "../../lib/config";
+import { API_BASE, assetUrl } from "../../lib/config";
 import { addAsWallpaper, downloadWallpaper } from "../../lib/downloads";
 import { withVerification } from "../../lib/verification";
 import { TierTick } from "../../components/ui/VerifiedBadge";
@@ -169,7 +169,7 @@ export default function WallpaperDetailScreen() {
 
   const share = async () => {
     if (!detail) return;
-    const url = assetUrl(preview) ?? `${C.bg}`;
+    const url = `${API_BASE}/wallpaper/${encodeURIComponent(detail.slug)}`;
     try {
       await Share.share({
         title: detail.title,

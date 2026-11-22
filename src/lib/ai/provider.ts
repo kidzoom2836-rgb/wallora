@@ -1,6 +1,7 @@
 import ZAI from "z-ai-web-dev-sdk";
 
 import type { AICapability } from "./modes";
+import { PollinationsProvider } from "./pollinations";
 
 /**
  * WALLORA AI provider abstraction.
@@ -156,6 +157,65 @@ export class ZAIProvider implements AIProvider {
   }
 }
 
+/**
+ * Tries the admin-selected provider first, then WALLORA Free (Pollinations).
+ * This keeps chat and prompt enhancement working when a paid key is missing,
+ * expired, or temporarily failing — without ever sending a key to the browser.
+ */
+export class FallbackProvider implements AIProvider {
+  readonly id: string;
+  readonly name: string;
+
+  constructor(
+    private readonly primary: AIProvider,
+    private readonly fallback: AIProvider,
+  ) {
+    this.id = `${primary.id}+${fallback.id}`;
+    this.name = `${primary.name} → ${fallback.name}`;
+  }
+
+  async getCapabilities(): Promise<AICapability[]> {
+    const [a, b] = await Promise.all([
+      this.primary.getCapabilities(),
+      this.fallback.getCapabilities(),
+    ]);
+    return [...new Set([...a, ...b])];
+  }
+
+  async generateText(request: TextGenerationRequest): Promise<TextGenerationResult> {
+    try {
+      return await this.primary.generateText(request);
+    } catch (primaryError) {
+      console.warn("[ai] primary provider failed, trying fallback:", primaryError);
+      return this.fallback.generateText(request);
+    }
+  }
+
+  async enhancePrompt(request: PromptEnhanceRequest): Promise<PromptEnhanceResult> {
+    if (this.primary.enhancePrompt) {
+      try {
+        return await this.primary.enhancePrompt(request);
+      } catch (primaryError) {
+        console.warn("[ai] primary prompt enhancement failed, trying fallback:", primaryError);
+      }
+    }
+    if (this.fallback.enhancePrompt) return this.fallback.enhancePrompt(request);
+    return { enhanced: request.prompt };
+  }
+
+  async analyzeImage(request: ImageAnalysisRequest): Promise<ImageAnalysisResult> {
+    if (this.primary.analyzeImage) {
+      try {
+        return await this.primary.analyzeImage(request);
+      } catch (primaryError) {
+        console.warn("[ai] primary image analysis failed, using WALLORA Free:", primaryError);
+      }
+    }
+    if (this.fallback.analyzeImage) return this.fallback.analyzeImage(request);
+    throw new Error("Image analysis is not available for the selected provider.");
+  }
+}
+
 let cachedProvider: AIProvider | null = null;
 
 export function getAIProvider(): AIProvider {
@@ -172,11 +232,19 @@ export function getAIProvider(): AIProvider {
 export async function getConfiguredAIProvider(): Promise<AIProvider> {
   const { getAIConfig } = await import("./admin-config");
   const config = await getAIConfig();
+
+  if (config.textProvider === "pollinations" || config.textModel.startsWith("pollinations:")) {
+    return new FallbackProvider(new PollinationsProvider(), getAIProvider());
+  }
+
   const useNvidia =
     config.textProvider === "nvidia" ||
     config.textModel === "nvidia" ||
     config.textModel.includes("/");
-  if (!useNvidia) return getAIProvider();
-  const { NvidiaProvider } = await import("./nvidia");
-  return new NvidiaProvider();
+
+  const primary: AIProvider = useNvidia
+    ? new (await import("./nvidia")).NvidiaProvider()
+    : getAIProvider();
+
+  return new FallbackProvider(primary, new PollinationsProvider());
 }

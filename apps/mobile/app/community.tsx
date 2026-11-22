@@ -18,6 +18,8 @@ import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { apiJson } from "../lib/api";
 import { API_BASE, assetUrl } from "../lib/config";
+import { pickCommunityImage, uploadCommunityImage, type PickedImage } from "../lib/uploads";
+import { withVerification } from "../lib/verification";
 import { C, R, S } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 
@@ -83,6 +85,131 @@ function Banner({ message, tone = "error" }: { message: string | null; tone?: "e
     <View style={[styles.banner, { borderColor: color + "55" }]}>
       <Ionicons name={icon} size={16} color={color} />
       <Text style={[styles.bannerText, { color }]}>{message}</Text>
+    </View>
+  );
+}
+
+function CommunityComposer({ onPosted }: { onPosted: () => void }) {
+  const { user } = useAuth();
+  const [body, setBody] = useState("");
+  const [image, setImage] = useState<PickedImage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
+
+  if (!user) return null;
+
+  const pick = async (source: "library" | "camera") => {
+    setNotice(null);
+    try {
+      const picked = await pickCommunityImage(source);
+      if (picked) setImage(picked);
+    } catch (e: any) {
+      setNotice({ message: e?.message ?? "Could not open the image picker.", tone: "error" });
+    }
+  };
+
+  const submit = async () => {
+    const text = body.trim();
+    if ((!text && !image) || busy) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const posted = await withVerification(async () => {
+        let imageKey: string | null = null;
+        if (image) {
+          const uploaded = await uploadCommunityImage(image);
+          imageKey = uploaded.key;
+        }
+        await apiJson<CommunityPost>("/api/v1/community/posts", {
+          method: "POST",
+          body: JSON.stringify({
+            body: text,
+            ...(imageKey ? { kind: "image", imageKey } : {}),
+          }),
+        });
+        return true;
+      });
+
+      if (posted) {
+        setBody("");
+        setImage(null);
+        setNotice({ message: "Posted to the community.", tone: "success" });
+        onPosted();
+      } else {
+        setNotice({ message: "Claim your free WALLORA tick to post.", tone: "info" });
+      }
+    } catch (e: any) {
+      setNotice({ message: e?.message ?? "Could not publish your post.", tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.composer}>
+      <View style={styles.composerTitleRow}>
+        <Ionicons name="create-outline" size={17} color={C.accent} />
+        <Text style={styles.composerTitle}>Share with the community</Text>
+      </View>
+      <TextInput
+        value={body}
+        onChangeText={setBody}
+        placeholder="What are you creating, WALLORA?"
+        placeholderTextColor={C.muted}
+        style={styles.composerInput}
+        multiline
+        maxLength={2000}
+        editable={!busy}
+      />
+
+      {image ? (
+        <View style={styles.composerPreview}>
+          <Image source={{ uri: image.uri }} style={styles.composerImage} resizeMode="cover" />
+          <Pressable
+            onPress={() => setImage(null)}
+            disabled={busy}
+            hitSlop={8}
+            style={styles.composerRemove}
+          >
+            <Ionicons name="close" size={16} color={C.text} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      <Banner message={notice?.message ?? null} tone={notice?.tone} />
+
+      <View style={styles.composerActions}>
+        <Pressable
+          onPress={() => void pick("library")}
+          disabled={busy}
+          style={styles.composerTool}
+        >
+          <Ionicons name="image-outline" size={16} color={C.textSoft} />
+          <Text style={styles.composerToolText}>Photo</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void pick("camera")}
+          disabled={busy}
+          style={styles.composerTool}
+        >
+          <Ionicons name="camera-outline" size={16} color={C.textSoft} />
+          <Text style={styles.composerToolText}>Camera</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void submit()}
+          disabled={busy || (!body.trim() && !image)}
+          style={[styles.composerPost, busy && styles.buttonDisabled]}
+        >
+          {busy ? (
+            <ActivityIndicator color={C.bg} size="small" />
+          ) : (
+            <>
+              <Ionicons name="send" size={15} color={C.bg} />
+              <Text style={styles.composerPostText}>Post</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -223,7 +350,7 @@ export default function CommunityScreen() {
     try {
       const result = await apiJson<ActionResult>(`/api/v1/community/posts/${post.id}/share`, {
         method: "POST",
-        body: JSON.stringify({ platform: "app" }),
+        body: JSON.stringify({ platform: "copy" }),
       });
       const url =
         result?.shareUrl ?? `${API_BASE}/community?post=${encodeURIComponent(post.id)}`;
@@ -309,6 +436,8 @@ export default function CommunityScreen() {
           ))}
         </View>
 
+        <CommunityComposer onPosted={onRefresh} />
+
         {!user && (
           <Pressable style={styles.signInCard} onPress={() => router.push("/auth/login")}>
             <Ionicons name="lock-closed-outline" size={17} color={C.accent} />
@@ -319,7 +448,7 @@ export default function CommunityScreen() {
         <Banner message={notice?.message ?? null} tone={notice?.tone} />
       </View>
     ),
-    [notice, query, router, sort, total, user],
+    [notice, onRefresh, query, router, sort, total, user],
   );
 
   return (
@@ -423,7 +552,9 @@ export default function CommunityScreen() {
                 </View>
               </View>
 
-              <Text style={styles.body}>{item.body}</Text>
+              <Pressable onPress={() => router.push(`/community/${item.id}`)}>
+                <Text style={styles.body}>{item.body || (image ? "Image shared on WALLORA" : "")}</Text>
+              </Pressable>
 
               {image ? (
                 <Image source={{ uri: image }} style={styles.postImage} resizeMode="cover" />
@@ -454,6 +585,14 @@ export default function CommunityScreen() {
                 >
                   <Ionicons name="repeat" size={16} color={item.reposted ? C.success : C.textSoft} />
                   <Text style={[styles.actionText, item.reposted && { color: C.success }]}>Repost</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push(`/community/${item.id}`)}
+                  disabled={busy}
+                  style={styles.action}
+                >
+                  <Ionicons name="chatbubble-outline" size={16} color={C.textSoft} />
+                  <Text style={styles.actionText}>{countLabel(item.commentCount)}</Text>
                 </Pressable>
                 <Pressable onPress={() => void sharePost(item)} disabled={busy} style={styles.action}>
                   <Ionicons name="share-outline" size={16} color={C.textSoft} />
@@ -545,6 +684,67 @@ const styles = StyleSheet.create({
     backgroundColor: C.card,
   },
   bannerText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  composer: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.lg,
+    padding: S.md,
+    marginBottom: S.md,
+  },
+  composerTitleRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: S.sm },
+  composerTitle: { color: C.text, fontSize: 13, fontWeight: "700" },
+  composerInput: {
+    minHeight: 76,
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlignVertical: "top",
+    backgroundColor: C.raised,
+    borderWidth: 1,
+    borderColor: C.borderSoft,
+    borderRadius: R.md,
+    padding: S.md,
+  },
+  composerPreview: { marginTop: S.sm, position: "relative" },
+  composerImage: { width: "100%", height: 170, borderRadius: R.md, backgroundColor: C.raised },
+  composerRemove: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.bg + "DD",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  composerActions: { flexDirection: "row", alignItems: "center", gap: S.sm, marginTop: S.sm },
+  composerTool: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: S.md,
+    paddingVertical: 8,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.raised,
+  },
+  composerToolText: { color: C.textSoft, fontSize: 12, fontWeight: "700" },
+  composerPost: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minWidth: 86,
+    paddingHorizontal: S.md,
+    paddingVertical: 9,
+    borderRadius: R.md,
+    backgroundColor: C.accent,
+  },
+  composerPostText: { color: C.bg, fontSize: 12, fontWeight: "800" },
   postCard: {
     backgroundColor: C.card,
     borderWidth: 1,

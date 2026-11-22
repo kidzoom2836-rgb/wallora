@@ -13,16 +13,24 @@ import { getTiersForUsers, TIER_LIMITS } from "@/lib/verification/store";
 
 export const dynamic = "force-dynamic";
 
-const CreatePostSchema = z.object({
-  body: z
-    .string()
-    .trim()
-    .min(1, { message: "Write something before posting." })
-    .max(2000, { message: "Posts must be 2000 characters or fewer." }),
-  kind: z.enum(["text", "wallpaper", "project"]).optional().default("text"),
-  refId: z.string().trim().max(300).nullish(),
-  repostOf: z.string().trim().max(200).nullish(),
-});
+const CreatePostSchema = z
+  .object({
+    body: z
+      .string()
+      .trim()
+      .max(2000, { message: "Posts must be 2000 characters or fewer." })
+      .optional()
+      .default(""),
+    kind: z.enum(["text", "wallpaper", "project", "image"]).optional().default("text"),
+    refId: z.string().trim().max(300).nullish(),
+    /** Storage key returned by /api/v1/uploads/presign for direct image posts. */
+    imageKey: z.string().trim().max(300).nullish(),
+    repostOf: z.string().trim().max(200).nullish(),
+  })
+  .refine(
+    (data) => data.body.length > 0 || (data.kind === "image" && !!(data.imageKey || data.refId)),
+    { message: "Write something or attach an image before posting.", path: ["body"] },
+  );
 
 function badRequest(message: string) {
   return NextResponse.json(
@@ -100,12 +108,19 @@ export async function POST(request: NextRequest) {
     avatarUrl: auth.session.user.image,
   });
 
+  const imageKey =
+    parsed.data.imageKey?.trim() ||
+    (parsed.data.kind === "image" ? parsed.data.refId?.trim() : null) ||
+    null;
+  const kind = imageKey ? "image" : parsed.data.kind;
+
   const post = await createPost({
     body: parsed.data.body,
-    kind: parsed.data.kind,
-    refId: parsed.data.refId?.trim() || null,
+    kind,
+    refId: kind === "image" ? imageKey : parsed.data.refId?.trim() || null,
     repostOf,
     author,
+    ownerId: userId,
   });
 
   return NextResponse.json({ data: post }, { status: 201 });

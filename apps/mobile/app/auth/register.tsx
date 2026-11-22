@@ -13,6 +13,7 @@ export default function RegisterScreen() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,8 +28,12 @@ export default function RegisterScreen() {
       setError("Password needs 8+ characters with a letter and a number");
       return;
     }
+    if (!acceptedTerms) {
+      setError("Please accept the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
     setLoading(true); setError(null);
-    const res = await signUp(name.trim(), username.trim(), email.trim(), password);
+    const res = await signUp(name.trim(), username.trim(), email.trim(), password, acceptedTerms);
     setLoading(false);
     if (res.error) { setError(res.error); return; }
     router.replace("/(tabs)");
@@ -75,6 +80,19 @@ export default function RegisterScreen() {
           </View>
         ))}
 
+        <Pressable
+          style={styles.termsRow}
+          onPress={() => setAcceptedTerms((value) => !value)}
+          disabled={loading}
+        >
+          <View style={[styles.checkbox, acceptedTerms && styles.checkboxActive]}>
+            {acceptedTerms && <Ionicons name="checkmark" size={13} color={C.bg} />}
+          </View>
+          <Text style={styles.termsText}>
+            I accept the Terms of Service and Privacy Policy.
+          </Text>
+        </Pressable>
+
         <Pressable style={[styles.btn, loading && { opacity: 0.6 }]} onPress={submit} disabled={loading}>
           {loading ? <ActivityIndicator color={C.bg} /> : <Text style={styles.btnText}>Create account</Text>}
         </Pressable>
@@ -104,6 +122,10 @@ const styles = StyleSheet.create({
   label: { color: C.muted, fontSize: 12, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 },
   inputRow: { flexDirection: "row", alignItems: "center", backgroundColor: C.card, borderRadius: 12, borderWidth: 1, borderColor: C.border },
   input: { flex: 1, color: C.text, padding: 14, fontSize: 15 },
+  termsRow: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginTop: 6, marginBottom: 6 },
+  checkbox: { width: 19, height: 19, borderRadius: 5, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  checkboxActive: { backgroundColor: C.accent, borderColor: C.accent },
+  termsText: { flex: 1, color: C.muted, fontSize: 12, lineHeight: 18 },
   btn: { backgroundColor: C.accent, paddingVertical: 15, borderRadius: 12, alignItems: "center", marginTop: 8 },
   btnText: { color: C.bg, fontWeight: "700", fontSize: 16 },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 20 },

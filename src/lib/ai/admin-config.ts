@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
  * migration is required. The value is JSON, written only by /adminkenya.
  */
 
-export type AIProviderId = "zai" | "nvidia";
+export type AIProviderId = "zai" | "nvidia" | "pollinations";
 
 export interface AIConfig {
   textProvider: AIProviderId;
@@ -42,6 +42,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
  */
 export const TEXT_MODELS = [
   { id: "zai:auto", provider: "zai", label: "ZAI Web Dev SDK (default)", note: "Current provider" },
+  { id: "pollinations:free", provider: "pollinations", label: "WALLORA Free", note: "Pollinations · no key · shared tier" },
   { id: "minimaxai/minimax-m3.1-flash", provider: "nvidia", label: "MiniMax M3.1 Flash", note: "Fast · verified" },
   { id: "nvidia/nemotron-3.5-lightning-30b-a3b", provider: "nvidia", label: "Nemotron 3.5 Lightning 30B", note: "Reasoning · verified" },
   { id: "mistralai/mistral-large-4-1t-a52b", provider: "nvidia", label: "Mistral Large 4", note: "Reasoning · verified" },
@@ -54,7 +55,8 @@ export const TEXT_MODELS = [
  * actually provisioned for this key.
  */
 export const IMAGE_MODELS = [
-  { id: "zai:auto", provider: "zai", label: "ZAI Web Dev SDK", note: "Only available image provider" },
+  { id: "zai:auto", provider: "zai", label: "ZAI Web Dev SDK", note: "Current provider" },
+  { id: "pollinations:flux", provider: "pollinations", label: "WALLORA Free", note: "Pollinations Flux · no key · rate limited" },
 ] as const;
 
 /** Models that used to be offered but are now dead. Auto-migrated on read. */
@@ -82,11 +84,20 @@ function sanitize(input: Partial<AIConfig> | null | undefined): AIConfig {
   if (DEPRECATED_IMAGE_MODELS.has(imageModel)) imageModel = "zai:auto";
 
   let textProvider: AIProviderId =
-    input.textProvider === "nvidia" || textModel.includes("/") ? "nvidia" : "zai";
+    input.textProvider === "pollinations" || textModel.startsWith("pollinations:")
+      ? "pollinations"
+      : input.textProvider === "nvidia" || textModel.includes("/")
+        ? "nvidia"
+        : "zai";
   let imageProvider: AIProviderId =
-    input.imageProvider === "nvidia" || imageModel.includes("/") ? "nvidia" : "zai";
+    input.imageProvider === "pollinations" || imageModel.startsWith("pollinations:")
+      ? "pollinations"
+      : input.imageProvider === "nvidia" || imageModel.includes("/")
+        ? "nvidia"
+        : "zai";
 
-  // No working NVIDIA image endpoint — force image generation onto ZAI.
+  // No working NVIDIA image endpoint on this key — keep image generation on
+  // ZAI or WALLORA Free (Pollinations).
   if (imageProvider === "nvidia") {
     imageProvider = "zai";
     imageModel = "zai:auto";

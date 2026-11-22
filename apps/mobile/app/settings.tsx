@@ -8,6 +8,7 @@ import {
   Switch,
   RefreshControl,
   ActivityIndicator,
+  Image,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,9 +16,12 @@ import { useRouter } from "expo-router";
 
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
-import { apiJson } from "../lib/api";
+import { apiFetch, apiJson } from "../lib/api";
+import { assetUrl } from "../lib/config";
 import { C, R, S, tierMeta } from "../lib/theme";
 import { useAuth } from "../lib/auth";
+import { pickImages, uploadImages, type PickedImage } from "../lib/uploads";
+import { withVerification } from "../lib/verification";
 
 type AppSettings = {
   theme: string;
@@ -32,6 +36,7 @@ type MeResponse = {
   id?: string;
   name?: string;
   email?: string;
+  image?: string | null;
   role?: string;
   verificationTier?: string;
   profile?: {
@@ -39,9 +44,12 @@ type MeResponse = {
     displayName?: string;
     bio?: string | null;
     avatarUrl?: string | null;
+    coverUrl?: string | null;
     verified?: boolean;
   } | null;
 };
+
+type MediaKind = "avatar" | "cover";
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
@@ -83,6 +91,9 @@ export default function SettingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [avatarPick, setAvatarPick] = useState<PickedImage | null>(null);
+  const [coverPick, setCoverPick] = useState<PickedImage | null>(null);
+  const [uploading, setUploading] = useState<MediaKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: "success" | "error" | "info" } | null>(null);
 
@@ -160,6 +171,104 @@ export default function SettingsScreen() {
     }
   };
 
+  const pickMedia = async (kind: MediaKind) => {
+    if (uploading) return;
+    setNotice(null);
+    setError(null);
+    try {
+      // Single image only; the crop aspect matches the web profile editor.
+      const images = await pickImages("library", {
+        max: 1,
+        quality: 0.85,
+        aspect: kind === "avatar" ? [1, 1] : [16, 9],
+      });
+      const picked = images[0];
+      if (!picked) return;
+      if (kind === "avatar") setAvatarPick(picked);
+      else setCoverPick(picked);
+    } catch (e: any) {
+      const message = e?.message ?? "Could not choose that image.";
+      setError(message);
+      setNotice({ text: message, tone: "error" });
+    }
+  };
+
+  const uploadMedia = async (kind: MediaKind) => {
+    const picked = kind === "avatar" ? avatarPick : coverPick;
+    if (!picked || uploading) return;
+    setUploading(kind);
+    setNotice(null);
+    setError(null);
+    try {
+      const storedKey = await withVerification(async () => {
+        // Stage the single image through the shared upload pipeline, then send
+        // it to the profile endpoint that owns avatar/cover normalization.
+        const [staged] = await uploadImages([picked]);
+
+        const form = new FormData();
+        form.append("kind", kind);
+        form.append("file", {
+          uri: picked.uri,
+          name: picked.fileName,
+          type: picked.mimeType,
+        } as unknown as Blob);
+
+        const res = await apiFetch("/api/v1/profile/media", {
+          method: "POST",
+          body: form,
+          rawBody: true,
+        });
+        let payload: any = {};
+        try {
+          payload = await res.json();
+        } catch {
+          /* non-JSON error response */
+        }
+        if (!res.ok) {
+          throw new Error(
+            payload?.error?.message ?? payload?.message ?? `Upload failed (${res.status}).`,
+          );
+        }
+        const field = kind === "avatar" ? "avatarUrl" : "coverUrl";
+        return payload?.data?.[field] ?? payload?.data?.url ?? staged?.key;
+      });
+
+      if (!storedKey) {
+        setNotice({
+          text: "Claim your free WALLORA tick to change your profile media.",
+          tone: "info",
+        });
+        return;
+      }
+
+      setAccount((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(kind === "avatar" ? { image: storedKey } : {}),
+              profile: {
+                ...(prev.profile ?? {}),
+                ...(kind === "avatar" ? { avatarUrl: storedKey } : { coverUrl: storedKey }),
+              },
+            }
+          : prev,
+      );
+      if (kind === "avatar") setAvatarPick(null);
+      else setCoverPick(null);
+      await refresh();
+      setNotice({
+        text: kind === "avatar" ? "Profile photo updated." : "Cover updated.",
+        tone: "success",
+      });
+    } catch (e: any) {
+      const message = e?.message ?? "Could not save that image.";
+      setError(message);
+      setNotice({ text: message, tone: "error" });
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
   };
@@ -190,6 +299,9 @@ export default function SettingsScreen() {
   }
 
   const tier = account?.verificationTier ?? "free";
+  const avatarRef =
+    avatarPick?.uri ?? assetUrl(account?.profile?.avatarUrl ?? account?.image ?? user?.avatarUrl);
+  const coverRef = coverPick?.uri ?? assetUrl(account?.profile?.coverUrl);
 
   return (
     <View style={styles.root}>
@@ -221,7 +333,11 @@ export default function SettingsScreen() {
         <View style={styles.accountCard}>
           <View style={styles.accountTop}>
             <View style={styles.accountIcon}>
-              <Ionicons name="person-outline" size={22} color={C.accent} />
+              {avatarRef ? (
+                <Image source={{ uri: avatarRef }} style={styles.accountAvatar} resizeMode="cover" />
+              ) : (
+                <Ionicons name="person-outline" size={22} color={C.accent} />
+              )}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.accountName} numberOfLines={1}>
@@ -242,6 +358,87 @@ export default function SettingsScreen() {
                 <Text style={styles.metaDivider}>·</Text>
                 <Text style={styles.metaText}>{account.role}</Text>
               </>
+            ) : null}
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>PROFILE MEDIA</Text>
+        <View style={styles.card}>
+          <View style={styles.mediaRow}>
+            <View style={[styles.mediaPreview, styles.avatarPreview]}>
+              {avatarRef ? (
+                <Image source={{ uri: avatarRef }} style={styles.mediaImage} resizeMode="cover" />
+              ) : (
+                <Ionicons name="person-outline" size={22} color={C.accent} />
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.rowTitle}>Profile photo</Text>
+              <Text style={styles.rowSub}>Square image, at least 96×96 pixels.</Text>
+              <Pressable
+                onPress={() => void pickMedia("avatar")}
+                disabled={!!uploading}
+                style={({ pressed }) => [styles.chooseButton, pressed && styles.pressed]}
+              >
+                <Ionicons name="image-outline" size={14} color={C.accent} />
+                <Text style={styles.chooseButtonText}>
+                  {avatarPick ? "Change photo" : "Choose photo"}
+                </Text>
+              </Pressable>
+            </View>
+            {avatarPick ? (
+              <Pressable
+                onPress={() => void uploadMedia("avatar")}
+                disabled={!!uploading}
+                hitSlop={8}
+                style={[styles.uploadButton, uploading && styles.buttonDisabled]}
+              >
+                {uploading === "avatar" ? (
+                  <ActivityIndicator color={C.bg} size="small" />
+                ) : (
+                  <Ionicons name="cloud-upload-outline" size={18} color={C.bg} />
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.rowDivider} />
+
+          <View style={styles.mediaRow}>
+            <View style={[styles.mediaPreview, styles.coverPreview]}>
+              {coverRef ? (
+                <Image source={{ uri: coverRef }} style={styles.mediaImage} resizeMode="cover" />
+              ) : (
+                <Ionicons name="image-outline" size={22} color={C.accent} />
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.rowTitle}>Cover image</Text>
+              <Text style={styles.rowSub}>Wide image, at least 256×256 pixels.</Text>
+              <Pressable
+                onPress={() => void pickMedia("cover")}
+                disabled={!!uploading}
+                style={({ pressed }) => [styles.chooseButton, pressed && styles.pressed]}
+              >
+                <Ionicons name="image-outline" size={14} color={C.accent} />
+                <Text style={styles.chooseButtonText}>
+                  {coverPick ? "Change cover" : "Choose cover"}
+                </Text>
+              </Pressable>
+            </View>
+            {coverPick ? (
+              <Pressable
+                onPress={() => void uploadMedia("cover")}
+                disabled={!!uploading}
+                hitSlop={8}
+                style={[styles.uploadButton, uploading && styles.buttonDisabled]}
+              >
+                {uploading === "cover" ? (
+                  <ActivityIndicator color={C.bg} size="small" />
+                ) : (
+                  <Ionicons name="cloud-upload-outline" size={18} color={C.bg} />
+                )}
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -424,7 +621,9 @@ const styles = StyleSheet.create({
     backgroundColor: C.raised,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  accountAvatar: { width: 44, height: 44 },
   accountName: { fontSize: 15, fontWeight: "800", color: C.text },
   accountEmail: { fontSize: 12, color: C.muted, marginTop: 2 },
   accountMeta: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5, marginTop: S.md },
@@ -447,6 +646,41 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", alignItems: "center", gap: S.sm, paddingVertical: S.sm },
   rowDivider: { height: 1, backgroundColor: C.borderSoft },
+  mediaRow: { flexDirection: "row", alignItems: "center", gap: S.md, paddingVertical: S.sm },
+  mediaPreview: {
+    backgroundColor: C.raised,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarPreview: { width: 52, height: 52, borderRadius: 26 },
+  coverPreview: { width: 72, height: 52, borderRadius: R.sm },
+  mediaImage: { width: "100%", height: "100%" },
+  chooseButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 5,
+    paddingHorizontal: S.sm,
+    paddingVertical: 6,
+    borderRadius: R.pill,
+    backgroundColor: C.raised,
+    borderWidth: 1,
+    borderColor: C.border,
+    marginTop: S.sm,
+  },
+  chooseButtonText: { color: C.accent, fontSize: 11, fontWeight: "700" },
+  uploadButton: {
+    width: 38,
+    height: 38,
+    borderRadius: R.md,
+    backgroundColor: C.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pressed: { opacity: 0.7 },
   rowIcon: {
     width: 36,
     height: 36,

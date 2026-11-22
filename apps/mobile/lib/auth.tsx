@@ -30,7 +30,13 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (name: string, username: string, email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (
+    name: string,
+    username: string,
+    email: string,
+    password: string,
+    acceptTerms: boolean,
+  ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -129,7 +135,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (name: string, username: string, email: string, password: string) => {
+  const signUp = async (
+    name: string,
+    username: string,
+    email: string,
+    password: string,
+    acceptTerms: boolean,
+  ) => {
     try {
       const res = await apiFetch("/api/v1/auth/register", {
         method: "POST",
@@ -138,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           username,
           email,
           password,
-          acceptTerms: true,
+          acceptTerms,
         }),
       });
       const text = await res.text();

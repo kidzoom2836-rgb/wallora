@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getStorage } from "@/lib/storage";
 import { getTiersForUsers, type VerificationTier } from "@/lib/verification/store";
 
 /**
@@ -27,7 +28,7 @@ export type AuthorSnapshot = {
 
 type StoredAuthor = Omit<AuthorSnapshot, "tier"> & { tier?: CommunityTier };
 
-export type PostKind = "text" | "wallpaper" | "project";
+export type PostKind = "text" | "wallpaper" | "project" | "image";
 
 export type RepostPreview = {
   id: string;
@@ -332,12 +333,43 @@ async function readMemberships(key: string): Promise<Record<string, string[]>> {
   return read<Record<string, string[]>>(key, {});
 }
 
+/**
+ * Accept only storage keys we can verify: uploads owned by this user, or
+ * published AI generations (`gen/...`), which are public by design.
+ */
+function normalizeUploadKey(refId: string, ownerId?: string): string | null {
+  let key = refId.trim();
+  key = key.replace(/^https?:\/\/[^/]+\//, "");
+  if (key.startsWith("/api/v1/storage/")) key = key.slice("/api/v1/storage/".length);
+  if (key.startsWith("/uploads/")) key = key.slice("/uploads/".length);
+  key = key.replace(/^\/+/, "").split(/[?#]/)[0];
+
+  const isOwnedUpload = !!ownerId && key.startsWith(`w/${ownerId}/`);
+  const isGeneration = key.startsWith("gen/");
+  if (!isOwnedUpload && !isGeneration) return null;
+  if (key.includes("..") || !/\.(jpe?g|png|webp)$/i.test(key)) return null;
+  return key;
+}
+
 /** Validate a context reference so the feed never links to a missing record. */
 async function resolveRef(
   kind: PostKind,
   refId: string | null,
+  ownerId?: string,
 ): Promise<{ kind: PostKind; refId: string | null; imageUrl: string | null }> {
   if (!refId) return { kind: "text", refId: null, imageUrl: null };
+
+  if (kind === "image") {
+    const key = ownerId ? normalizeUploadKey(refId, ownerId) : null;
+    if (!key) return { kind: "text", refId: null, imageUrl: null };
+    const storage = getStorage();
+    try {
+      await storage.getObject(key);
+    } catch {
+      return { kind: "text", refId: null, imageUrl: null };
+    }
+    return { kind: "image", refId: key, imageUrl: storage.getPublicUrl(key) };
+  }
 
   if (kind === "wallpaper") {
     const wallpaper = await db.wallpaper.findFirst({
@@ -420,7 +452,9 @@ async function liveRefKeys(posts: StoredPost[]): Promise<Set<string>> {
 }
 
 function withoutDeadRef(post: StoredPost, liveKeys: Set<string>): StoredPost {
-  if (!post.refId || liveKeys.has(`${post.kind}:${post.refId}`)) return post;
+  // Direct image posts are validated against storage at creation time and do
+  // not have a database row that can become "unlisted".
+  if (!post.refId || post.kind === "image" || liveKeys.has(`${post.kind}:${post.refId}`)) return post;
   return { ...post, kind: "text", refId: null, imageUrl: null };
 }
 
@@ -550,9 +584,10 @@ export async function createPost(input: {
   refId: string | null;
   repostOf: string | null;
   author: AuthorSnapshot;
+  ownerId: string;
 }): Promise<CommunityPost> {
   const posts = await readPosts();
-  const ref = await resolveRef(input.kind, input.refId);
+  const ref = await resolveRef(input.kind, input.refId, input.ownerId);
   const source = input.repostOf
     ? posts.find((post) => post.id === input.repostOf)
     : null;

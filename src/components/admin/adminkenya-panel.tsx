@@ -121,9 +121,9 @@ type AuditEntry = {
 };
 
 type AIConfig = {
-  textProvider: "zai" | "nvidia";
+  textProvider: "zai" | "nvidia" | "pollinations";
   textModel: string;
-  imageProvider: "zai" | "nvidia";
+  imageProvider: "zai" | "nvidia" | "pollinations";
   imageModel: string;
   nvidiaBaseUrl: string;
   temperature: number;
@@ -954,6 +954,26 @@ function AITab() {
         )}
       </Panel>
 
+      <Panel
+        title="WALLORA Free (Pollinations)"
+        subtitle="No API key required. Requests run server-side and fall back automatically when a paid provider is unavailable."
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
+              <Sparkles className="size-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-medium">Free text and image generation</p>
+              <p className="text-xs text-secondary-text">
+                Shared community tier · rate limits apply · no secrets in the browser
+              </p>
+            </div>
+          </div>
+          <Badge variant="default">Always available</Badge>
+        </div>
+      </Panel>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Text & chat" subtitle="Powers WALLORA AI conversations and prompt enhancement.">
           <div className="space-y-4">
@@ -966,18 +986,30 @@ function AITab() {
                   textModel:
                     textProvider === "nvidia"
                       ? config.textModels.find((m) => m.provider === "nvidia")?.id ?? config.textModel
-                      : "zai:auto",
+                      : textProvider === "pollinations"
+                        ? "pollinations:free"
+                        : "zai:auto",
                 })
               }
               options={[
                 { value: "zai", label: "ZAI Web Dev SDK (current)" },
+                { value: "pollinations", label: "WALLORA Free (Pollinations)" },
                 { value: "nvidia", label: "NVIDIA NIM" },
               ]}
             />
             <ModelSelect
               label="Text model"
               value={config.textModel}
-              onChange={(textModel) => set({ textModel, textProvider: textModel.includes("/") ? "nvidia" : "zai" })}
+              onChange={(textModel) =>
+                set({
+                  textModel,
+                  textProvider: textModel.startsWith("pollinations:")
+                    ? "pollinations"
+                    : textModel.includes("/")
+                      ? "nvidia"
+                      : "zai",
+                })
+              }
               options={config.textModels.map((m) => ({
                 value: m.id,
                 label: `${m.label} · ${m.note}`,
@@ -1012,7 +1044,7 @@ function AITab() {
           </div>
         </Panel>
 
-        <Panel title="Image generation" subtitle="Powers the AI Studio image outputs. NVIDIA NIM currently has no image endpoint on this key, so images stay on ZAI.">
+        <Panel title="Image generation" subtitle="Powers the AI Studio image outputs. WALLORA Free uses Pollinations with no key; ZAI remains the paid fallback.">
           <div className="space-y-4">
             <ModelSelect
               label="Image provider"
@@ -1021,28 +1053,34 @@ function AITab() {
                 set({
                   imageProvider: imageProvider as AIConfig["imageProvider"],
                   imageModel:
-                    imageProvider === "nvidia"
-                      ? config.imageModels.find((m) => m.provider === "nvidia")?.id ?? config.imageModel
+                    imageProvider === "pollinations"
+                      ? "pollinations:flux"
                       : "zai:auto",
                 })
               }
               options={[
                 { value: "zai", label: "ZAI Web Dev SDK (current)" },
-                { value: "nvidia", label: "NVIDIA NIM" },
+                { value: "pollinations", label: "WALLORA Free (Pollinations)" },
               ]}
             />
             <ModelSelect
               label="Image model"
               value={config.imageModel}
-              onChange={(imageModel) => set({ imageModel, imageProvider: imageModel.includes("/") ? "nvidia" : "zai" })}
+              onChange={(imageModel) =>
+                set({
+                  imageModel,
+                  imageProvider: imageModel.startsWith("pollinations:") ? "pollinations" : "zai",
+                })
+              }
               options={config.imageModels.map((m) => ({
                 value: m.id,
                 label: `${m.label} · ${m.note}`,
               }))}
             />
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-secondary-text">
-              If NVIDIA is selected but the key is missing, generation fails and credits are
-              refunded automatically. The panel stays on the current model until you save.
+              WALLORA Free is a shared tier and may rate-limit requests. If the selected provider
+              fails, generation automatically tries the other one and refunds credits only when
+              every provider fails.
             </div>
           </div>
         </Panel>
