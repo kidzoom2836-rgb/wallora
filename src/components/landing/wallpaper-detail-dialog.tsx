@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useDiscovery } from "@/stores/discovery";
 import { useAuthDialog } from "@/stores/auth-dialog";
+import { recordDownload } from "@/lib/downloads-client";
 import { cn } from "@/lib/utils";
 
 type DetailAsset = {
@@ -206,6 +207,17 @@ export function WallpaperDetailDialog() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      if (wallpaper) {
+        recordDownload({
+          slug: wallpaper.slug,
+          title: wallpaper.title,
+          creator: wallpaper.creator?.displayName ?? wallpaper.creator?.username ?? null,
+          filename: data.data.filename,
+          remoteUrl: data.data.url,
+          previewUrl: metaAsset?.objectKey ?? null,
+          variant: metaAsset?.variant,
+        });
+      }
       toast.success("Download started", {
         description: `Saving ${data.data.filename}`,
       });

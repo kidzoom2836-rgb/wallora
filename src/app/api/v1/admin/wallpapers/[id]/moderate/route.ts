@@ -10,8 +10,8 @@ type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
 /**
  * PATCH /api/v1/admin/wallpapers/[id]/moderate
  *
- * Update a wallpaper's moderation status. Admin-only. Each call appends a row
- * to the AuditLog so every moderation decision is traceable to an actor.
+ * Update a wallpaper's moderation status. Super admin only. Each call appends
+ * a row to the AuditLog so every moderation decision is traceable to an actor.
  *
  * Body: { status: "approved" | "rejected" | "flagged" }
  *
@@ -21,7 +21,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireRole(ROLES.ADMIN);
+  const auth = await requireRole(ROLES.SUPER_ADMIN);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

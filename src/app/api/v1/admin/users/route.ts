@@ -12,9 +12,11 @@ import { requireRole, ROLES } from "@/lib/auth-helpers";
  * Query params:
  *   page  — 1-based page (default 1)
  *   limit — items per page (default 50, hard max 50)
+ *
+ * Super admin only — the hidden /adminkenya panel is the sole admin surface.
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireRole(ROLES.MODERATOR);
+  const auth = await requireRole(ROLES.SUPER_ADMIN);
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);

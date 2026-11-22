@@ -122,7 +122,9 @@ type Pagination = {
 // Role helpers
 // ---------------------------------------------------------------------------
 
-const ADMIN_ROLES = new Set(["admin", "super_admin"]);
+// The legacy /admin dashboard is retired. Only the hidden super-admin panel
+// at /adminkenya grants access to moderation controls.
+const ADMIN_ROLES = new Set(["super_admin"]);
 
 const MOD_STATUS_OPTIONS: Array<{ id: string; label: string }> = [
   { id: "pending", label: "Pending" },
@@ -281,8 +283,8 @@ function AccessDenied() {
           Access denied — admin role required.
         </h2>
         <p className="mt-1 max-w-md text-sm text-secondary-text">
-          This dashboard is restricted to admin and super_admin accounts. Your
-          current session does not have the required permissions.
+          This legacy dashboard is restricted to super_admin accounts. Use the
+          hidden Control Room for platform management.
         </p>
       </div>
     </div>

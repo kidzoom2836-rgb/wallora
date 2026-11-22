@@ -28,6 +28,7 @@ export function AuthDialog() {
   const isRegister = view === "register";
 
   const [showPassword, setShowPassword] = React.useState(false);
+  const [forgotPassword, setForgotPassword] = React.useState(false);
   const [status, setStatus] = React.useState<Status>("idle");
   const [error, setError] = React.useState<string>("");
   const [fields, setFields] = React.useState<Record<string, string | boolean>>({});
@@ -46,6 +47,7 @@ export function AuthDialog() {
       setStatus("idle");
       setError("");
       setShowPassword(false);
+      setForgotPassword(false);
     }
   }, [open, view]);
 
@@ -206,10 +208,40 @@ export function AuthDialog() {
     setStatus("success");
   };
 
+  const handleForgotPassword = async () => {
+    const email = String(fields.email ?? "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus("error");
+      setError("Enter your email address first.");
+      return;
+    }
+
+    setStatus("loading");
+    setError("");
+    try {
+      const res = await fetch("/api/v1/auth/password-reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setStatus("error");
+        setError(body?.error?.message ?? "Could not send a reset email.");
+        return;
+      }
+      setStatus("success");
+    } catch {
+      setStatus("error");
+      setError("Network error. Please check your connection and try again.");
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (status === "loading" || status === "success") return;
-    if (isRegister) handleRegister();
+    if (forgotPassword) handleForgotPassword();
+    else if (isRegister) handleRegister();
     else handleSignIn();
   };
 
@@ -223,24 +255,32 @@ export function AuthDialog() {
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             <Badge variant="outline" className="border-primary/30 bg-primary/10 text-[10px] text-primary">
-              {isRegister ? "Create account" : "Welcome back"}
+              {forgotPassword ? "Account recovery" : isRegister ? "Create account" : "Welcome back"}
             </Badge>
           </div>
           <DialogTitle className="font-display text-xl">
             {isSuccess
-              ? isRegister
-                ? "Welcome to WALLORA"
-                : "Signed in"
-              : isRegister
-                ? "Create your WALLORA account"
-                : "Sign in to WALLORA"}
+              ? forgotPassword
+                ? "Check your email"
+                : isRegister
+                  ? "Welcome to WALLORA"
+                  : "Signed in"
+              : forgotPassword
+                ? "Reset your password"
+                : isRegister
+                  ? "Create your WALLORA account"
+                  : "Sign in to WALLORA"}
           </DialogTitle>
           <DialogDescription className="text-secondary-text">
             {isSuccess
-              ? "Taking you to your account…"
-              : isRegister
-                ? "Join the creative ecosystem. Discovery, AI, studios and a creator marketplace."
-                : "Continue where you left off. Your session stays on this device."}
+              ? forgotPassword
+                ? "If that email belongs to an account, a reset link is on its way."
+                : "Taking you to your account…"
+              : forgotPassword
+                ? "Enter your email and we’ll send you a secure reset link."
+                : isRegister
+                  ? "Join the creative ecosystem. Discovery, AI, studios and a creator marketplace."
+                  : "Continue where you left off. Your session stays on this device."}
           </DialogDescription>
         </DialogHeader>
 
@@ -250,13 +290,25 @@ export function AuthDialog() {
               <CheckCircle2 className="h-7 w-7" />
             </span>
             <p className="text-sm text-foreground">
-              {isRegister ? "Your account is ready." : "You are signed in."}
+              {forgotPassword
+                ? "Your reset request was submitted."
+                : isRegister
+                  ? "Your account is ready."
+                  : "You are signed in."}
             </p>
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleClose(false)}
+              onClick={() => {
+                if (forgotPassword) {
+                  setForgotPassword(false);
+                  setStatus("idle");
+                  setError("");
+                  return;
+                }
+                handleClose(false);
+              }}
             >
-              Continue
+              {forgotPassword ? "Back to sign in" : "Continue"}
             </Button>
           </div>
         ) : (
@@ -293,30 +345,32 @@ export function AuthDialog() {
               autoComplete="email"
             />
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password" className="text-xs font-medium text-secondary-text">
-                Password
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder={isRegister ? "At least 8 characters, letters + numbers" : "Your password"}
-                  value={String(fields.password ?? "")}
-                  onChange={(e) => setField("password", e.target.value)}
-                  autoComplete={isRegister ? "new-password" : "current-password"}
-                  className="border-border bg-surface pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-secondary-text transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+            {!forgotPassword && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="password" className="text-xs font-medium text-secondary-text">
+                  Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder={isRegister ? "At least 8 characters, letters + numbers" : "Your password"}
+                    value={String(fields.password ?? "")}
+                    onChange={(e) => setField("password", e.target.value)}
+                    autoComplete={isRegister ? "new-password" : "current-password"}
+                    className="border-border bg-surface pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-secondary-text transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {isRegister && (
               <label className="flex items-start gap-2.5 text-sm text-secondary-text cursor-pointer">
@@ -350,8 +404,10 @@ export function AuthDialog() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isRegister ? "Creating account…" : "Signing in…"}
+                  {forgotPassword ? "Sending reset link…" : isRegister ? "Creating account…" : "Signing in…"}
                 </>
+              ) : forgotPassword ? (
+                "Send reset link"
               ) : isRegister ? (
                 "Create account"
               ) : (
@@ -359,18 +415,45 @@ export function AuthDialog() {
               )}
             </Button>
 
-            <div className="flex items-center justify-between text-xs text-secondary-text">
-              <button
-                type="button"
-                onClick={() => switchView(isRegister ? "signin" : "register")}
-                className="font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                {isRegister ? "Already have an account? Sign in" : "New to WALLORA? Create an account"}
-              </button>
-              {!isRegister && (
-                <span className="cursor-not-allowed opacity-50" title="Available in a later phase">
-                  Forgot password?
-                </span>
+            <div className="flex items-center justify-between gap-3 text-xs text-secondary-text">
+              {forgotPassword ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotPassword(false);
+                    setStatus("idle");
+                    setError("");
+                  }}
+                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  Back to sign in
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotPassword(false);
+                      switchView(isRegister ? "signin" : "register");
+                    }}
+                    className="font-medium text-foreground underline-offset-4 hover:underline"
+                  >
+                    {isRegister ? "Already have an account? Sign in" : "New to WALLORA? Create an account"}
+                  </button>
+                  {!isRegister && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotPassword(true);
+                        setStatus("idle");
+                        setError("");
+                      }}
+                      className="font-medium text-secondary-text underline-offset-4 hover:text-foreground hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </form>

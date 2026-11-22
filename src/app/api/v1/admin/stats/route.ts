@@ -7,11 +7,10 @@ import { requireRole, ROLES } from "@/lib/auth-helpers";
  * GET /api/v1/admin/stats
  *
  * Returns REAL aggregate platform metrics from the database — no synthetic
- * numbers. Aggregated in parallel for speed. Requires admin or moderator role
- * (hierarchical: admin >= moderator).
+ * numbers. Aggregated in parallel. Super admin only.
  */
 export async function GET() {
-  const auth = await requireRole(ROLES.MODERATOR);
+  const auth = await requireRole(ROLES.SUPER_ADMIN);
   if (!auth.ok) return auth.response;
 
   // Start of "today" in UTC — used for all "today" counters.

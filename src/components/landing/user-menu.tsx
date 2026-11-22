@@ -13,6 +13,10 @@ import {
   BadgeCheck,
   MessageCircle,
   Images,
+  Heart,
+  Download,
+  UploadCloud,
+  Globe2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -131,6 +135,22 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem onClick={() => router.push("/showroom")} className="text-secondary-text focus:text-foreground cursor-pointer">
           <Images className="mr-2 h-4 w-4" />
           Showroom
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/favorites")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <Heart className="mr-2 h-4 w-4" />
+          Saved wallpapers
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/downloads")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <Download className="mr-2 h-4 w-4" />
+          Downloads
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/uploads")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <UploadCloud className="mr-2 h-4 w-4" />
+          My uploads
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/sites")} className="text-secondary-text focus:text-foreground cursor-pointer">
+          <Globe2 className="mr-2 h-4 w-4" />
+          Explore sites
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push(profileHref)} className="text-secondary-text focus:text-foreground cursor-pointer">
           <UserIcon className="mr-2 h-4 w-4" />

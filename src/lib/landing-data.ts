@@ -217,6 +217,29 @@ export const COLLECTIONS: Collection[] = [
   },
 ];
 
+/**
+ * Each curated collection maps to real wallpaper-library searches. The counts
+ * on the landing cards are editorial; this filter is what the collection page
+ * actually queries so the cards open live results rather than a dead end.
+ */
+export const COLLECTION_FILTERS: Record<
+  string,
+  { terms: string[]; intro: string }
+> = {
+  midnight: {
+    terms: ["midnight", "dark", "noir", "night"],
+    intro: "Moody after-dark scenes, deep shadows and quiet highlights.",
+  },
+  cyberdawn: {
+    terms: ["cyber", "neon", "futuristic", "skyline"],
+    intro: "Electric city light, synthetic colour and future-facing worlds.",
+  },
+  natural: {
+    terms: ["forest", "nature", "waterfall", "mountain"],
+    intro: "Organic textures, open landscapes and natural light.",
+  },
+};
+
 export type Plan = {
   id: string;
   name: string;

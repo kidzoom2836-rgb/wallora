@@ -21,7 +21,7 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
  *   limit  — items per page (default 24, hard max 24)
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireRole(ROLES.MODERATOR);
+  const auth = await requireRole(ROLES.SUPER_ADMIN);
   if (!auth.ok) return auth.response;
 
   const { searchParams } = new URL(request.url);
