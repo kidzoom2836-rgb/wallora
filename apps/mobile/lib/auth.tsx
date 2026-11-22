@@ -21,6 +21,8 @@ export interface User {
   bio?: string | null;
   avatarUrl?: string | null;
   verified?: boolean;
+  verificationTier?: "free" | "verified" | "premium" | "supreme";
+  creatorStatus?: string | null;
   displayName?: string;
 }
 
@@ -58,6 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: profile.bio,
         avatarUrl: profile.avatarUrl,
         verified: profile.verified,
+        verificationTier: fresh.verificationTier ?? "free",
+        creatorStatus: profile.creatorStatus,
         displayName: profile.displayName,
       };
       setUser(mapped);

@@ -1,159 +1,259 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from "react-native";
-import { useRouter } from "expo-router";
-import { useState, useEffect } from "react";
+import { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../lib/auth";
-import { apiJson } from "../../lib/api";
-import { assetUrl } from "../../lib/config";
 
-const C = { bg: "#0B0C0F", card: "#14161B", raised: "#1C1F26", text: "#F7F7F5", muted: "#9296A1", accent: "#D7B879", border: "#292C33", error: "#E46F75" };
+import { apiFetch, apiJson } from "../../lib/api";
+import { assetUrl } from "../../lib/config";
+import { useAuth } from "../../lib/auth";
+import { C, R, SHADOW, tierMeta } from "../../lib/theme";
+import { VerifiedBadge } from "../../components/ui/VerifiedBadge";
+import { SectionTitle } from "../../components/ui/States";
 
 interface ProfileStats {
   followers: number;
   following: number;
   wallpapers: number;
   displayName: string;
+  username: string;
   bio: string | null;
   avatarUrl: string | null;
   verified: boolean;
+  tier?: string | null;
+}
+
+interface Wallpaper {
+  id: string;
+  slug: string;
+  title: string;
+  likeCount?: number;
+  downloadCount?: number;
+  asset?: { objectKey: string } | null;
 }
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refresh } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!user?.username) return;
-    apiJson<any>(`/api/v1/users/${user.username}`)
-      .then((d) => setStats({
+    const [profile, walls] = await Promise.allSettled([
+      apiJson<any>(`/api/v1/users/${user.username}`),
+      apiJson<{ items: Wallpaper[] }>(`/api/v1/users/${user.username}/wallpapers?limit=12`),
+    ]);
+    if (profile.status === "fulfilled") {
+      const d = profile.value;
+      setStats({
         followers: d.stats?.followers ?? 0,
         following: d.stats?.following ?? 0,
         wallpapers: d.stats?.wallpapers ?? 0,
-        displayName: d.displayName,
+        displayName: d.displayName ?? d.name ?? user.displayName ?? user.name ?? "Creator",
+        username: d.username ?? user.username!,
         bio: d.bio,
         avatarUrl: d.avatarUrl,
         verified: !!d.verified,
-      }))
-      .catch(() => {});
-  }, [user?.username]);
+        tier: d.tier ?? d.verificationTier,
+      });
+    }
+    if (walls.status === "fulfilled") setWallpapers(walls.value.items ?? []);
+  }, [user]);
 
-  const rows = [
-    { icon: "bookmark-outline" as const, title: "My Space", desc: "Saved wallpapers", route: "/favorites" },
-    { icon: "cloud-upload-outline" as const, title: "My Uploads", desc: "Your published wallpapers", route: "/my-uploads" },
-    { icon: "folder-outline" as const, title: "Projects", desc: "Your creative projects", route: "/projects" },
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      load().finally(() => setLoading(false));
+    }, [load]),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    await refresh();
+    setRefreshing(false);
+  };
+
+  const doSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await apiFetch("/api/v1/auth/signout", { method: "POST" }).catch(() => {});
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  const tier = tierMeta(stats?.tier ?? user?.verificationTier ?? "free");
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <Text style={styles.topTitle}>Profile</Text>
-          <View style={styles.roleBadge}><Text style={styles.roleText}>{user?.role ?? "user"}</Text></View>
+    <View style={styles.screen}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        <View style={styles.hero}>
+          <View style={styles.heroGlow} />
+          {loading ? (
+            <ActivityIndicator color={C.accent} size="large" />
+          ) : (
+            <>
+              <View style={styles.avatarWrap}>
+                {stats?.avatarUrl || user?.avatarUrl ? (
+                  <Image source={{ uri: assetUrl(stats?.avatarUrl ?? user?.avatarUrl) }} style={styles.avatar} />
+                ) : (
+                  <Ionicons name="person" size={36} color={C.accent} />
+                )}
+              </View>
+              <View style={styles.identity}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.name}>{stats?.displayName ?? user?.displayName ?? user?.name}</Text>
+                  <VerifiedBadge tier={stats?.tier ?? user?.verificationTier ?? "free"} size="md" />
+                </View>
+                <Text style={styles.handle}>@{stats?.username ?? user?.username}</Text>
+                <View style={[styles.tierPill, { borderColor: tier.color + "66" }]}>
+                  <Ionicons name="shield-checkmark-outline" size={12} color={tier.color} />
+                  <Text style={[styles.tierText, { color: tier.color }]}>{tier.label}</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
-        <View style={styles.header}>
-          <View style={styles.avatar}>
-            {stats?.avatarUrl || user?.avatarUrl ? (
-              <ImageAvatar uri={assetUrl(stats?.avatarUrl ?? user?.avatarUrl)} />
-            ) : (
-              <Text style={styles.avatarText}>{(user?.name ?? "W").slice(0, 1).toUpperCase()}</Text>
-            )}
+        <View style={styles.body}>
+          <View style={styles.statsRow}>
+            <Stat value={stats?.wallpapers ?? 0} label="Wallpapers" icon="image-outline" />
+            <Stat value={stats?.followers ?? 0} label="Followers" icon="people-outline" />
+            <Stat value={stats?.following ?? 0} label="Following" icon="person-add-outline" />
           </View>
-          <View style={styles.identity}>
-            <View style={styles.nameRow}>
-              <Text style={styles.name}>{stats?.displayName ?? user?.name ?? "WALLORA User"}</Text>
-              {stats?.verified && <Ionicons name="checkmark-circle" size={16} color={C.accent} />}
+
+          {stats?.bio && (
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>ABOUT</Text>
+              <Text style={styles.bio}>{stats.bio}</Text>
             </View>
-            <Text style={styles.handle}>@{user?.username ?? "wallora"}</Text>
+          )}
+
+          <View style={styles.menuGrid}>
+            <MenuTile icon="apps-outline" label="Your Space" onPress={() => router.push("/(tabs)/space")} />
+            <MenuTile icon="download-outline" label="Downloads" onPress={() => router.push("/downloads")} />
+            <MenuTile icon="shield-checkmark-outline" label="Verification" onPress={() => router.push("/verification")} />
+            <MenuTile icon="settings-outline" label="Settings" onPress={() => router.push("/settings")} />
+            <MenuTile icon="cloud-upload-outline" label="Uploads" onPress={() => router.push("/my-uploads")} />
+            <MenuTile icon="code-slash-outline" label="Builder" onPress={() => router.push("/builder")} />
+            <MenuTile icon="storefront-outline" label="Market" onPress={() => router.push("/marketplace")} />
+            <MenuTile icon="people-outline" label="Community" onPress={() => router.push("/community")} />
           </View>
-        </View>
 
-        {stats?.bio && <Text style={styles.bio}>{stats.bio}</Text>}
+          <SectionTitle title="Your wallpapers" subtitle="Artwork published from this account" />
 
-        <View style={styles.stats}>
-          <Stat num={stats?.wallpapers ?? 0} label="Wallpapers" />
-          <Stat num={stats?.followers ?? 0} label="Followers" />
-          <Stat num={stats?.following ?? 0} label="Following" />
-        </View>
-
-        <Text style={styles.sectionTitle}>YOUR SPACE</Text>
-        {rows.map((item) => (
-          <Pressable key={item.title} style={styles.row} onPress={() => router.push(item.route as any)}>
-            <View style={styles.rowIcon}><Ionicons name={item.icon} size={20} color={C.accent} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{item.title}</Text>
-              <Text style={styles.rowDesc}>{item.desc}</Text>
+          {wallpapers.length === 0 ? (
+            <View style={styles.empty}>
+              <Ionicons name="images-outline" size={30} color={C.muted} />
+              <Text style={styles.emptyTitle}>No wallpapers yet</Text>
+              <Text style={styles.emptyText}>Generate in Studio or upload from WALLORA on the web.</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={C.muted} />
+          ) : (
+            <View style={styles.grid}>
+              {wallpapers.map((w) => (
+                <Pressable
+                  key={w.id}
+                  onPress={() => router.push({ pathname: "/wallpaper/[slug]", params: { slug: w.slug } })}
+                  style={({ pressed }) => [styles.wallCard, pressed && styles.pressed]}
+                >
+                  {w.asset?.objectKey && (
+                    <Image source={{ uri: assetUrl(w.asset.objectKey) }} style={styles.wallImage} resizeMode="cover" />
+                  )}
+                  <View style={styles.wallOverlay}>
+                    <Text style={styles.wallTitle} numberOfLines={2}>{w.title}</Text>
+                    <View style={styles.wallMeta}>
+                      <Text style={styles.wallStat}><Ionicons name="heart-outline" size={10} color={C.text} /> {w.likeCount ?? 0}</Text>
+                      <Text style={styles.wallStat}><Ionicons name="download-outline" size={10} color={C.text} /> {w.downloadCount ?? 0}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          <Pressable onPress={doSignOut} disabled={signingOut} style={styles.signOut}>
+            {signingOut ? <ActivityIndicator color={C.error} size="small" /> : <Ionicons name="log-out-outline" size={18} color={C.error} />}
+            <Text style={styles.signOutText}>Sign out</Text>
           </Pressable>
-        ))}
-
-        <View style={styles.divider} />
-
-        <Pressable style={styles.row} onPress={() => router.push("/(tabs)/studio")}>
-          <View style={styles.rowIcon}><Ionicons name="color-wand-outline" size={20} color={C.accent} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.rowTitle}>AI Studio</Text>
-            <Text style={styles.rowDesc}>Generate original artwork</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={C.muted} />
-        </Pressable>
-
-        <Pressable style={[styles.row, { marginTop: 16 }]} onPress={async () => { await signOut(); router.replace("/auth/login"); }}>
-          <View style={[styles.rowIcon, { backgroundColor: "rgba(228,111,117,0.1)" }]}>
-            <Ionicons name="log-out-outline" size={20} color={C.error} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.rowTitle, { color: C.error }]}>Sign out</Text>
-          </View>
-        </Pressable>
-
-        <Text style={styles.footer}>WALLORA · where imagination lives</Text>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-function Stat({ num, label }: { num: number; label: string }) {
+function Stat({ value, label, icon }: { value: number; label: string; icon: keyof typeof Ionicons.glyphMap }) {
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statNum}>{num}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={statStyles.wrap}>
+      <Ionicons name={icon} size={17} color={C.accent} />
+      <Text style={statStyles.value}>{value}</Text>
+      <Text style={statStyles.label}>{label}</Text>
     </View>
   );
 }
 
-function ImageAvatar({ uri }: { uri?: string }) {
-  if (!uri) return <View style={styles.avatarImageFallback} />;
-  return <Image source={{ uri }} style={styles.avatarImage} />;
+function MenuTile({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuTile, pressed && styles.pressed]}>
+      <Ionicons name={icon} size={19} color={C.accent} />
+      <Text style={styles.menuLabel}>{label}</Text>
+    </Pressable>
+  );
 }
 
+const statStyles = StyleSheet.create({
+  wrap: { flex: 1, alignItems: "center", gap: 3 },
+  value: { color: C.text, fontSize: 18, fontWeight: "800" },
+  label: { color: C.muted, fontSize: 10 },
+});
+
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 40, paddingTop: 56 },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 22 },
-  topTitle: { color: C.text, fontSize: 24, fontWeight: "800" },
-  roleBadge: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  roleText: { color: C.accent, fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
-  header: { flexDirection: "row", alignItems: "center", gap: 15 },
-  avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: C.accent, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  avatarImage: { width: 76, height: 76 },
-  avatarImageFallback: { width: 76, height: 76, backgroundColor: C.accent },
-  avatarText: { fontSize: 30, fontWeight: "800", color: C.bg },
-  identity: { flex: 1 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  name: { color: C.text, fontSize: 19, fontWeight: "700" },
-  handle: { color: C.muted, fontSize: 13, marginTop: 3 },
-  bio: { color: C.muted, fontSize: 13, lineHeight: 19, marginTop: 14 },
-  stats: { flexDirection: "row", backgroundColor: C.card, borderRadius: 14, padding: 16, marginTop: 20, borderWidth: 1, borderColor: C.border },
-  stat: { flex: 1, alignItems: "center" },
-  statNum: { color: C.text, fontSize: 19, fontWeight: "800" },
-  statLabel: { color: C.muted, fontSize: 11, marginTop: 3 },
-  sectionTitle: { color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginTop: 26, marginBottom: 11 },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.card, borderRadius: 12, padding: 13, marginBottom: 8, borderWidth: 1, borderColor: C.border },
-  rowIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: C.raised, alignItems: "center", justifyContent: "center" },
-  rowTitle: { color: C.text, fontSize: 14, fontWeight: "700" },
-  rowDesc: { color: C.muted, fontSize: 11, marginTop: 2 },
-  divider: { height: 1, backgroundColor: C.border, marginVertical: 14 },
-  footer: { color: C.muted, fontSize: 11, textAlign: "center", marginTop: 26 },
+  screen: { flex: 1, backgroundColor: C.bg },
+  hero: { minHeight: 200, padding: 20, paddingTop: 26, backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  heroGlow: { position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(215,184,121,0.12)", top: -150 },
+  avatarWrap: { width: 76, height: 76, borderRadius: 38, backgroundColor: C.raised, borderWidth: 2, borderColor: C.accent, alignItems: "center", justifyContent: "center", overflow: "hidden", ...SHADOW.glowGold },
+  avatar: { width: 76, height: 76 },
+  identity: { alignItems: "center", marginTop: 12 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  name: { color: C.text, fontSize: 19, fontWeight: "800" },
+  handle: { color: C.muted, fontSize: 12, marginTop: 2 },
+  tierPill: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 9, paddingHorizontal: 10, paddingVertical: 5, borderRadius: R.pill, borderWidth: 1, backgroundColor: C.bg },
+  tierText: { fontSize: 10, fontWeight: "800" },
+  body: { padding: 16 },
+  statsRow: { flexDirection: "row", backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, paddingVertical: 15, marginBottom: 14 },
+  card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 14, marginBottom: 14 },
+  cardLabel: { color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.3, marginBottom: 7 },
+  bio: { color: C.textSoft, fontSize: 13, lineHeight: 19 },
+  menuGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 22 },
+  menuTile: { width: "30%", minHeight: 70, borderRadius: R.md, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", gap: 7 },
+  menuLabel: { color: C.textSoft, fontSize: 11, fontWeight: "700", textAlign: "center" },
+  empty: { alignItems: "center", paddingVertical: 40, gap: 8, backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1, borderColor: C.border },
+  emptyTitle: { color: C.text, fontSize: 15, fontWeight: "700" },
+  emptyText: { color: C.muted, fontSize: 12, textAlign: "center", paddingHorizontal: 30 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  wallCard: { width: "47%", height: 150, borderRadius: R.md, overflow: "hidden", backgroundColor: C.raised },
+  wallImage: { width: "100%", height: "100%" },
+  wallOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 9, backgroundColor: "rgba(0,0,0,0.75)" },
+  wallTitle: { color: C.text, fontSize: 11, fontWeight: "700" },
+  wallMeta: { flexDirection: "row", gap: 10, marginTop: 4 },
+  wallStat: { color: C.textSoft, fontSize: 9 },
+  pressed: { opacity: 0.7 },
+  signOut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 26, paddingVertical: 14, borderRadius: R.md, borderWidth: 1, borderColor: C.error + "55", backgroundColor: C.errorDim },
+  signOutText: { color: C.error, fontSize: 14, fontWeight: "700" },
 });

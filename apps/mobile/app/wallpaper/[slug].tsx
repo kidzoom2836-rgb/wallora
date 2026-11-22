@@ -1,9 +1,12 @@
-import { View, Text, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator, Share, Linking, TextInput } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator, Share, TextInput, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { apiFetch, apiJson } from "../../lib/api";
 import { assetUrl } from "../../lib/config";
+import { addAsWallpaper, downloadWallpaper } from "../../lib/downloads";
+import { withVerification } from "../../lib/verification";
+import { TierTick } from "../../components/ui/VerifiedBadge";
 
 const C = {
   bg: "#0B0C0F",
@@ -17,8 +20,19 @@ const C = {
 };
 
 interface Asset { id: string; variant: string; objectKey: string; width: number; height: number; }
-interface Creator { id: string; username: string; displayName: string; bio?: string | null; verified?: boolean; avatarUrl?: string | null; }
-interface Comment { id: string; content: string; createdAt: string; author: { username: string; displayName: string; verified?: boolean; avatarUrl?: string | null }; }
+interface VariationAsset { variant: string; objectKey: string; width: number; height: number; format?: string; }
+interface Variation {
+  index: number;
+  label: string;
+  prefix?: string;
+  previewAsset: VariationAsset | null;
+  originalAsset?: VariationAsset | null;
+  gridAsset?: VariationAsset | null;
+  detailAsset?: VariationAsset | null;
+  assets?: VariationAsset[];
+}
+interface Creator { id: string; username: string; displayName: string; bio?: string | null; verified?: boolean; tier?: string | null; avatarUrl?: string | null; }
+interface Comment { id: string; content: string; createdAt: string; author: { username: string; displayName: string; verified?: boolean; tier?: string | null; avatarUrl?: string | null }; }
 interface Related { id: string; slug: string; title: string; orientation: string; likeCount: number; dominantColor?: string | null; asset: { objectKey: string } | null; }
 interface Detail {
   id: string;
@@ -37,6 +51,8 @@ interface Detail {
   category: { slug: string; name: string } | null;
   creator: Creator;
   assets: Asset[];
+  variationCount?: number;
+  variations?: Variation[];
   tags: { slug: string; name: string }[];
   liked: boolean;
   favorited: boolean;
@@ -56,6 +72,7 @@ export default function WallpaperDetailScreen() {
   const [posting, setPosting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [activeVariation, setActiveVariation] = useState(0);
 
   const notice = (message: string) => {
     setToast(message);
@@ -86,10 +103,17 @@ export default function WallpaperDetailScreen() {
   }, [slug]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { setActiveVariation(0); }, [detail?.id]);
 
+  const selectedVariation = detail?.variations?.[activeVariation] ?? null;
   const preview =
+    selectedVariation?.previewAsset?.objectKey ??
     detail?.assets?.find((a) => a.variant === "detail")?.objectKey ??
     detail?.assets?.find((a) => a.variant === "grid")?.objectKey;
+  const selectedAsset =
+    selectedVariation?.originalAsset ??
+    detail?.assets?.find((a) => a.variant === "original") ??
+    detail?.assets?.[0] ?? null;
 
   const toggleLike = async () => {
     if (!detail || busy) return;
@@ -161,20 +185,45 @@ export default function WallpaperDetailScreen() {
     if (!detail || busy) return;
     setBusy("download");
     try {
+      const variant = selectedAsset?.variant;
+      const query = variant ? `?variant=${encodeURIComponent(variant)}` : "";
       const data = await apiJson<{ url: string; filename: string; mimeType: string }>(
-        `/api/v1/wallpapers/${slug}/download`,
+        `/api/v1/wallpapers/${slug}/download${query}`,
         { method: "POST" },
       );
       const url = assetUrl(data.url);
+      if (!url) throw new Error("No download URL was returned.");
+      const saved = await downloadWallpaper({
+        id: `${detail.id}-${variant ?? "base"}`,
+        title:
+          (detail.variations?.length ?? 0) > 1
+            ? `${detail.title} · ${selectedVariation?.label ?? "Variation"}`
+            : detail.title,
+        remoteUrl: url,
+        slug,
+        creator: detail.creator?.displayName ?? detail.creator?.username,
+        width: selectedAsset?.width,
+        height: selectedAsset?.height,
+      });
       setDetail({ ...detail, downloadCount: detail.downloadCount + 1 });
-      if (url) {
-        try {
-          await Share.share({ title: data.filename, message: `Save ${data.filename}`, url });
-        } catch {
-          await Linking.openURL(url).catch(() => {});
-        }
-      }
-      notice("Download ready");
+      Alert.alert(
+        "Saved to WALLORA Downloads",
+        `${saved.title} is available offline. You can preview it and add it as your wallpaper from Downloads.`,
+        [
+          { text: "Done" },
+          {
+            text: "Add as wallpaper",
+            onPress: async () => {
+              try {
+                await addAsWallpaper(saved);
+                notice("Saved to your WALLORA gallery album");
+              } catch (e: any) {
+                notice(e?.message ?? "Could not save to gallery");
+              }
+            },
+          },
+        ],
+      );
     } catch (e: any) {
       notice(e?.message ?? "Could not download");
     } finally {
@@ -186,10 +235,13 @@ export default function WallpaperDetailScreen() {
     if (!comment.trim() || !slug || posting) return;
     setPosting(true);
     try {
-      const data = await apiJson<Comment>(`/api/v1/wallpapers/${slug}/comments`, {
-        method: "POST",
-        body: JSON.stringify({ content: comment.trim() }),
-      });
+      const data = await withVerification(() =>
+        apiJson<Comment>(`/api/v1/wallpapers/${slug}/comments`, {
+          method: "POST",
+          body: JSON.stringify({ content: comment.trim() }),
+        }),
+      );
+      if (!data) return;
       setComments((c) => [data, ...c]);
       setComment("");
       notice("Comment posted");
@@ -222,9 +274,11 @@ export default function WallpaperDetailScreen() {
   }
 
   const initial = (detail.creator.displayName ?? "?").slice(0, 1).toUpperCase();
-  const ratio = detail.assets?.[0]?.width && detail.assets?.[0]?.height
-    ? detail.assets[0].height / detail.assets[0].width
-    : 1.2;
+  const ratio = selectedAsset?.width && selectedAsset?.height
+    ? selectedAsset.height / selectedAsset.width
+    : detail.assets?.[0]?.width && detail.assets?.[0]?.height
+      ? detail.assets[0].height / detail.assets[0].width
+      : 1.2;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -249,6 +303,33 @@ export default function WallpaperDetailScreen() {
           </View>
         </View>
 
+        {/* One post can contain multiple approved variations. */}
+        {(detail.variations?.length ?? 0) > 1 && (
+          <View style={styles.variationSection}>
+            <Text style={styles.variationHeading}>
+              Variations ({detail.variations?.length})
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.variationRail}>
+              {detail.variations?.map((variation, index) => (
+                <Pressable
+                  key={variation.index}
+                  onPress={() => setActiveVariation(index)}
+                  style={[styles.variationCard, index === activeVariation && styles.variationCardActive]}
+                >
+                  {assetUrl(variation.previewAsset?.objectKey) ? (
+                    <Image source={{ uri: assetUrl(variation.previewAsset?.objectKey) }} style={styles.variationImage} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.variationImage, { backgroundColor: detail.dominantColor ?? C.raised }]} />
+                  )}
+                  <Text style={[styles.variationLabel, index === activeVariation && styles.variationLabelActive]} numberOfLines={1}>
+                    {variation.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Creator */}
         <View style={styles.creatorRow}>
           <View style={styles.avatar}>
@@ -261,7 +342,7 @@ export default function WallpaperDetailScreen() {
           <View style={{ flex: 1 }}>
             <View style={styles.creatorNameRow}>
               <Text style={styles.creatorName}>{detail.creator.displayName}</Text>
-              {detail.creator.verified && <Ionicons name="checkmark-circle" size={15} color={C.accent} />}
+              {(detail.creator.verified || detail.creator.tier) && <TierTick tier={detail.creator.tier} size={19} />}
             </View>
             <Text style={styles.creatorMeta}>
               @{detail.creator.username}{followers != null ? ` · ${followers} followers` : ""}
@@ -355,7 +436,7 @@ export default function WallpaperDetailScreen() {
                 <View style={{ flex: 1 }}>
                   <View style={styles.commentHead}>
                     <Text style={styles.commentAuthor}>{c.author.displayName}</Text>
-                    {c.author.verified && <Ionicons name="checkmark-circle" size={12} color={C.accent} />}
+                    {(c.author.verified || c.author.tier) && <TierTick tier={c.author.tier} size={15} />}
                   </View>
                   <Text style={styles.commentBody}>{c.content}</Text>
                 </View>
@@ -424,6 +505,14 @@ const styles = StyleSheet.create({
   previewCaption: { position: "absolute", bottom: 16, left: 18, right: 18 },
   previewEyebrow: { color: C.accent, fontSize: 10, fontWeight: "800", letterSpacing: 1.4, marginBottom: 4 },
   previewTitle: { color: C.text, fontSize: 27, fontWeight: "700" },
+  variationSection: { paddingTop: 14 },
+  variationHeading: { color: C.muted, fontSize: 11, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", paddingHorizontal: 16, marginBottom: 8 },
+  variationRail: { gap: 9, paddingHorizontal: 16 },
+  variationCard: { width: 92, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.card },
+  variationCardActive: { borderColor: C.accent, backgroundColor: "rgba(215,184,121,0.08)" },
+  variationImage: { width: 82, height: 82, borderRadius: 8, backgroundColor: C.raised },
+  variationLabel: { color: C.muted, fontSize: 10, fontWeight: "700", textAlign: "center", marginTop: 5 },
+  variationLabelActive: { color: C.accent },
   creatorRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: C.accent, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarImage: { width: 46, height: 46 },
