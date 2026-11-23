@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { isAllowedPlaylistUrl, parseM3U } from "@/lib/tv/m3u";
 
 export const dynamic = "force-dynamic";
+// Large public guides (iptv-org has ~11.5k channels) need more than the
+// default serverless execution window.
+export const maxDuration = 300;
 
 const SyncSchema = z.object({
   sourceUrl: z.string().trim().url(),
@@ -104,25 +107,38 @@ export async function POST(request: NextRequest) {
 
   let created = 0;
   let updated = 0;
-  for (let index = 0; index < channels.length; index += 1) {
-    const channel = channels[index];
-    const existing = await db.tvChannel.findUnique({ where: { slug: channel.slug } });
-    const data = {
-      name: channel.name,
-      groupName: channel.groupName,
-      logoUrl: channel.logoUrl,
-      streamUrl: channel.streamUrl,
-      status: "active",
-      sortOrder: index,
-      createdById: auth.session.user.id,
-    };
-    if (existing) {
-      await db.tvChannel.update({ where: { slug: channel.slug }, data: { ...data, createdById: undefined } });
-      updated += 1;
-    } else {
-      await db.tvChannel.create({ data });
-      created += 1;
-    }
+  const existingRows = await db.tvChannel.findMany({
+    where: { slug: { in: channels.map((channel) => channel.slug) } },
+    select: { slug: true },
+  });
+  const existingSlugs = new Set(existingRows.map((row) => row.slug));
+
+  // Chunked upserts keep a full 10k+ channel sync inside a serverless window
+  // instead of issuing two sequential queries per channel.
+  const BATCH_SIZE = 100;
+  for (let offset = 0; offset < channels.length; offset += BATCH_SIZE) {
+    const batch = channels.slice(offset, offset + BATCH_SIZE);
+    await db.$transaction(
+      batch.map((channel, index) => {
+        const sortOrder = offset + index;
+        const wasExisting = existingSlugs.has(channel.slug);
+        if (wasExisting) updated += 1;
+        else created += 1;
+        const data = {
+          name: channel.name,
+          groupName: channel.groupName,
+          logoUrl: channel.logoUrl,
+          streamUrl: channel.streamUrl,
+          status: "active",
+          sortOrder,
+        };
+        return db.tvChannel.upsert({
+          where: { slug: channel.slug },
+          create: { ...data, createdById: auth.session.user.id },
+          update: data,
+        });
+      }),
+    );
   }
 
   return NextResponse.json({
@@ -131,11 +147,27 @@ export async function POST(request: NextRequest) {
   });
 }
 
+/**
+ * Curated, credential-free iptv-org playlists. Small subsets are recommended
+ * over the 11.5k-channel index because most users only need a few regions and
+ * categories, and dead/geo-blocked links are easier to spot in a smaller set.
+ */
+export const RECOMMENDED_SOURCES = [
+  { name: "iptv-org · Kenya", url: "https://iptv-org.github.io/iptv/countries/ke.m3u" },
+  { name: "iptv-org · News", url: "https://iptv-org.github.io/iptv/categories/news.m3u" },
+  { name: "iptv-org · Sports", url: "https://iptv-org.github.io/iptv/categories/sports.m3u" },
+  { name: "iptv-org · Movies", url: "https://iptv-org.github.io/iptv/categories/movies.m3u" },
+  { name: "iptv-org · Kids", url: "https://iptv-org.github.io/iptv/categories/kids.m3u" },
+  { name: "iptv-org · All channels", url: "https://iptv-org.github.io/iptv/index.m3u" },
+] as const;
+
 /** GET /api/v1/channels/sync — show the default source and sync history. */
 export async function GET() {
   const auth = await requireRole(ROLES.SUPER_ADMIN);
   if (!auth.ok) return auth.response;
 
   const sources = await db.tvPlaylistSource.findMany({ orderBy: { updatedAt: "desc" }, take: 20 });
-  return NextResponse.json({ data: { defaultSource: DEFAULT_SOURCE, sources } });
+  return NextResponse.json({
+    data: { defaultSource: DEFAULT_SOURCE, recommendedSources: RECOMMENDED_SOURCES, sources },
+  });
 }

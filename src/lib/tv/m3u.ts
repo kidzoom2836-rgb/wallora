@@ -25,7 +25,9 @@ export function slugify(value: string): string {
 }
 
 /** Parse EXTINF-tagged channels from an M3U playlist. */
-export function parseM3U(text: string, max = 5000): ParsedChannel[] {
+// iptv-org's full index currently has ~11.5k channels; keep the ceiling above
+// that so a full sync is not silently truncated.
+export function parseM3U(text: string, max = 20000): ParsedChannel[] {
   const lines = text.split(/\r?\n/);
   const channels: ParsedChannel[] = [];
   let pending: { name: string; groupName: string; logoUrl: string | null } | null = null;

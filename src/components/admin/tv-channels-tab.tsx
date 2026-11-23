@@ -29,6 +29,16 @@ import { cn } from "@/lib/utils";
 
 const DEFAULT_SOURCE = "https://raw.githubusercontent.com/nn2wdw5jvc-max/mu-iptv/main/EDEM_2.m3u";
 
+/** Curated public playlists from iptv-org, ordered from safest to largest. */
+const RECOMMENDED_SOURCES = [
+  { label: "Kenya", name: "iptv-org · Kenya", url: "https://iptv-org.github.io/iptv/countries/ke.m3u" },
+  { label: "News", name: "iptv-org · News", url: "https://iptv-org.github.io/iptv/categories/news.m3u" },
+  { label: "Sports", name: "iptv-org · Sports", url: "https://iptv-org.github.io/iptv/categories/sports.m3u" },
+  { label: "Movies", name: "iptv-org · Movies", url: "https://iptv-org.github.io/iptv/categories/movies.m3u" },
+  { label: "Kids", name: "iptv-org · Kids", url: "https://iptv-org.github.io/iptv/categories/kids.m3u" },
+  { label: "All (11k)", name: "iptv-org · All channels", url: "https://iptv-org.github.io/iptv/index.m3u" },
+] as const;
+
 type ChannelStatus = "active" | "hidden" | "disabled";
 
 type Channel = {
@@ -105,6 +115,7 @@ export function TvChannelsTab() {
   const [status, setStatus] = useState<ChannelStatus | "all">("active");
   const [page, setPage] = useState(1);
   const [sourceUrl, setSourceUrl] = useState(DEFAULT_SOURCE);
+  const [sourceName, setSourceName] = useState("EDEM_2 community playlist");
   const [form, setForm] = useState<ChannelForm>(EMPTY_FORM);
   const [editing, setEditing] = useState<Channel | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -136,7 +147,7 @@ export function TvChannelsTab() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sourceUrl: sourceUrl || DEFAULT_SOURCE, dryRun }),
+          body: JSON.stringify({ sourceUrl: sourceUrl || DEFAULT_SOURCE, sourceName, dryRun }),
         },
       ),
     onSuccess: (result, dryRun) => {
@@ -270,6 +281,32 @@ export function TvChannelsTab() {
             Sync to database
           </Button>
         </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-semibold text-secondary-text">iptv-org presets:</span>
+          {RECOMMENDED_SOURCES.map((preset) => (
+            <button
+              key={preset.url}
+              type="button"
+              onClick={() => {
+                setSourceUrl(preset.url);
+                setSourceName(preset.name);
+              }}
+              className={cn(
+                "rounded-md border px-2 py-1 text-[10px] font-medium transition-colors",
+                sourceUrl === preset.url
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-muted/40 text-secondary-text hover:text-foreground",
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-secondary-text">
+          Preview before syncing. iptv-org links are user-submitted public streams; some are
+          geo-blocked or temporary. Start with a small list such as Kenya, then add categories.
+        </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-secondary-text">
           <span>Default source:</span>
