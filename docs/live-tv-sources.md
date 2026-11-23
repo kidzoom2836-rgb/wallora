@@ -48,6 +48,25 @@ Kenya, News, Sports, Movies and Kids (roughly 2,800 channels), caches them for 6
 the guide **WALLORA TV · iptv-org**. Once the backend guide has channels, it takes priority again.
 A custom M3U URL in Live TV → Settings still overrides everything.
 
+## Search, filters and TV tools
+
+The Live TV guide now behaves more like a modern streaming app:
+
+- **Smart search** (`apps/mobile/lib/tvSearch.ts`) ranks matches locally. It tolerates typos
+  (`citzen` → Citizen TV), understands abbreviations (`ktn`, `ntv`, `k24`) and initialisms, and shows
+  a **Did you mean** row plus live channel matches while typing. Choosing a result selects that
+  channel in the guide. Search history stays on the device.
+- **Guide filters** in Live TV → Settings can hide `[Geo-blocked]`, `[Not 24/7]` and plain `http://`
+  streams from public playlists. Channel order can be Recommended, A–Z or grouped by category.
+- **Player tools** include a default playback speed, automatic reconnection with backoff, and a
+  background-audio toggle (the player property is applied at runtime; native background playback
+  support is configured in `app.json`).
+- **Maintenance tools** refresh the guide cache, clear the cached guide, clear search history, and
+  reset all TV settings.
+
+These preferences are stored in AsyncStorage under `wallora.tv.settings.v1` and are validated with
+defaults when read, so older installs keep working.
+
 ## Import procedure
 
 1. Deploy the backend branch so `/api/v1/channels/sync` is current.

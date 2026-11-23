@@ -37,6 +37,7 @@ import {
   getTvSettings,
   qualityHeight,
   DEFAULT_TV_SETTINGS,
+  SPEED_OPTIONS,
   type TvSettings,
 } from "../../lib/tvSettings";
 
@@ -48,7 +49,6 @@ const FILL = {
   bottom: 0,
 };
 
-const SPEEDS = [1, 1.25, 1.5, 2];
 const MAX_RECONNECTS = 8;
 
 /** Keep hook-returned player mutations behind helpers so lint can verify intent. */
@@ -75,6 +75,12 @@ function safeSetMaxResolution(player: VideoPlayer, size: VideoSize | null) {
 function safeSetSubtitle(player: VideoPlayer, track: SubtitleTrack | null) {
   try {
     player.subtitleTrack = track;
+  } catch {}
+}
+function safeSetBackgroundAudio(player: VideoPlayer, enabled: boolean) {
+  try {
+    player.staysActiveInBackground = enabled;
+    player.showNowPlayingNotification = enabled;
   } catch {}
 }
 
@@ -214,7 +220,8 @@ export default function LiveTvPlayerScreen() {
   const scheduleReconnect = useCallback(
     (reason: string) => {
       if (reconnectTimer.current) return;
-      if (attemptRef.current >= MAX_RECONNECTS) {
+      if (!settings.autoReconnect || attemptRef.current >= MAX_RECONNECTS) {
+        setReconnectReason(settings.autoReconnect ? reason : "Auto-reconnect is off");
         setReconnectFailed(true);
         setReconnecting(false);
         return;
@@ -228,7 +235,7 @@ export default function LiveTvPlayerScreen() {
         applyNextAttempt();
       }, delay);
     },
-    [applyNextAttempt],
+    [applyNextAttempt, settings.autoReconnect],
   );
 
   useEffect(() => {
@@ -238,11 +245,14 @@ export default function LiveTvPlayerScreen() {
     setReconnectFailed(false);
     setQualityIndex(0);
     setSubtitleIndex(0);
-    setSpeedIndex(0);
+    const defaultSpeedIndex = SPEED_OPTIONS.findIndex(
+      (speed) => speed === settings.defaultSpeed,
+    );
+    setSpeedIndex(defaultSpeedIndex < 0 ? 0 : defaultSpeedIndex);
     lastProgressAt.current = Date.now();
     lastGoodAt.current = Date.now();
     clearReconnectTimer();
-  }, [channelId, clearReconnectTimer]);
+  }, [channelId, clearReconnectTimer, settings.defaultSpeed]);
 
   useEffect(() => {
     if (status === "error" || !!error) {
@@ -338,7 +348,11 @@ export default function LiveTvPlayerScreen() {
   }, [player, settings.subtitlesDefault, subtitleTracks]);
 
   useEffect(() => {
-    safeSetSpeed(player, SPEEDS[speedIndex]);
+    safeSetBackgroundAudio(player, settings.backgroundAudio);
+  }, [player, settings.backgroundAudio]);
+
+  useEffect(() => {
+    safeSetSpeed(player, SPEED_OPTIONS[speedIndex]);
   }, [player, speedIndex]);
 
   useEffect(() => {
@@ -398,7 +412,7 @@ export default function LiveTvPlayerScreen() {
   };
 
   const cycleSpeed = () => {
-    setSpeedIndex((current) => (current + 1) % SPEEDS.length);
+    setSpeedIndex((current) => (current + 1) % SPEED_OPTIONS.length);
   };
 
   const shareToCommunity = () => {
@@ -573,7 +587,7 @@ export default function LiveTvPlayerScreen() {
           </Pressable>
           <Pressable onPress={cycleSpeed} style={styles.chip}>
             <Ionicons name="speedometer-outline" size={11} color={C.textSoft} />
-            <Text style={styles.chipText}>{SPEEDS[speedIndex]}x</Text>
+            <Text style={styles.chipText}>{SPEED_OPTIONS[speedIndex]}×</Text>
           </Pressable>
           <Pressable onPress={cycleSubtitles} style={styles.chip}>
             <Ionicons name="logo-closed-captioning" size={12} color={C.textSoft} />
