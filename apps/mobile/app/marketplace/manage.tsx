@@ -20,7 +20,7 @@ import { apiJson } from "../../lib/api";
 import { assetUrl } from "../../lib/config";
 import { useAuth } from "../../lib/auth";
 import { C, R, S } from "../../lib/theme";
-import { pickImages, uploadImages, type PickedImage } from "../../lib/uploads";
+import { pickImages, toFormUploadFile, uploadImages, type PickedImage } from "../../lib/uploads";
 import { withVerification } from "../../lib/verification";
 
 type MyProduct = {
@@ -62,18 +62,19 @@ async function uploadProductCover(image: PickedImage): Promise<string> {
   let url = uploaded?.publicUrl;
 
   try {
+    const part = await toFormUploadFile(image);
     const form = new FormData();
-    form.append("file", {
-      uri: image.uri,
-      name: image.fileName,
-      type: image.mimeType,
-    } as unknown as Blob);
-    const result = await apiJson<{ url?: string }>("/api/v1/products/image", {
-      method: "POST",
-      body: form,
-      rawBody: true,
-    });
-    if (result?.url) url = result.url;
+    form.append("file", part.blob, part.fileName);
+    try {
+      const result = await apiJson<{ url?: string }>("/api/v1/products/image", {
+        method: "POST",
+        body: form,
+        rawBody: true,
+      });
+      if (result?.url) url = result.url;
+    } finally {
+      part.cleanup();
+    }
   } catch (e: any) {
     if (e?.status === 401) throw e;
     // The presigned upload already stored the image; keep its URL.

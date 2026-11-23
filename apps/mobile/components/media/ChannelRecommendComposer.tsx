@@ -50,7 +50,10 @@ export function ChannelRecommendComposer({
           method: "POST",
           body: JSON.stringify({
             body: body.trim() || `Recommended ${channel.name}`,
-            kind: "channel_clip",
+            // Keep this as a text post for compatibility with every deployed
+            // backend schema. Channel metadata and the optional clip URL are
+            // still sent, and the current API stores them on the post.
+            kind: "text",
             channelId: channel.id,
             refId: channel.id,
             channelName: channel.name,

@@ -1,5 +1,5 @@
 import { apiFetch } from "./api";
-import type { PickedImage } from "./uploads";
+import { toFormUploadFile, type PickedImage } from "./uploads";
 
 export type ProfileMediaKind = "avatar" | "cover";
 
@@ -18,19 +18,21 @@ export async function uploadProfileMedia(
   kind: ProfileMediaKind,
   picked: PickedImage,
 ): Promise<string> {
+  const file = await toFormUploadFile(picked);
   const form = new FormData();
   form.append("kind", kind);
-  form.append("file", {
-    uri: picked.uri,
-    name: picked.fileName,
-    type: picked.mimeType,
-  } as unknown as Blob);
+  form.append("file", file.blob, file.fileName);
 
-  const res = await apiFetch("/api/v1/profile/media", {
-    method: "POST",
-    body: form,
-    rawBody: true,
-  });
+  let res: Response;
+  try {
+    res = await apiFetch("/api/v1/profile/media", {
+      method: "POST",
+      body: form,
+      rawBody: true,
+    });
+  } finally {
+    file.cleanup();
+  }
 
   let payload: ProfileMediaResponse = {};
   try {

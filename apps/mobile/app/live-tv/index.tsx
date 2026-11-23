@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,28 +15,19 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useEvent } from "expo";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  isPictureInPictureSupported,
-  useVideoPlayer,
-  VideoView,
-  type SubtitleTrack,
-  type VideoPlayer,
-  type VideoSize,
-} from "expo-video";
 
-import { ScreenHeader } from "../components/ui/ScreenHeader";
-import { EmptyState } from "../components/ui/States";
-import { MediaRail } from "../components/ui/MediaRail";
-import type { MediaItem } from "../components/ui/MediaCard";
-import { SmartSearchBar } from "../components/media/SmartSearchBar";
-import { TvWatermark } from "../components/media/TvWatermark";
+import { ScreenHeader } from "../../components/ui/ScreenHeader";
+import { EmptyState } from "../../components/ui/States";
+import { MediaRail } from "../../components/ui/MediaRail";
+import type { MediaItem } from "../../components/ui/MediaCard";
+import { SmartSearchBar } from "../../components/media/SmartSearchBar";
 import {
   hasAcceptedTvTerms,
   TvWelcomeModal,
-} from "../components/media/TvWelcomeModal";
-import { C, R, SHADOW } from "../lib/theme";
+} from "../../components/media/TvWelcomeModal";
+import { C, R, SHADOW } from "../../lib/theme";
+import { apiJson } from "../../lib/api";
 import {
   DEFAULT_PLAYLIST_URL,
   getCustomPlaylistUrl,
@@ -48,16 +39,15 @@ import {
   uniqueChannelId,
   type IptvChannel,
   type PlaylistResult,
-} from "../lib/iptv";
+} from "../../lib/iptv";
 import {
   getCommunityLikes,
   getMostWatched,
   getTrending,
   rankChannels,
-  recordWatch,
   setFavoriteBoost,
   type RankedChannel,
-} from "../lib/channelAnalytics";
+} from "../../lib/channelAnalytics";
 
 const CHANNEL_COLORS = [
   "#2E5A88",
@@ -74,38 +64,10 @@ const FILL = {
   right: 0,
   bottom: 0,
 };
-const SPEEDS = [1, 1.25, 1.5, 2];
 const SPECIAL_GROUPS = new Set(["All", "Favorites", "Most watched", "Trending"]);
-
-type QualityOption = { label: string; size: VideoSize };
 
 function colorFor(index: number) {
   return CHANNEL_COLORS[index % CHANNEL_COLORS.length];
-}
-
-/** expo-video player properties are mutable by design; keep mutations out of render. */
-function applyMaxResolution(player: VideoPlayer, size: VideoSize | null) {
-  try {
-    player.maxResolution = size;
-  } catch {}
-}
-
-function applyPlaybackRate(player: VideoPlayer, rate: number) {
-  try {
-    player.playbackRate = rate;
-  } catch {}
-}
-
-function applySubtitleTrack(player: VideoPlayer, track: SubtitleTrack | null) {
-  try {
-    player.subtitleTrack = track;
-  } catch {}
-}
-
-function resetPlaybackSettings(player: VideoPlayer) {
-  applyMaxResolution(player, null);
-  applySubtitleTrack(player, null);
-  applyPlaybackRate(player, 1);
 }
 
 function initials(name: string) {
@@ -174,8 +136,6 @@ export default function LiveTvScreen() {
   const [selected, setSelected] = useState<IptvChannel | null>(null);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [customUrlInput, setCustomUrlInput] = useState("");
-  const [pipSupported] = useState(() => isPictureInPictureSupported());
-  const videoRef = useRef<VideoView>(null);
 
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -183,17 +143,11 @@ export default function LiveTvScreen() {
   const [mostWatched, setMostWatched] = useState<RankedChannel[]>([]);
   const [trending, setTrending] = useState<RankedChannel[]>([]);
   const [communityLikes, setCommunityLikes] = useState<Record<string, number>>({});
+  const [adminFeatured, setAdminFeatured] = useState<IptvChannel[]>([]);
   const [statsVersion, setStatsVersion] = useState(0);
   const [recommendChannel, setRecommendChannel] = useState<IptvChannel | null>(
     null,
   );
-
-  const [qualityOptions, setQualityOptions] = useState<QualityOption[]>([]);
-  const [qualityIndex, setQualityIndex] = useState(0);
-  const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([]);
-  const [subtitleIndex, setSubtitleIndex] = useState(0);
-  const [speedIndex, setSpeedIndex] = useState(0);
-  const pendingWatch = useRef<{ id: string; seconds: number } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -244,117 +198,36 @@ export default function LiveTvScreen() {
     load().finally(() => setLoading(false));
   }, [load]);
 
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const customUrl = await getCustomPlaylistUrl().catch(() => null);
+      if (customUrl || !alive) return;
+      try {
+        const response = await apiJson<{ items?: IptvChannel[] }>(
+          "/api/v1/channels?featured=1&limit=24",
+        );
+        if (!alive) return;
+        setAdminFeatured(
+          (response?.items ?? []).filter((channel) => channel?.isFeatured),
+        );
+      } catch {
+        if (alive) setAdminFeatured([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
   };
 
-  const source = useMemo(() => {
-    if (!selected) return null;
-    // expo-video needs this hint on iOS when an HLS URL has no .m3u8 extension.
-    const hlsHint = /m3u8/i.test(selected.url)
-      ? ({ contentType: "hls" as const } as const)
-      : {};
-    return {
-      uri: selected.url,
-      ...hlsHint,
-      metadata: {
-        title: selected.name,
-        artist: "WALLORA Live TV" as const,
-      },
-    };
-  }, [selected]);
-
-  const player = useVideoPlayer(source, (instance) => {
-    instance.staysActiveInBackground = true;
-    instance.showNowPlayingNotification = false;
-    instance.loop = false;
-  });
-  const { isPlaying } = useEvent(player, "playingChange", {
-    isPlaying: player.playing,
-  });
-  const { status } = useEvent(player, "statusChange", {
-    status: player.status,
-  });
-
   const channels = useMemo(() => playlist?.channels ?? [], [playlist]);
   const selectedId = selected ? uniqueChannelId(selected) : "";
-  const isFavorite = !!selected && favorites.includes(selectedId);
-
-  useEffect(() => {
-    if (!termsAccepted) {
-      try {
-        player.pause();
-      } catch {}
-      return;
-    }
-    if (selected) player.play();
-  }, [selected, player, termsAccepted]);
-
-  const refreshTracks = useCallback(() => {
-    try {
-      const tracks = player.availableVideoTracks ?? [];
-      const seen = new Set<number>();
-      const options: QualityOption[] = [];
-      for (const track of tracks) {
-        const size = track.size;
-        if (!size?.height || seen.has(size.height)) continue;
-        seen.add(size.height);
-        options.push({ label: `${size.height}p`, size });
-      }
-      options.sort((a, b) => b.size.height - a.size.height);
-      setQualityOptions(options);
-
-      const subs = player.availableSubtitleTracks ?? [];
-      setSubtitleTracks(subs);
-    } catch {
-      setQualityOptions([]);
-      setSubtitleTracks([]);
-    }
-  }, [player]);
-
-  useEffect(() => {
-    refreshTracks();
-    const listeners = [
-      player.addListener("sourceLoad", refreshTracks),
-      player.addListener("videoTrackChange", refreshTracks),
-      player.addListener("availableSubtitleTracksChange", refreshTracks),
-    ];
-    return () => listeners.forEach((listener) => listener.remove());
-  }, [player, refreshTracks]);
-
-  useEffect(() => {
-    setQualityIndex(0);
-    setSubtitleIndex(0);
-    setSpeedIndex(0);
-    resetPlaybackSettings(player);
-  }, [selectedId, player]);
-
-  useEffect(() => {
-    if (!termsAccepted || !selectedId || !isPlaying) return;
-    const id = selectedId;
-    const timer = setInterval(() => {
-      const current = pendingWatch.current;
-      const next = {
-        id,
-        seconds: (current?.id === id ? current.seconds : 0) + 5,
-      };
-      pendingWatch.current = next;
-      if (next.seconds >= 30) {
-        recordWatch(id, next.seconds).catch(() => {});
-        pendingWatch.current = { id, seconds: 0 };
-        setStatsVersion((value) => value + 1);
-      }
-    }, 5000);
-
-    return () => {
-      clearInterval(timer);
-      const pending = pendingWatch.current;
-      if (pending?.seconds) recordWatch(pending.id, pending.seconds).catch(() => {});
-      pendingWatch.current = null;
-    };
-  }, [termsAccepted, selectedId, isPlaying]);
 
   useEffect(() => {
     if (!channels.length) {
@@ -488,6 +361,21 @@ export default function LiveTvScreen() {
     () => ranked.slice(0, 12).map((channel, i) => toMediaItem(channel, i)),
     [ranked, toMediaItem],
   );
+  const featuredItems = useMemo(() => {
+    const seen = new Set<string>();
+    const adminPicks = [...adminFeatured, ...channels.filter((channel) => channel.isFeatured)]
+      .filter((channel) => {
+        const id = uniqueChannelId(channel);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .map((channel) => ({ ...channel, isFeatured: true }));
+    const source = adminPicks.length ? adminPicks : ranked.slice(0, 8);
+    return source.slice(0, 12).map((channel, i) =>
+      toMediaItem(channel, i, channel.isFeatured ? "ADMIN PICK" : undefined),
+    );
+  }, [adminFeatured, channels, ranked, toMediaItem]);
 
   const handleToggleFavorite = async (channel?: IptvChannel) => {
     if (!channel) return;
@@ -498,48 +386,22 @@ export default function LiveTvScreen() {
     setStatsVersion((value) => value + 1);
   };
 
-  const watchChannel = (channel?: IptvChannel) => {
-    if (!termsAccepted) {
-      setShowWelcome(true);
-      return;
-    }
-    if (channel && uniqueChannelId(channel) !== selectedId) {
+  const openPlayer = useCallback(
+    (channel?: IptvChannel) => {
+      if (!channel) return;
+      if (!termsAccepted) {
+        setShowWelcome(true);
+        return;
+      }
       setSelected(channel);
-      return;
-    }
-    try {
-      player.play();
-    } catch {}
-  };
+      router.push({
+        pathname: "/live-tv/player",
+        params: { channel: uniqueChannelId(channel) },
+      });
+    },
+    [termsAccepted],
+  );
 
-  const togglePlayback = () => {
-    if (!termsAccepted) {
-      setShowWelcome(true);
-      return;
-    }
-    if (isPlaying) player.pause();
-    else player.play();
-  };
-
-  const cycleQuality = () => {
-    if (!qualityOptions.length) return;
-    const next = (qualityIndex + 1) % (qualityOptions.length + 1);
-    setQualityIndex(next);
-    applyMaxResolution(player, next === 0 ? null : qualityOptions[next - 1].size);
-  };
-
-  const cycleSpeed = () => {
-    const next = (speedIndex + 1) % SPEEDS.length;
-    setSpeedIndex(next);
-    applyPlaybackRate(player, SPEEDS[next]);
-  };
-
-  const cycleSubtitles = () => {
-    if (!subtitleTracks.length) return;
-    const next = (subtitleIndex + 1) % (subtitleTracks.length + 1);
-    setSubtitleIndex(next);
-    applySubtitleTrack(player, next === 0 ? null : subtitleTracks[next - 1]);
-  };
 
   const pushRecommendation = (channel: IptvChannel) => {
     const channelId = uniqueChannelId(channel);
@@ -618,28 +480,32 @@ export default function LiveTvScreen() {
     );
   };
 
-  const qualityLabel =
-    qualityIndex === 0 ? "AUTO" : qualityOptions[qualityIndex - 1]?.label ?? "AUTO";
-  const subtitleLabel =
-    subtitleIndex === 0
-      ? "CC OFF"
-      : subtitleTracks[subtitleIndex - 1]?.label ?? "CC";
-
   return (
     <View style={styles.screen}>
       <ScreenHeader
         title="WALLORA Live TV"
         subtitle={`${channels.length.toLocaleString()} channels · real-time streams`}
         right={
-          <Pressable
-            onPress={() => setShowPlaylistModal(true)}
-            hitSlop={10}
-            style={styles.headerButton}
-            accessibilityRole="button"
-            accessibilityLabel="Playlist options"
-          >
-            <Ionicons name="options-outline" size={19} color={C.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push("/live-tv/reminders")}
+              hitSlop={10}
+              style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel="Channel reminders"
+            >
+              <Ionicons name="alarm-outline" size={19} color={C.text} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/live-tv/settings")}
+              hitSlop={10}
+              style={styles.headerButton}
+              accessibilityRole="button"
+              accessibilityLabel="Live TV settings"
+            >
+              <Ionicons name="settings-outline" size={19} color={C.text} />
+            </Pressable>
+          </View>
         }
       />
 
@@ -697,7 +563,7 @@ export default function LiveTvScreen() {
                 </View>
                 <View style={styles.heroActions}>
                   <Pressable
-                    onPress={() => watchChannel(heroChannel)}
+                    onPress={() => openPlayer(heroChannel)}
                     style={({ pressed }) => [
                       styles.heroPrimary,
                       pressed && styles.pressed,
@@ -720,182 +586,76 @@ export default function LiveTvScreen() {
               </View>
             )}
 
-            <View style={styles.playerCard}>
-              <View style={styles.playerBox}>
-                {selected ? (
-                  <VideoView
-                    ref={videoRef}
-                    player={player}
-                    style={FILL}
-                    contentFit="contain"
-                    nativeControls={false}
-                    allowsPictureInPicture={pipSupported}
-                    fullscreenOptions={{ enable: true, orientation: "landscape" }}
-                  />
+            <Pressable
+              onPress={() => openPlayer(heroChannel ?? undefined)}
+              style={({ pressed }) => [
+                styles.playerCard,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Open full screen WALLORA TV player"
+            >
+              <LinearGradient
+                colors={[C.raised, C.bgElevated, C.bgDeep]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={FILL}
+              />
+              <View style={styles.playerCardHead}>
+                <View style={styles.livePill}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.livePillText}>LIVE TV</Text>
+                </View>
+                <View style={styles.fullScreenPill}>
+                  <Ionicons name="expand-outline" size={12} color={C.accent} />
+                  <Text style={styles.fullScreenPillText}>FULL SCREEN</Text>
+                </View>
+              </View>
+              <View style={styles.playerCardBody}>
+                {heroChannel ? (
+                  <ChannelLogo channel={heroChannel} index={heroIndex} size={48} />
                 ) : (
                   <View style={styles.playerPlaceholder}>
-                    <Ionicons name="tv-outline" size={34} color={C.muted} />
-                    <Text style={styles.playerPlaceholderText}>
-                      No channels available
-                    </Text>
+                    <Ionicons name="tv-outline" size={28} color={C.muted} />
                   </View>
                 )}
-
-                <TvWatermark channelName={selected?.name} />
-
-                {status === "loading" && termsAccepted && (
-                  <View style={styles.playerOverlay}>
-                    <ActivityIndicator color={C.accent} size="large" />
-                    <Text style={styles.overlayText}>Connecting to stream…</Text>
-                  </View>
-                )}
-                {status === "error" && termsAccepted && (
-                  <View style={styles.playerOverlay}>
-                    <Ionicons
-                      name="alert-circle-outline"
-                      size={28}
-                      color={C.error}
-                    />
-                    <Text style={styles.overlayText}>
-                      This stream is offline. Try another channel.
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.playerTop}>
-                  <View style={styles.livePill}>
-                    <View style={styles.liveDot} />
-                    <Text style={styles.livePillText}>LIVE TV</Text>
-                  </View>
-                  <View style={styles.playerTopActions}>
-                    <Pressable
-                      onPress={() => handleToggleFavorite(selected ?? undefined)}
-                      hitSlop={8}
-                      style={styles.playerIconButton}
-                      accessibilityRole="button"
-                      accessibilityLabel={isFavorite ? "Remove favorite" : "Add favorite"}
-                    >
-                      <Ionicons
-                        name={isFavorite ? "star" : "star-outline"}
-                        size={18}
-                        color={isFavorite ? C.accent : C.white}
-                      />
-                    </Pressable>
-                    {pipSupported && (
-                      <Pressable
-                        onPress={() =>
-                          videoRef.current
-                            ?.startPictureInPicture()
-                            .catch(() => {})
-                        }
-                        hitSlop={8}
-                        style={styles.playerIconButton}
-                        accessibilityRole="button"
-                        accessibilityLabel="Picture in picture"
-                      >
-                        <Ionicons
-                          name="contract-outline"
-                          size={18}
-                          color={C.white}
-                        />
-                      </Pressable>
-                    )}
-                  </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.nowPlayingLabel}>NOW PLAYING</Text>
+                  <Text style={styles.nowPlayingTitle} numberOfLines={1}>
+                    {heroChannel?.name ?? "Pick a channel"}
+                  </Text>
+                  <Text style={styles.nowPlayingGroup} numberOfLines={1}>
+                    {heroChannel ? groupLabel(heroChannel.group) : "WALLORA Live TV"}
+                  </Text>
                 </View>
-
-                <View style={styles.playerChips}>
-                  <Pressable
-                    onPress={cycleQuality}
-                    style={[styles.controlChip, !qualityOptions.length && styles.controlChipMuted]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Video quality: ${qualityLabel}`}
-                  >
-                    <Ionicons name="resize-outline" size={11} color={C.textSoft} />
-                    <Text style={styles.controlChipText}>{qualityLabel}</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={cycleSpeed}
-                    style={styles.controlChip}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Playback speed: ${SPEEDS[speedIndex]} times`}
-                  >
-                    <Ionicons name="speedometer-outline" size={11} color={C.textSoft} />
-                    <Text style={styles.controlChipText}>
-                      {SPEEDS[speedIndex]}x
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={cycleSubtitles}
-                    style={[styles.controlChip, !subtitleTracks.length && styles.controlChipMuted]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Subtitles: ${subtitleLabel}`}
-                  >
-                    <Ionicons
-                      name="logo-closed-captioning"
-                      size={12}
-                      color={C.textSoft}
-                    />
-                    <Text style={styles.controlChipText} numberOfLines={1}>
-                      {subtitleLabel}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                <View style={styles.playerBottom}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.nowPlayingLabel}>NOW WATCHING</Text>
-                    <Text style={styles.nowPlayingTitle} numberOfLines={1}>
-                      {selected?.name ?? "Pick a channel"}
-                    </Text>
-                    <Text style={styles.nowPlayingGroup} numberOfLines={1}>
-                      {selected ? groupLabel(selected.group) : "WALLORA Live TV"}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() =>
-                      videoRef.current?.enterFullscreen().catch(() => {})
-                    }
-                    style={styles.fullscreenButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="Enter fullscreen"
-                  >
-                    <Ionicons name="expand-outline" size={19} color={C.bg} />
-                  </Pressable>
-                </View>
-
-                {!termsAccepted && (
-                  <Pressable
-                    onPress={() => setShowWelcome(true)}
-                    style={styles.lockedOverlay}
-                    accessibilityRole="button"
-                    accessibilityLabel="Accept terms to watch live TV"
-                  >
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={26}
-                      color={C.accent}
-                    />
-                    <Text style={styles.lockedTitle}>
-                      Accept terms to start watching
-                    </Text>
-                    <Text style={styles.lockedSubtitle}>Tap to review WALLORA TV terms</Text>
-                  </Pressable>
-                )}
+                <Ionicons name="play-circle" size={34} color={C.accent} />
               </View>
-
-              <Pressable onPress={togglePlayback} style={styles.playToggle}>
+              <View style={styles.playerCardFooter}>
                 <Ionicons
-                  name={isPlaying && termsAccepted ? "pause" : "play"}
-                  size={16}
-                  color={C.bg}
+                  name="information-circle-outline"
+                  size={13}
+                  color={C.textSoft}
                 />
-                <Text style={styles.playToggleText}>
-                  {!termsAccepted
-                    ? "Accept terms to play"
-                    : isPlaying
-                      ? "Pause stream"
-                      : "Play stream"}
+                <Text style={styles.playerCardFooterText}>
+                  Full-screen player · CC · quality · share to community
                 </Text>
+              </View>
+            </Pressable>
+
+            <View style={styles.quickActions}>
+              <Pressable
+                onPress={() => router.push("/live-tv/settings")}
+                style={styles.quickAction}
+              >
+                <Ionicons name="settings-outline" size={16} color={C.accent} />
+                <Text style={styles.quickActionText}>TV settings</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/live-tv/reminders")}
+                style={styles.quickAction}
+              >
+                <Ionicons name="alarm-outline" size={16} color={C.accent} />
+                <Text style={styles.quickActionText}>Reminders</Text>
               </Pressable>
             </View>
 
@@ -912,6 +672,16 @@ export default function LiveTvScreen() {
               </Text>
             </View>
 
+            <MediaRail
+              title="Featured on WALLORA"
+              subtitle="Admin-recommended channels"
+              items={featuredItems}
+              onSeeAll={() => {
+                setGroup("All");
+                setQuery("");
+              }}
+              autoScroll={false}
+            />
             <MediaRail
               title="Most watched by you"
               subtitle="Your personal top channels"
@@ -1058,8 +828,8 @@ export default function LiveTvScreen() {
                   color={C.accent}
                 />
                 <Text style={styles.uploadNoticeText}>
-                  9-second clip uploads are being connected to the backend. For
-                  now, your recommendation opens the community composer.
+                  Your recommendation opens the community composer, where you
+                  can attach a 9-second clip before posting.
                 </Text>
               </View>
 
@@ -1235,16 +1005,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.22)",
   },
   heroSecondaryText: { color: C.text, fontSize: 12.5, fontWeight: "800" },
-  playerCard: {
-    marginHorizontal: 16,
-    marginTop: 14,
-    borderRadius: R.xl,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.card,
-    ...SHADOW.card,
-  },
   playerBox: {
     width: "100%",
     aspectRatio: 16 / 9,
@@ -1388,6 +1148,80 @@ const styles = StyleSheet.create({
     borderTopColor: C.borderSoft,
   },
   playToggleText: { color: C.accent, fontSize: 12, fontWeight: "800" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 2 },
+  fullScreenPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: R.pill,
+    backgroundColor: C.accentDim,
+  },
+  fullScreenPillText: {
+    color: C.accent,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  playerCard: {
+    position: "relative",
+    overflow: "hidden",
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: R.xl,
+    borderWidth: 1,
+    borderColor: C.borderSoft,
+    ...SHADOW.card,
+  },
+  playerCardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  playerCardBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 14,
+  },
+  playerCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 13,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: C.borderSoft,
+  },
+  playerCardFooterText: {
+    color: C.textSoft,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  quickActions: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  quickAction: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: R.lg,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderSoft,
+  },
+  quickActionText: {
+    color: C.text,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   infoRow: {
     flexDirection: "row",
     alignItems: "flex-start",

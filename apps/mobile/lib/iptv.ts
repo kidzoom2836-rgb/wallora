@@ -17,6 +17,9 @@ export type IptvChannel = {
   logo?: string;
   url: string;
   tvgId?: string;
+  /** Set by the WALLORA admin panel and returned by the database channel API. */
+  isFeatured?: boolean;
+  previewUrl?: string;
 };
 
 export type PlaylistResult = {
@@ -233,6 +236,8 @@ export async function loadPlaylist(options?: {
           logo: channel.logo,
           url: channel.url,
           tvgId: channel.tvgId,
+          isFeatured: channel.isFeatured,
+          previewUrl: channel.previewUrl,
         }));
       if (channels.length >= 3) {
         const result: PlaylistResult = {
