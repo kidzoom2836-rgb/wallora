@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   FlatList,
   Image,
   Pressable,
@@ -23,13 +24,19 @@ import { WebView } from "react-native-webview";
 import { TvSignalSearching } from "../../components/media/TvSignalSearching";
 import {
   DEFAULT_REEL_INTERESTS,
+  getAutoAdvance,
   getReelInterests,
+  getReelPosition,
   getReelsApiKey,
   getReelsProvider,
   loadPersonalizedReels,
   loadStockReels,
+  markReelsSeen,
   recordReelLike,
+  recordReelSkip,
+  setAutoAdvance,
   setReelInterests,
+  setReelPosition,
   setReelsApiKey,
   setReelsProvider,
   type ReelProvider,
@@ -78,6 +85,7 @@ function ReelCard({
   likeCount,
   onLike,
   onShare,
+  onSkip,
   insetsBottom,
   viewportHeight,
 }: {
@@ -87,6 +95,7 @@ function ReelCard({
   likeCount: number;
   onLike: () => void;
   onShare: () => void;
+  onSkip: () => void;
   insetsBottom: number;
   viewportHeight: number;
 }) {
@@ -107,6 +116,25 @@ function ReelCard({
   const [heartVisible, setHeartVisible] = useState(false);
   const heartScale = useMemo(() => new Animated.Value(0), []);
   const lastTap = useRef(0);
+  const shownAt = useRef(0);
+  const skipReported = useRef(false);
+  const onSkipRef = useRef(onSkip);
+  useEffect(() => {
+    onSkipRef.current = onSkip;
+  }, [onSkip]);
+
+  useEffect(() => {
+    if (active) {
+      shownAt.current = Date.now();
+      skipReported.current = false;
+      return;
+    }
+    if (shownAt.current && !skipReported.current) {
+      skipReported.current = true;
+      const elapsed = Date.now() - shownAt.current;
+      if (elapsed > 0 && elapsed < 1400) onSkipRef.current();
+    }
+  }, [active]);
 
   useEffect(() => {
     if (isYouTube) return;
@@ -382,8 +410,13 @@ export default function ReelsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [initialIndex, setInitialIndex] = useState(0);
+  const [autoAdvance, setAdvanceState] = useState(false);
+  const [appState, setAppState] = useState(AppState.currentState);
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [likes, setLikes] = useState<Record<string, number>>({});
+  const listRef = useRef<FlatList<StockReel>>(null);
+  const lastInteraction = useRef(Date.now());
 
   const feed = showingSearch ? searchResults : reels;
 
@@ -395,9 +428,13 @@ export default function ReelsScreen() {
           nextSource === "youtube"
             ? await loadPersonalizedReels({ force })
             : await loadStockReels({ provider: nextSource, force });
+        const position = await getReelPosition();
+        const restored = position ? result.reels.findIndex((reel) => reel.id === position) : -1;
+        const nextIndex = restored >= 0 ? restored : 0;
         setReels(result.reels);
         setError(result.error ?? null);
-        setActiveIndex(0);
+        setActiveIndex(nextIndex);
+        setInitialIndex(nextIndex);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not load WALLORA Reels.");
         setReels([]);
@@ -412,14 +449,16 @@ export default function ReelsScreen() {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [savedSource, savedInterests] = await Promise.all([
+      const [savedSource, savedInterests, advance] = await Promise.all([
         getReelsProvider(),
         getReelInterests(),
+        getAutoAdvance(),
       ]);
       const key = await getReelsApiKey(savedSource);
       if (!alive) return;
       setSource(savedSource);
       setApiKey(key);
+      setAdvanceState(advance);
       if (!savedInterests.length) {
         setDraftInterests(DEFAULT_REEL_INTERESTS.slice(0, 4));
         setPrefsOpen(true);
@@ -430,6 +469,55 @@ export default function ReelsScreen() {
       alive = false;
     };
   }, [loadFeed]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  // Remember the viewed reel so the next visit resumes instead of restarting.
+  useEffect(() => {
+    const current = feed[activeIndex];
+    if (!current || loading) return;
+    void markReelsSeen([current.id]);
+    void setReelPosition(current.id);
+  }, [activeIndex, feed, loading]);
+
+  useEffect(() => {
+    if (!loading && initialIndex > 0 && tab === "foryou" && !showingSearch) {
+      listRef.current?.scrollToOffset({ offset: initialIndex * viewportHeight, animated: false });
+    }
+  }, [initialIndex, loading, showingSearch, tab, viewportHeight]);
+
+  useEffect(() => {
+    if (
+      !autoAdvance ||
+      appState !== "active" ||
+      loading ||
+      prefsOpen ||
+      settingsVisible ||
+      tab !== "foryou" ||
+      showingSearch ||
+      feed.length < 2
+    ) {
+      return;
+    }
+    const timer = setInterval(() => {
+      if (Date.now() - lastInteraction.current < 6000) return;
+      const next = (activeIndex + 1) % feed.length;
+      lastInteraction.current = Date.now();
+      setActiveIndex(next);
+      listRef.current?.scrollToIndex({ index: next, animated: true });
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [activeIndex, appState, autoAdvance, feed.length, loading, prefsOpen, settingsVisible, showingSearch, tab]);
+
+  const toggleAutoAdvance = useCallback(() => {
+    setAdvanceState((value) => {
+      void setAutoAdvance(!value);
+      return !value;
+    });
+  }, []);
 
   const runSearch = useCallback(async () => {
     const query = searchText.trim();
@@ -545,6 +633,17 @@ export default function ReelsScreen() {
         ))}
       </View>
       <View style={styles.headerActions}>
+        <Pressable
+          onPress={toggleAutoAdvance}
+          style={[styles.headerButton, autoAdvance && styles.headerButtonActive]}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={autoAdvance ? "pause-outline" : "play-outline"}
+            size={19}
+            color={autoAdvance ? C.bg : C.white}
+          />
+        </Pressable>
         <Pressable onPress={onRefresh} style={styles.headerButton} hitSlop={8}>
           <Ionicons name="refresh-outline" size={19} color={C.white} />
         </Pressable>
@@ -651,9 +750,17 @@ export default function ReelsScreen() {
     content = (
       <View style={styles.screen}>
         <FlatList
+          ref={listRef}
           data={feed}
           keyExtractor={(item) => item.id}
           style={{ height: viewportHeight }}
+          initialScrollIndex={initialIndex}
+          onTouchStart={() => {
+            lastInteraction.current = Date.now();
+          }}
+          onScrollToIndexFailed={({ index }) => {
+            listRef.current?.scrollToOffset({ offset: index * viewportHeight, animated: false });
+          }}
           pagingEnabled
           decelerationRate="fast"
           overScrollMode="never"
@@ -669,6 +776,7 @@ export default function ReelsScreen() {
             index,
           })}
           onMomentumScrollEnd={(event) => {
+            lastInteraction.current = Date.now();
             const index = Math.round(event.nativeEvent.contentOffset.y / viewportHeight);
             setActiveIndex(Math.min(Math.max(index, 0), Math.max(feed.length - 1, 0)));
           }}
@@ -685,6 +793,9 @@ export default function ReelsScreen() {
               likeCount={likes[item.id] ?? 0}
               onLike={() => toggleLike(item)}
               onShare={() => void share(item)}
+              onSkip={() => {
+                void recordReelSkip(item);
+              }}
               insetsBottom={insets.bottom}
               viewportHeight={viewportHeight}
             />
@@ -770,6 +881,7 @@ const styles = StyleSheet.create({
   },
   headerActions: { flexDirection: "row", gap: 8 },
   headerButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
+  headerButtonActive: { backgroundColor: C.accent },
   tabs: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: R.pill, padding: 3 },
   tab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill },
   tabActive: { backgroundColor: C.accent },

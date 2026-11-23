@@ -56,6 +56,11 @@ they create copyright/ToS risk and break without notice.
   interleaved for variety and ranked by likes, topic affinity and view count.
 - Tabs: **For You**, **Search** (YouTube shorts by keyword) and **Topics** (update interests).
 - Likes are stored on-device and improve future ranking; no profile data leaves the device.
+- Quickly swiping past a reel lowers that topic's affinity, so the feed adapts to skips as well as likes.
+- Each visit rotates the interest order and feed starting point, demotes already-seen reels, and
+  resumes at the last reel watched. The feed therefore changes on return instead of repeating.
+- Optional **auto-advance** (play button in the Reels header) moves to the next reel every 8 seconds;
+  it pauses on interaction, when a dialog is open, or when the app is backgrounded.
 - YouTube embeds use `autoplay`, inline playback and loop parameters, with the official YouTube
   controls available so playback is user-initiated where platform policy requires it.
 - A local `EXPO_PUBLIC_YOUTUBE_API_KEY` in the gitignored `apps/mobile/.env` is used for development.
