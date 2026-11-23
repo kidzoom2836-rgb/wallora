@@ -1,4 +1,5 @@
 import { apiFetch } from "./api";
+import { toFormUploadFile, type FormUploadFile } from "./uploads";
 
 export const AI_ATTACHMENT_MAX_FILES = 4;
 export const AI_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -80,15 +81,28 @@ export async function uploadAiAttachments(files: LocalAiFile[]): Promise<AiAttac
   if (!files.length) return [];
 
   const form = new FormData();
-  for (const file of files) {
-    form.append("files", {
-      uri: file.uri,
-      name: file.name,
-      type: normalizeType(file),
-    } as unknown as Blob);
+  const parts: FormUploadFile[] = [];
+  try {
+    for (const file of files) {
+      const part = await toFormUploadFile({
+        uri: file.uri,
+        fileName: file.name,
+        mimeType: normalizeType(file),
+      });
+      parts.push(part);
+      form.append("files", part.blob, part.fileName);
+    }
+  } catch (error) {
+    parts.forEach((part) => part.cleanup());
+    throw error;
   }
 
-  const res = await apiFetch("/api/v1/ai/attachments", { method: "POST", body: form });
+  let res: Response;
+  try {
+    res = await apiFetch("/api/v1/ai/attachments", { method: "POST", body: form });
+  } finally {
+    parts.forEach((part) => part.cleanup());
+  }
   const text = await res.text();
   let json: any = {};
   try {

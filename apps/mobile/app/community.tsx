@@ -25,6 +25,7 @@ import { useAuth } from "../lib/auth";
 import { loadPlaylist, uniqueChannelId, type IptvChannel } from "../lib/iptv";
 import { ChannelClipCard } from "../components/media/ChannelClipCard";
 import { ChannelRecommendComposer } from "../components/media/ChannelRecommendComposer";
+import { VideoShareComposer } from "../components/media/VideoShareComposer";
 
 type CommunityAuthor = {
   id?: string;
@@ -226,9 +227,15 @@ function CommunityComposer({ onPosted }: { onPosted: () => void }) {
 
 export default function CommunityScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ recommend?: string }>();
+  const params = useLocalSearchParams<{ recommend?: string; video?: string }>();
   const { user } = useAuth();
   const [recommendChannel, setRecommendChannel] = useState<IptvChannel | null>(null);
+  const [sharedVideo, setSharedVideo] = useState<{
+    id: string;
+    title: string;
+    uri: string;
+    source?: string;
+  } | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -278,6 +285,38 @@ export default function CommunityScreen() {
       active = false;
     };
   }, [params.recommend]);
+
+  useEffect(() => {
+    const raw = params.video;
+    if (!raw) {
+      setSharedVideo(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        id?: unknown;
+        title?: unknown;
+        uri?: unknown;
+        source?: unknown;
+      };
+      if (
+        typeof parsed.id === "string" &&
+        typeof parsed.title === "string" &&
+        typeof parsed.uri === "string"
+      ) {
+        setSharedVideo({
+          id: parsed.id,
+          title: parsed.title,
+          uri: parsed.uri,
+          source: typeof parsed.source === "string" ? parsed.source : undefined,
+        });
+      } else {
+        setSharedVideo(null);
+      }
+    } catch {
+      setSharedVideo(null);
+    }
+  }, [params.video]);
 
   const load = useCallback(
     async (nextPage: number, replace: boolean) => {
@@ -485,6 +524,10 @@ export default function CommunityScreen() {
           <ChannelRecommendComposer channel={recommendChannel} onPosted={onRefresh} />
         ) : null}
 
+        {sharedVideo ? (
+          <VideoShareComposer video={sharedVideo} onPosted={onRefresh} />
+        ) : null}
+
         {!user && (
           <Pressable style={styles.signInCard} onPress={() => router.push("/auth/login")}>
             <Ionicons name="lock-closed-outline" size={17} color={C.accent} />
@@ -495,7 +538,7 @@ export default function CommunityScreen() {
         <Banner message={notice?.message ?? null} tone={notice?.tone} />
       </View>
     ),
-    [notice, onRefresh, query, recommendChannel, router, sort, total, user],
+    [notice, onRefresh, query, recommendChannel, router, sharedVideo, sort, total, user],
   );
 
   return (

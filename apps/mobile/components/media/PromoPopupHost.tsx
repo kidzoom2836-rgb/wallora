@@ -30,6 +30,9 @@ let aPromoIsVisible = false;
 function isSuppressedPath(pathname: string): boolean {
   return (
     pathname === "/live-tv" ||
+    pathname.startsWith("/live-tv/") ||
+    pathname === "/video-player/player" ||
+    pathname === "/video-player/settings" ||
     pathname === "/auth" ||
     pathname.startsWith("/auth/")
   );

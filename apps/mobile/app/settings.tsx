@@ -17,12 +17,13 @@ import { useRouter } from "expo-router";
 
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
-import { apiFetch, apiJson } from "../lib/api";
+import { apiJson } from "../lib/api";
 import { APP_THEMES, getActiveThemeId, selectAppTheme, type AppThemeId } from "../lib/appThemes";
 import { assetUrl } from "../lib/config";
 import { C, R, S, tierMeta } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 import { pickImages, uploadImages, type PickedImage } from "../lib/uploads";
+import { uploadProfileMedia } from "../lib/profile-media";
 import { withVerification } from "../lib/verification";
 import {
   disablePushNotifications,
@@ -238,32 +239,7 @@ export default function SettingsScreen() {
         // it to the profile endpoint that owns avatar/cover normalization.
         const [staged] = await uploadImages([picked]);
 
-        const form = new FormData();
-        form.append("kind", kind);
-        form.append("file", {
-          uri: picked.uri,
-          name: picked.fileName,
-          type: picked.mimeType,
-        } as unknown as Blob);
-
-        const res = await apiFetch("/api/v1/profile/media", {
-          method: "POST",
-          body: form,
-          rawBody: true,
-        });
-        let payload: any = {};
-        try {
-          payload = await res.json();
-        } catch {
-          /* non-JSON error response */
-        }
-        if (!res.ok) {
-          throw new Error(
-            payload?.error?.message ?? payload?.message ?? `Upload failed (${res.status}).`,
-          );
-        }
-        const field = kind === "avatar" ? "avatarUrl" : "coverUrl";
-        return payload?.data?.[field] ?? payload?.data?.url ?? staged?.key;
+        return (await uploadProfileMedia(kind, picked)) || staged?.key;
       });
 
       if (!storedKey) {
