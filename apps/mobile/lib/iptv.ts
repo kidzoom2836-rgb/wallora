@@ -46,7 +46,7 @@ export const LOCAL_PLAYLIST_SOURCES = [
   "https://iptv-org.github.io/iptv/categories/kids.m3u",
 ] as const;
 
-const CACHE_KEY = "wallora.iptv.playlist.v2";
+const CACHE_KEY = "wallora.iptv.playlist.v3";
 const DB_SOURCE = "wallora.database.channels";
 const LOCAL_SOURCE = "wallora.iptv.iptvorg";
 const CUSTOM_URL_KEY = "wallora.iptv.customUrl.v1";
