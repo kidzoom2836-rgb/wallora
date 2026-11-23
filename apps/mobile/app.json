@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.wallora.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -54,7 +54,8 @@
       [
         "expo-audio",
         {
-          "enableBackgroundPlayback": true
+          "enableBackgroundPlayback": true,
+          "recordAudioAndroid": false
         }
       ],
       [

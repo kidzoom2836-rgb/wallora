@@ -4,6 +4,7 @@ import {
   FlatList,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,8 @@ import {
   View,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
+import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   setAudioModeAsync,
@@ -67,13 +70,144 @@ const DEMO_TRACKS: Track[] = [
   },
 ];
 
-/** Imperative player setters live outside hooks so React's lint rules allow them. */
-function applyVolume(player: AudioPlayer, value: number) {
-  player.volume = value;
+/** Friendly, non-technical copy for anything the native player rejects. */
+const MESSAGE = {
+  load: "This track couldn't be loaded. Try another one.",
+  play: "Playback couldn't start. Please try again.",
+  pause: "Couldn't pause playback. Please try again.",
+  seek: "Couldn't move within this track.",
+  volume: "Couldn't adjust volume on this device.",
+  rate: "Couldn't change playback speed on this device.",
+  status: "Playback stopped unexpectedly. Tap play to try again.",
+  empty: "Add a song to begin.",
+} as const;
+
+type FailHandler = (message: string) => void;
+
+/**
+ * Every native player call goes through one of these guards. A single failed
+ * call must never take the screen down.
+ */
+function safeReplace(
+  player: AudioPlayer,
+  uri: string,
+  fail?: FailHandler,
+): boolean {
+  try {
+    player.replace({ uri });
+    return true;
+  } catch {
+    fail?.(MESSAGE.load);
+    return false;
+  }
 }
 
-function applyRate(player: AudioPlayer, rate: number) {
-  player.playbackRate = rate;
+function safePlay(player: AudioPlayer, fail?: FailHandler): boolean {
+  try {
+    player.play();
+    return true;
+  } catch {
+    fail?.(MESSAGE.play);
+    return false;
+  }
+}
+
+function safePause(player: AudioPlayer, fail?: FailHandler): boolean {
+  try {
+    player.pause();
+    return true;
+  } catch {
+    fail?.(MESSAGE.pause);
+    return false;
+  }
+}
+
+function safeSeek(player: AudioPlayer, seconds: number, fail?: FailHandler) {
+  const target = Number.isFinite(seconds) && seconds >= 0 ? seconds : 0;
+  try {
+    void Promise.resolve(player.seekTo(target)).catch(() => {
+      fail?.(MESSAGE.seek);
+    });
+  } catch {
+    fail?.(MESSAGE.seek);
+  }
+}
+
+function safeVolume(
+  player: AudioPlayer,
+  value: number,
+  fail?: FailHandler,
+): boolean {
+  try {
+    player.volume = Math.max(0, Math.min(1, value));
+    return true;
+  } catch {
+    fail?.(MESSAGE.volume);
+    return false;
+  }
+}
+
+function safeRate(
+  player: AudioPlayer,
+  rate: number,
+  fail?: FailHandler,
+): boolean {
+  try {
+    player.playbackRate = rate;
+    return true;
+  } catch {
+    fail?.(MESSAGE.rate);
+    return false;
+  }
+}
+
+async function requestLockScreenPermission() {
+  if (Platform.OS !== "android") return;
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing?.granted) return;
+    // POST_NOTIFICATIONS on Android 13+. A denial is not fatal: playback and
+    // the media session still work, only the notification is unavailable.
+    await Notifications.requestPermissionsAsync();
+  } catch {
+    // Ignore permission failures entirely.
+  }
+}
+
+async function safeLockScreen(player: AudioPlayer, track: Track) {
+  await requestLockScreenPermission();
+  try {
+    const metadata: AudioMetadata = {
+      title: track.title,
+      artist: track.artist ?? "WALLORA Music",
+      albumTitle: "WALLORA Music",
+    };
+    player.setActiveForLockScreen(true, metadata);
+  } catch {
+    // Lock-screen controls are best effort and must never break playback.
+  }
+}
+
+function safeClearLockScreen(player: AudioPlayer) {
+  try {
+    player.clearLockScreenControls();
+  } catch {
+    // Ignore.
+  }
+}
+
+function safeAudioMode() {
+  try {
+    void Promise.resolve(
+      setAudioModeAsync({
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
+        interruptionMode: "doNotMix",
+      }),
+    ).catch(() => {});
+  } catch {
+    // Ignore.
+  }
 }
 
 function formatTime(seconds?: number) {
@@ -97,6 +231,79 @@ function makeId(uri: string) {
   return `${Date.now().toString(36)}-${uri.length}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function clampIndex(index: number, length: number) {
+  if (!Number.isFinite(index) || length <= 0) return 0;
+  return Math.max(0, Math.min(Math.floor(index), length - 1));
+}
+
+function normalizeTrack(raw: unknown): Track | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.id !== "string" || !value.id) return null;
+  if (typeof value.title !== "string" || !value.title) return null;
+  if (typeof value.uri !== "string" || !value.uri) return null;
+  const source = value.source;
+  if (source !== "demo" && source !== "url" && source !== "local") return null;
+  const addedAt =
+    typeof value.addedAt === "number" && Number.isFinite(value.addedAt)
+      ? value.addedAt
+      : Date.now();
+  return {
+    id: value.id,
+    title: value.title,
+    artist: typeof value.artist === "string" ? value.artist : undefined,
+    uri: value.uri,
+    source,
+    addedAt,
+  };
+}
+
+function localFileExists(uri: string): boolean {
+  try {
+    return new File(uri).exists;
+  } catch {
+    return false;
+  }
+}
+
+function parseStoredTracks(raw: string | null): Track[] | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const seen = new Set<string>();
+    const tracks: Track[] = [];
+    for (const item of parsed) {
+      const track = normalizeTrack(item);
+      if (!track || seen.has(track.id)) continue;
+      // Cached imports can be purged by the OS; drop their stale entries.
+      if (
+        track.source === "local" &&
+        Platform.OS !== "web" &&
+        !localFileExists(track.uri)
+      ) {
+        continue;
+      }
+      seen.add(track.id);
+      tracks.push(track);
+    }
+    return tracks;
+  } catch {
+    return null;
+  }
+}
+
+function parseStoredFavorites(raw: string | null): string[] | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((item): item is string => typeof item === "string");
+  } catch {
+    return null;
+  }
+}
+
 export default function MusicScreen() {
   const [tracks, setTracks] = useState<Track[]>(DEMO_TRACKS);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -109,88 +316,105 @@ export default function MusicScreen() {
   const [urlInput, setUrlInput] = useState("");
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [scrubWidth, setScrubWidth] = useState(300);
-  const hydrated = useRef(false);
+
+  const hydratedRef = useRef(false);
+  const touchedTracksRef = useRef(false);
+  const touchedFavoritesRef = useRef(false);
+  const loadedRef = useRef(false);
+  const playRequestRef = useRef(0);
+  const finishedTrackRef = useRef<string | null>(null);
+  const lastStatusErrorRef = useRef<string | null>(null);
 
   const current = tracks[currentIndex] ?? null;
   const player = useAudioPlayer(null, { updateInterval: 400 });
   const status = useAudioPlayerStatus(player);
 
-  useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem(TRACKS_KEY),
-      AsyncStorage.getItem(FAVORITES_KEY),
-    ])
-      .then(([rawTracks, rawFavorites]) => {
-        if (rawTracks) {
-          const parsed = JSON.parse(rawTracks) as Track[];
-          if (Array.isArray(parsed) && parsed.length) setTracks(parsed);
-        }
-        if (rawFavorites) {
-          const parsed = JSON.parse(rawFavorites) as string[];
-          if (Array.isArray(parsed)) setFavorites(parsed);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        hydrated.current = true;
-      });
+  const fail = useCallback((message: string) => setPlaybackError(message), []);
 
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      interruptionMode: "doNotMix",
-    }).catch(() => {});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [rawTracks, rawFavorites] = await Promise.all([
+          AsyncStorage.getItem(TRACKS_KEY),
+          AsyncStorage.getItem(FAVORITES_KEY),
+        ]);
+        if (cancelled) return;
+        if (!touchedTracksRef.current) {
+          const savedTracks = parseStoredTracks(rawTracks);
+          if (savedTracks !== null) {
+            setTracks(savedTracks);
+            setCurrentIndex((index) => clampIndex(index, savedTracks.length));
+          }
+        }
+        if (!touchedFavoritesRef.current) {
+          const savedFavorites = parseStoredFavorites(rawFavorites);
+          if (savedFavorites !== null) setFavorites(savedFavorites);
+        }
+      } catch {
+        // Storage may be unavailable; the in-memory queue still works.
+      } finally {
+        if (!cancelled) hydratedRef.current = true;
+      }
+    })();
+
+    // Session configuration only — never starts playback.
+    safeAudioMode();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (!hydratedRef.current) return;
     AsyncStorage.setItem(TRACKS_KEY, JSON.stringify(tracks)).catch(() => {});
   }, [tracks]);
 
   useEffect(() => {
-    if (!hydrated.current) return;
+    if (!hydratedRef.current) return;
     AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites)).catch(
       () => {},
     );
   }, [favorites]);
 
+  /** Only called from explicit user actions (or a track finishing naturally). */
   const playTrack = useCallback(
     async (track: Track) => {
-      player.replace({ uri: track.uri });
-      applyVolume(player, volume);
-      applyRate(player, SPEEDS[speedIndex]);
-      const metadata: AudioMetadata = {
-        title: track.title,
-        artist: track.artist ?? "WALLORA Music",
-        albumTitle: "WALLORA Music",
-      };
-      player.setActiveForLockScreen(true, metadata);
-      player.play();
+      const request = ++playRequestRef.current;
+      setPlaybackError(null);
+      if (!track.uri) {
+        fail(MESSAGE.load);
+        return;
+      }
+      if (!safeReplace(player, track.uri, fail)) return;
+      loadedRef.current = true;
+      safeVolume(player, volume, fail);
+      safeRate(player, SPEEDS[speedIndex], fail);
+      await safeLockScreen(player, track);
+      // A newer selection may have replaced this one while awaiting permission.
+      if (request !== playRequestRef.current) return;
+      safePlay(player, fail);
     },
-    [player, speedIndex, volume],
+    [fail, player, speedIndex, volume],
   );
 
-  useEffect(() => {
-    if (current) playTrack(current);
-    // Only restart when the selected track changes, not on volume/speed changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id]);
-
-  useEffect(() => {
-    applyVolume(player, volume);
-  }, [player, volume]);
-
-  useEffect(() => {
-    applyRate(player, SPEEDS[speedIndex]);
-  }, [player, speedIndex]);
+  const selectTrack = useCallback(
+    (index: number, track: Track) => {
+      setCurrentIndex(index);
+      void playTrack(track);
+    },
+    [playTrack],
+  );
 
   const advance = useCallback(
     (direction: 1 | -1, auto = false) => {
       if (!tracks.length) return;
-      if (auto && repeat === "one") {
-        player.seekTo(0).catch(() => {});
-        player.play();
+      if (auto && repeat === "one" && current) {
+        safeSeek(player, 0, fail);
+        safePlay(player, fail);
         return;
       }
       let next = currentIndex + direction;
@@ -198,27 +422,66 @@ export default function MusicScreen() {
       if (next >= tracks.length) {
         if (auto && repeat === "all") next = 0;
         else {
-          player.pause();
-          player.seekTo(0).catch(() => {});
+          safePause(player, fail);
+          safeSeek(player, 0, fail);
           return;
         }
       }
       if (next < 0) next = tracks.length - 1;
       setCurrentIndex(next);
+      void playTrack(tracks[next]);
     },
-    [currentIndex, player, repeat, shuffle, tracks.length],
+    [current, currentIndex, fail, player, playTrack, repeat, shuffle, tracks],
   );
 
   useEffect(() => {
-    if (!status.didJustFinish) return;
+    if (!status.didJustFinish || !loadedRef.current) {
+      finishedTrackRef.current = null;
+      return;
+    }
+    const trackId = current?.id ?? null;
+    if (finishedTrackRef.current === trackId) return;
+    finishedTrackRef.current = trackId;
     advance(1, true);
-  }, [status.didJustFinish, advance]);
+  }, [advance, current?.id, status.didJustFinish]);
 
-  const togglePlay = () => {
-    if (!current) return;
-    if (status.playing) player.pause();
-    else player.play();
-  };
+  useEffect(() => {
+    const error = status.error ?? null;
+    if (error && error !== lastStatusErrorRef.current) {
+      lastStatusErrorRef.current = error;
+      setPlaybackError(MESSAGE.status);
+    }
+    if (!error) lastStatusErrorRef.current = null;
+  }, [status.error]);
+
+  const togglePlay = useCallback(() => {
+    if (!current) {
+      fail(MESSAGE.empty);
+      return;
+    }
+    if (!loadedRef.current) {
+      void playTrack(current);
+      return;
+    }
+    if (status.playing) safePause(player, fail);
+    else safePlay(player, fail);
+  }, [current, fail, player, playTrack, status.playing]);
+
+  const changeVolume = useCallback(
+    (value: number) => {
+      if (!Number.isFinite(value)) return;
+      const next = Math.max(0, Math.min(1, value));
+      setVolume(next);
+      safeVolume(player, next, fail);
+    },
+    [fail, player],
+  );
+
+  const cycleSpeed = useCallback(() => {
+    const next = (speedIndex + 1) % SPEEDS.length;
+    setSpeedIndex(next);
+    safeRate(player, SPEEDS[next], fail);
+  }, [fail, player, speedIndex]);
 
   const addUrl = () => {
     const uri = urlInput.trim();
@@ -238,11 +501,14 @@ export default function MusicScreen() {
       source: "url",
       addedAt: Date.now(),
     };
+    touchedTracksRef.current = true;
+    const nextIndex = tracks.length;
     setTracks((prev) => [...prev, track]);
-    setCurrentIndex(tracks.length);
+    setCurrentIndex(nextIndex);
     setUrlInput("");
     setShowAdd(false);
-    setNotice("Track added and playing.");
+    setNotice("Track added.");
+    void playTrack(track);
   };
 
   const importFiles = async () => {
@@ -254,20 +520,28 @@ export default function MusicScreen() {
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.length) return;
-      const added = result.assets.map((asset) => ({
-        id: makeId(asset.uri),
-        title: asset.name ? titleFromFileName(asset.name) : "Local audio",
-        artist: "On this device",
-        uri: asset.uri,
-        source: "local" as const,
-        addedAt: Date.now(),
-      }));
+      const added: Track[] = result.assets
+        .filter((asset) => typeof asset.uri === "string" && !!asset.uri)
+        .map((asset) => ({
+          id: makeId(asset.uri),
+          title: asset.name ? titleFromFileName(asset.name) : "Local audio",
+          artist: "On this device",
+          uri: asset.uri,
+          source: "local" as const,
+          addedAt: Date.now(),
+        }));
+      if (!added.length) {
+        setNotice("Could not import that file.");
+        return;
+      }
+      touchedTracksRef.current = true;
       const startIndex = tracks.length;
       setTracks((prev) => [...prev, ...added]);
       setCurrentIndex(startIndex);
       setNotice(
         `${added.length} song${added.length === 1 ? "" : "s"} imported.`,
       );
+      void playTrack(added[0]);
     } catch {
       setNotice("Could not import that file.");
     } finally {
@@ -275,47 +549,59 @@ export default function MusicScreen() {
     }
   };
 
-  const toggleFavorite = (id: string) =>
+  const toggleFavorite = (id: string) => {
+    touchedFavoritesRef.current = true;
     setFavorites((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
+  };
 
   const removeTrack = (id: string) => {
     const index = tracks.findIndex((t) => t.id === id);
     if (index < 0) return;
+    touchedTracksRef.current = true;
     if (index === currentIndex) {
-      player.pause();
-      player.clearLockScreenControls();
+      safePause(player, fail);
+      safeClearLockScreen(player);
+      loadedRef.current = false;
+      playRequestRef.current += 1;
     }
     setTracks((prev) => prev.filter((t) => t.id !== id));
-    if (index < currentIndex) setCurrentIndex((i) => i - 1);
-    else if (index === currentIndex)
-      setCurrentIndex(Math.min(index, tracks.length - 2));
+    setCurrentIndex((i) => {
+      if (index < i) return i - 1;
+      if (index === i) return Math.max(0, Math.min(i, tracks.length - 2));
+      return i;
+    });
   };
 
+  const hasDuration = Number.isFinite(status.duration) && status.duration > 0;
   const progress =
-    status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
+    hasDuration && status.duration > 0
+      ? Math.min(1, Math.max(0, status.currentTime / status.duration))
+      : 0;
   const scrub = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !!status.duration,
-        onMoveShouldSetPanResponder: () => !!status.duration,
+        onStartShouldSetPanResponder: () => hasDuration,
+        onMoveShouldSetPanResponder: () => hasDuration,
         onPanResponderGrant: (event) => {
+          if (!hasDuration) return;
           const x = Math.max(
             0,
             Math.min(scrubWidth, event.nativeEvent.locationX),
           );
-          player.seekTo((x / scrubWidth) * status.duration).catch(() => {});
+          safeSeek(player, (x / scrubWidth) * status.duration, fail);
         },
         onPanResponderMove: (event) => {
+          if (!hasDuration) return;
           const x = Math.max(
             0,
             Math.min(scrubWidth, event.nativeEvent.locationX),
           );
-          player.seekTo((x / scrubWidth) * status.duration).catch(() => {});
+          safeSeek(player, (x / scrubWidth) * status.duration, fail);
         },
       }),
-    [player, scrubWidth, status.duration],
+    [fail, hasDuration, player, scrubWidth, status.duration],
   );
 
   const renderTrack = ({ item, index }: { item: Track; index: number }) => {
@@ -324,7 +610,7 @@ export default function MusicScreen() {
     return (
       <View style={[styles.trackRow, active && styles.trackRowActive]}>
         <Pressable
-          onPress={() => setCurrentIndex(index)}
+          onPress={() => selectTrack(index, item)}
           style={styles.trackMain}
           hitSlop={4}
         >
@@ -457,11 +743,7 @@ export default function MusicScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={() =>
-                player
-                  .seekTo(Math.max(0, status.currentTime - 15))
-                  .catch(() => {})
-              }
+              onPress={() => safeSeek(player, status.currentTime - 15, fail)}
               hitSlop={8}
               style={styles.skipButton}
             >
@@ -482,9 +764,7 @@ export default function MusicScreen() {
               <Ionicons name="play-skip-forward" size={26} color={C.text} />
             </Pressable>
             <Pressable
-              onPress={() =>
-                player.seekTo(status.currentTime + 15).catch(() => {})
-              }
+              onPress={() => safeSeek(player, status.currentTime + 15, fail)}
               hitSlop={8}
               style={styles.skipButton}
             >
@@ -518,9 +798,7 @@ export default function MusicScreen() {
               <Pressable
                 style={styles.volumeBar}
                 onPress={(event) =>
-                  setVolume(
-                    Math.max(0, Math.min(1, event.nativeEvent.locationX / 110)),
-                  )
+                  changeVolume(event.nativeEvent.locationX / 110)
                 }
               >
                 <View style={styles.volumeBarFill} />
@@ -533,14 +811,22 @@ export default function MusicScreen() {
               </Pressable>
               <Ionicons name="volume-high" size={15} color={C.muted} />
             </View>
-            <Pressable
-              onPress={() => setSpeedIndex((i) => (i + 1) % SPEEDS.length)}
-              style={styles.speedButton}
-            >
+            <Pressable onPress={cycleSpeed} style={styles.speedButton}>
               <Text style={styles.speedText}>{SPEEDS[speedIndex]}×</Text>
             </Pressable>
           </View>
         </View>
+
+        {playbackError && (
+          <Pressable
+            onPress={() => setPlaybackError(null)}
+            style={styles.errorBanner}
+          >
+            <Ionicons name="alert-circle-outline" size={15} color={C.error} />
+            <Text style={styles.errorBannerText}>{playbackError}</Text>
+            <Ionicons name="close-outline" size={14} color={C.error} />
+          </Pressable>
+        )}
 
         {notice && (
           <Pressable onPress={() => setNotice(null)} style={styles.notice}>
@@ -786,6 +1072,19 @@ const styles = StyleSheet.create({
     borderColor: C.border,
   },
   speedText: { color: C.textSoft, fontSize: 11, fontWeight: "800" },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 18,
+    marginTop: 12,
+    padding: 11,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.error,
+    backgroundColor: C.errorDim,
+  },
+  errorBannerText: { color: C.error, fontSize: 11.5, flex: 1 },
   notice: {
     flexDirection: "row",
     alignItems: "center",

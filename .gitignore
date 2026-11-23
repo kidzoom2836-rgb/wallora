@@ -10,6 +10,7 @@ out/
 .expo/
 dist/
 web-build/
+expo-*-qr.png
 
 # Build
 build/

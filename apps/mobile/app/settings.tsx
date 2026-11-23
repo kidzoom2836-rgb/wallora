@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { apiFetch, apiJson } from "../lib/api";
+import { APP_THEMES, getActiveThemeId, selectAppTheme, type AppThemeId } from "../lib/appThemes";
 import { assetUrl } from "../lib/config";
 import { C, R, S, tierMeta } from "../lib/theme";
 import { useAuth } from "../lib/auth";
@@ -105,6 +106,8 @@ export default function SettingsScreen() {
   const [notice, setNotice] = useState<{ text: string; tone: "success" | "error" | "info" } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
+  const [appThemeId, setAppThemeId] = useState<AppThemeId>(() => getActiveThemeId());
+  const [themeBusy, setThemeBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) {
@@ -183,6 +186,19 @@ export default function SettingsScreen() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const changeTheme = async (id: AppThemeId) => {
+    if (themeBusy || id === appThemeId) return;
+    setThemeBusy(true);
+    setNotice(null);
+    const changed = await selectAppTheme(id);
+    setAppThemeId(id);
+    setNotice({
+      text: changed ? "Theme applied. Rebuilding WALLORA…" : "That theme is already active.",
+      tone: "success",
+    });
+    setThemeBusy(false);
   };
 
   const pickMedia = async (kind: MediaKind) => {
@@ -554,16 +570,42 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowIcon}>
-              <Ionicons name="moon-outline" size={18} color={C.accent} />
+              <Ionicons name="color-palette-outline" size={18} color={C.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Theme</Text>
-              <Text style={styles.rowSub}>WALLORA mobile is dark-only in this release.</Text>
+              <Text style={styles.rowTitle}>App theme</Text>
+              <Text style={styles.rowSub}>Choose a look for WALLORA. The app refreshes once to apply it.</Text>
             </View>
-            <View style={styles.lockedBadge}>
-              <Ionicons name="lock-closed-outline" size={12} color={C.muted} />
-              <Text style={styles.lockedText}>Dark</Text>
-            </View>
+          </View>
+          <View style={styles.themeGrid}>
+            {APP_THEMES.map((theme) => {
+              const active = theme.id === appThemeId;
+              return (
+                <Pressable
+                  key={theme.id}
+                  onPress={() => void changeTheme(theme.id)}
+                  disabled={themeBusy}
+                  style={[styles.themeOption, active && styles.themeOptionActive]}
+                >
+                  <View style={styles.themeSwatches}>
+                    {theme.swatches.map((color, index) => (
+                      <View key={color + index} style={[styles.themeSwatch, { backgroundColor: color }]} />
+                    ))}
+                  </View>
+                  <Text style={[styles.themeLabel, active && styles.themeLabelActive]} numberOfLines={1}>
+                    {theme.label}
+                  </Text>
+                  <Text style={styles.themeTagline} numberOfLines={2}>
+                    {theme.tagline}
+                  </Text>
+                  {active ? (
+                    <View style={styles.themeCheck}>
+                      <Ionicons name="checkmark-circle-outline" size={14} color={C.accent} />
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -870,6 +912,23 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   lockedText: { color: C.textSoft, fontSize: 11, fontWeight: "700" },
+  themeGrid: { flexDirection: "row", flexWrap: "wrap", gap: S.sm, marginTop: S.sm },
+  themeOption: {
+    width: "47%",
+    minHeight: 96,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.raised,
+    padding: S.sm,
+  },
+  themeOptionActive: { borderColor: C.accent, backgroundColor: C.accentDim },
+  themeSwatches: { flexDirection: "row", gap: 4, marginBottom: S.sm },
+  themeSwatch: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: C.border },
+  themeLabel: { color: C.text, fontSize: 12, fontWeight: "800" },
+  themeLabelActive: { color: C.accentBright },
+  themeTagline: { color: C.muted, fontSize: 10, lineHeight: 14, marginTop: 2 },
+  themeCheck: { position: "absolute", top: S.sm, right: S.sm },
   fieldLabel: { color: C.textSoft, fontSize: 12, fontWeight: "700", marginTop: S.md, marginBottom: S.sm },
   input: {
     backgroundColor: C.raised,

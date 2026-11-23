@@ -8,6 +8,8 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { apiJson } from "./api";
+
 export type IptvChannel = {
   id: string;
   name: string;
@@ -29,6 +31,7 @@ export const DEFAULT_PLAYLIST_URL =
   "https://raw.githubusercontent.com/nn2wdw5jvc-max/mu-iptv/main/EDEM_2.m3u";
 
 const CACHE_KEY = "wallora.iptv.playlist.v2";
+const DB_SOURCE = "wallora.database.channels";
 const CUSTOM_URL_KEY = "wallora.iptv.customUrl.v1";
 const FAVORITES_KEY = "wallora.iptv.favorites.v1";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -186,13 +189,15 @@ export async function loadPlaylist(options?: {
 }): Promise<PlaylistResult> {
   const customUrl = await getCustomPlaylistUrl().catch(() => null);
   const url = customUrl || DEFAULT_PLAYLIST_URL;
+  // The backend is the default source of truth; a user-supplied M3U overrides it.
+  const cacheSource = customUrl ? url : DB_SOURCE;
 
   let cached: PlaylistResult | null = null;
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as PlaylistResult;
-      if (parsed?.source === url) cached = parsed;
+      if (parsed?.source === cacheSource) cached = parsed;
     }
   } catch {
     cached = null;
@@ -207,6 +212,46 @@ export async function loadPlaylist(options?: {
     return { ...cached, offline: false };
   }
 
+  if (!customUrl) {
+    try {
+      const backend = await apiJson<{ items?: IptvChannel[] }>(
+        "/api/v1/channels?limit=500",
+      );
+      const channels = (backend?.items ?? [])
+        .filter(
+          (channel) =>
+            channel &&
+            typeof channel.id === "string" &&
+            typeof channel.name === "string" &&
+            typeof channel.url === "string" &&
+            /^https?:\/\//i.test(channel.url),
+        )
+        .map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+          group: channel.group || "Other",
+          logo: channel.logo,
+          url: channel.url,
+          tvgId: channel.tvgId,
+        }));
+      if (channels.length >= 3) {
+        const result: PlaylistResult = {
+          channels,
+          source: DB_SOURCE,
+          sourceLabel: "WALLORA TV · database",
+          fetchedAt: Date.now(),
+          offline: false,
+        };
+        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(result)).catch(
+          () => {},
+        );
+        return result;
+      }
+    } catch {
+      // Fall through to the community M3U playlist when the backend is down.
+    }
+  }
+
   try {
     const response = await fetchWithTimeout(url);
     if (!response.ok)
@@ -217,7 +262,7 @@ export async function loadPlaylist(options?: {
 
     const result: PlaylistResult = {
       channels,
-      source: url,
+      source: cacheSource,
       sourceLabel: customUrl ? "Your playlist" : "Community playlist",
       fetchedAt: Date.now(),
       offline: false,

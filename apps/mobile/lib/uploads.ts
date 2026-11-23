@@ -243,3 +243,87 @@ export async function uploadCommunityImage(image: PickedImage): Promise<Uploaded
   const [uploaded] = await uploadImages([image]);
   return uploaded;
 }
+
+export const MAX_CLIP_BYTES = 12 * 1024 * 1024;
+const ALLOWED_CLIP_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v"];
+
+export type PickedClip = {
+  uri: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  durationMs?: number;
+};
+
+export type UploadedClip = {
+  key: string;
+  videoUrl: string;
+  contentType: string;
+  size: number;
+};
+
+/** Pick a short video from the gallery for a community channel preview. */
+export async function pickChannelClip(): Promise<PickedClip | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error("Photo library access is required to attach a preview clip.");
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["videos"],
+    videoMaxDuration: 9,
+    allowsEditing: false,
+    quality: 1,
+  });
+  if (result.canceled || !result.assets?.length) return null;
+
+  const asset = result.assets[0];
+  const fileName = asset.fileName || `wallora-clip-${Date.now()}.mp4`;
+  const mimeType = asset.mimeType || "video/mp4";
+  if (!ALLOWED_CLIP_TYPES.includes(mimeType)) {
+    throw new Error("Choose an MP4, WebM or MOV video.");
+  }
+  const fileSize = asset.fileSize ?? 0;
+  if (fileSize > MAX_CLIP_BYTES) {
+    throw new Error("Preview clips must be smaller than 12MB.");
+  }
+  const durationMs = asset.duration ?? undefined;
+  if (durationMs && durationMs > 10_500) {
+    throw new Error("Choose a clip that is 9 seconds or shorter.");
+  }
+  return { uri: asset.uri, fileName, mimeType, fileSize, durationMs };
+}
+
+/** Upload a channel preview clip to the WALLORA backend. */
+export async function uploadChannelClip(clip: PickedClip): Promise<UploadedClip> {
+  const form = new FormData();
+  form.append("file", {
+    uri: clip.uri,
+    name: clip.fileName,
+    type: clip.mimeType,
+  } as unknown as Blob);
+
+  const response = await apiFetch("/api/v1/community/clips", {
+    method: "POST",
+    body: form,
+    rawBody: true,
+  });
+  const text = await response.text();
+  let payload: any = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    /* non-JSON error */
+  }
+  if (!response.ok) {
+    throw new Error(payload?.error?.message ?? `Upload failed (${response.status}).`);
+  }
+  const data = payload?.data;
+  if (!data?.videoUrl) throw new Error("The upload service returned an invalid response.");
+  return {
+    key: data.key,
+    videoUrl: assetUrl(data.videoUrl) ?? data.videoUrl,
+    contentType: data.contentType,
+    size: data.size,
+  };
+}
