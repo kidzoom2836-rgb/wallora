@@ -160,9 +160,9 @@ function ffmpegAvailable(): boolean {
 async function normalizeClip(
   raw: Buffer,
   durationSec: number,
-): Promise<{ bytes: Buffer; ext: "mp4" | "ts"; contentType: string }> {
+): Promise<{ bytes: Buffer; ext: "mp4"; contentType: "video/mp4" }> {
   if (!ffmpegAvailable()) {
-    return { bytes: raw, ext: "ts", contentType: "video/mp2t" };
+    throw new Error("This server cannot prepare a playable MP4 preview. Share the live channel link instead.");
   }
 
   const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "wallora-clip-"));
@@ -199,11 +199,11 @@ async function normalizeClip(
       { encoding: "utf8", timeout: 20_000 },
     );
     if (result.error || result.status !== 0) {
-      return { bytes: raw, ext: "ts", contentType: "video/mp2t" };
+      throw new Error("The captured preview could not be converted to MP4.");
     }
     const bytes = await fs.readFile(output);
     if (!bytes.length || bytes.length > MAX_CLIP_BYTES) {
-      return { bytes: raw, ext: "ts", contentType: "video/mp2t" };
+      throw new Error("The captured preview could not be converted to a playable MP4.");
     }
     return { bytes, ext: "mp4", contentType: "video/mp4" };
   } finally {
@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
       {
         data: {
           key: stored.key,
-          videoUrl: storage.getPublicUrl(stored.key),
+          videoUrl: stored.key,
           contentType: stored.contentType,
           size: stored.size,
           durationSec: parsed.data.durationSec,

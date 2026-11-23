@@ -74,7 +74,9 @@ export class DatabaseStorageAdapter implements StorageAdapter {
   }
 
   getPublicUrl(key: string): string {
-    return `${SERVING_PREFIX}${key}`;
+    // putObject() already returns the serving URL as the key. Keep this
+    // idempotent so callers never produce /api/v1/storage//api/v1/storage/...
+    return key.startsWith(SERVING_PREFIX) ? key : `${SERVING_PREFIX}${key}`;
   }
 
   async presignDownload(key: string): Promise<string> {

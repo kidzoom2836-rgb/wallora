@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     {
       data: {
         key: stored.key,
-        videoUrl: storage.getPublicUrl(stored.key),
+        videoUrl: stored.key,
         contentType: stored.contentType,
         size: stored.size,
       },
