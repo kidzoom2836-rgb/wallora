@@ -36,9 +36,29 @@ import {
   type ReelProvider,
   type StockReel,
 } from "../../lib/reels";
+import { API_BASE } from "../../lib/config";
 import { C, R } from "../../lib/theme";
 
 type Tab = "foryou" | "search" | "topics";
+
+/**
+ * YouTube requires embedded players to identify the embedding site through a
+ * valid HTTPS Referer/origin. A WebView that navigates straight to
+ * youtube.com/embed/... has no web origin, so YouTube shows
+ * "Error 153 - Video player configuration error".
+ *
+ * Wrapping the player in local HTML with an HTTPS baseUrl gives the document a
+ * real origin (and therefore a valid Referer). API_BASE is our deployed HTTPS
+ * site, so the identity we send matches WALLORA.
+ */
+const YOUTUBE_EMBED_ORIGIN = API_BASE.startsWith("https://")
+  ? API_BASE.replace(/\/+$/, "")
+  : "https://wallora-inky.vercel.app";
+
+function buildYouTubeEmbedHtml(embedUrl: string) {
+  const safeUrl = embedUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return `<!DOCTYPE html><html><head><meta name="referrer" content="strict-origin-when-cross-origin"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"><style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe src="${safeUrl}" title="WALLORA reel" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen playsinline></iframe></body></html>`;
+}
 
 function countLabel(value: number) {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
@@ -119,19 +139,24 @@ function ReelCard({
 
   const buffering = !isYouTube && status === "loading";
   const embedUrl = isYouTube
-    ? `${reel.uri}?autoplay=${active ? 1 : 0}&loop=1&playlist=${reel.videoId}&controls=1&playsinline=1&rel=0&modestbranding=1`
+    ? `${reel.uri}?autoplay=${active ? 1 : 0}&loop=1&playlist=${reel.videoId}&controls=1&playsinline=1&rel=0&modestbranding=1&origin=${encodeURIComponent(YOUTUBE_EMBED_ORIGIN)}`
     : "";
+  const embedHtml = useMemo(
+    () => (isYouTube ? buildYouTubeEmbedHtml(embedUrl) : ""),
+    [embedUrl, isYouTube],
+  );
 
   return (
     <View style={[styles.reel, { height: viewportHeight }]}>
       {isYouTube ? (
         <WebView
-          source={{ uri: embedUrl }}
+          source={{ html: embedHtml, baseUrl: YOUTUBE_EMBED_ORIGIN }}
           style={StyleSheet.absoluteFill}
           originWhitelist={["*"]}
           javaScriptEnabled
           domStorageEnabled
           allowsInlineMediaPlayback
+          allowsFullscreenVideo
           mediaPlaybackRequiresUserAction={false}
         />
       ) : (
