@@ -36,4 +36,8 @@ Required build-time environment variables in the Vercel project:
 - `BETTER_AUTH_URL`
 - `NEXT_PUBLIC_APP_URL`
 - `NVIDIA_API_KEY`
-- `PIXABAY_API_KEY` (for the admin wallpaper importer)
+- `PIXABAY_API_KEY` (admin wallpaper importer and Reels proxy)
+- `YOUTUBE_API_KEY` and `PEXELS_API_KEY` (server-only Reels providers)
+
+Never add provider keys as `EXPO_PUBLIC_*` or `NEXT_PUBLIC_*` variables; those values are embedded
+in client bundles. The mobile app calls `/api/v1/reels/search` and receives only video metadata.

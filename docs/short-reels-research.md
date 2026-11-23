@@ -63,8 +63,9 @@ they create copyright/ToS risk and break without notice.
   it pauses on interaction, when a dialog is open, or when the app is backgrounded.
 - YouTube embeds use `autoplay`, inline playback and loop parameters, with the official YouTube
   controls available so playback is user-initiated where platform policy requires it.
-- A local `EXPO_PUBLIC_YOUTUBE_API_KEY` in the gitignored `apps/mobile/.env` is used for development.
-  Provider keys will move into admin-managed server settings before production.
+- Provider credentials are server-only. The app calls `GET /api/v1/reels/search`, which reads
+  `YOUTUBE_API_KEY`, `PIXABAY_API_KEY` or `PEXELS_API_KEY` from the backend environment. No provider
+  key is stored on the device or embedded in the APK/IPA.
 - Pixabay vertical clips remain available as low-bandwidth stock/live-wallpaper reels.
 
 ### Phase 2 — Creator shorts and wallpaper library
@@ -100,16 +101,15 @@ model Reel {
 
 ## Configuration
 
-- WALLORA Reels → **Source** chip → choose **YouTube**, **Pixabay** or **Pexels**.
-- For local development, put a YouTube Data API v3 key in `apps/mobile/.env` as
-  `EXPO_PUBLIC_YOUTUBE_API_KEY`. The file is gitignored; never commit provider keys.
-- Pixabay works out of the box with the shared built-in key. To use your own quota, paste a free
-  key from https://pixabay.com/api/docs/ into the Source settings.
-- Pexels is optional: https://www.pexels.com/api/
-- The Discover wallpaper importer needs `PIXABAY_API_KEY` on the web/backend server. Add it to the
-  deployment environment and use **Profile → Admin imports** from a super-admin account.
-- Any key you enter is stored on-device with AsyncStorage. The built-in Pixabay key is public in
-  the app bundle and rate-limited, so replace it in settings if traffic gets high.
+- WALLORA Reels → **Source** chip → choose **YouTube**, **Pixabay** or **Pexels**. The Source sheet
+  is informational only; it no longer accepts or stores API keys.
+- Set the matching server-side key in the backend deployment: `YOUTUBE_API_KEY` for YouTube shorts,
+  `PIXABAY_API_KEY` for Pixabay/Pexels stock and wallpaper imports, and optionally `PEXELS_API_KEY`.
+- The mobile app needs no provider key at build time. `apps/mobile/.env` only supports an optional
+  `EXPO_PUBLIC_API_BASE_URL` override.
+- The Discover wallpaper importer also uses the server's `PIXABAY_API_KEY` via
+  `POST /api/v1/admin/wallpapers/import/pixabay`.
+- API responses are cached for 24 hours on both server and device to respect provider quotas.
 - API responses are cached for 24 hours; pull-to-refresh is an explicit human request and may
   bypass the cache once.
 
