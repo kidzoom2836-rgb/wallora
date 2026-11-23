@@ -6,15 +6,21 @@ import { useRouter } from "expo-router";
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { C, R } from "../../lib/theme";
 import {
+  clearPlaylistCache,
   DEFAULT_PLAYLIST_URL,
   getCustomPlaylistUrl,
+  loadPlaylist,
   setCustomPlaylistUrl,
 } from "../../lib/iptv";
+import { clearRecentTvSearches } from "../../lib/tvSearch";
 import {
   DEFAULT_TV_SETTINGS,
   getTvSettings,
   QUALITY_OPTIONS,
   saveTvSettings,
+  SORT_OPTIONS,
+  SPEED_OPTIONS,
+  type TvGuideSort,
   type TvQuality,
   type TvSettings,
 } from "../../lib/tvSettings";
@@ -93,6 +99,9 @@ export default function LiveTvSettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [qualityOpen, setQualityOpen] = useState(false);
+  const [speedOpen, setSpeedOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -122,7 +131,7 @@ export default function LiveTvSettingsScreen() {
       await setCustomPlaylistUrl(reset ? null : playlistUrl);
       setNotice(
         reset
-          ? "WALLORA community playlist restored."
+          ? "Default guide restored."
           : "Playlist saved. Reopen the guide to load it.",
       );
       if (reset) setPlaylistUrl("");
@@ -133,7 +142,21 @@ export default function LiveTvSettingsScreen() {
     }
   };
 
+  const runTool = async (message: string, task: () => Promise<void>) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await task();
+      setNotice(message);
+    } catch {
+      setNotice("That tool could not finish. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const quality = QUALITY_OPTIONS.find((option) => option.value === settings.quality)!;
+  const sort = SORT_OPTIONS.find((option) => option.value === settings.guideSort)!;
 
   return (
     <View style={styles.screen}>
@@ -208,6 +231,32 @@ export default function LiveTvSettingsScreen() {
                 ))}
               </View>
             )}
+            <SettingRow
+              icon="play-forward-outline"
+              title="Default playback speed"
+              detail="Applied when a channel opens. You can still change it in the player."
+              value={`${settings.defaultSpeed}×`}
+              onPress={() => setSpeedOpen((open) => !open)}
+            />
+            {speedOpen && (
+              <View style={styles.optionList}>
+                {SPEED_OPTIONS.map((speed) => (
+                  <Pressable
+                    key={speed}
+                    onPress={() => {
+                      void update({ defaultSpeed: speed });
+                      setSpeedOpen(false);
+                    }}
+                    style={[
+                      styles.option,
+                      settings.defaultSpeed === speed && styles.optionActive,
+                    ]}
+                  >
+                    <Text style={styles.optionTitle}>{speed}×</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             <ToggleRow
               icon="speedometer-outline"
               title="Low-data mode (1 Mbps)"
@@ -240,6 +289,131 @@ export default function LiveTvSettingsScreen() {
               value={settings.showWatermark}
               onValueChange={(value) => void update({ showWatermark: value })}
             />
+          </View>
+
+          <Text style={styles.section}>PLAYBACK TOOLS</Text>
+          <View style={styles.card}>
+            <ToggleRow
+              icon="refresh-outline"
+              title="Auto-reconnect"
+              detail="Retry interrupted streams automatically with backoff."
+              value={settings.autoReconnect}
+              onValueChange={(value) => void update({ autoReconnect: value })}
+            />
+            <ToggleRow
+              icon="musical-notes-outline"
+              title="Background audio"
+              detail="Keep audio playing when you leave WALLORA TV."
+              value={settings.backgroundAudio}
+              onValueChange={(value) => void update({ backgroundAudio: value })}
+            />
+          </View>
+
+          <Text style={styles.section}>GUIDE TOOLS</Text>
+          <View style={styles.card}>
+            <SettingRow
+              icon="swap-vertical-outline"
+              title="Sort channels"
+              detail={sort.detail}
+              value={sort.label}
+              onPress={() => setSortOpen((open) => !open)}
+            />
+            {sortOpen && (
+              <View style={styles.optionList}>
+                {SORT_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      void update({ guideSort: option.value as TvGuideSort });
+                      setSortOpen(false);
+                    }}
+                    style={[
+                      styles.option,
+                      settings.guideSort === option.value && styles.optionActive,
+                    ]}
+                  >
+                    <Text style={styles.optionTitle}>{option.label}</Text>
+                    <Text style={styles.optionDetail}>{option.detail}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <ToggleRow
+              icon="earth-outline"
+              title="Hide geo-blocked channels"
+              detail="Remove streams tagged [Geo-blocked] in public playlists."
+              value={settings.hideGeoBlocked}
+              onValueChange={(value) => void update({ hideGeoBlocked: value })}
+            />
+            <ToggleRow
+              icon="moon-outline"
+              title="Hide not-24/7 channels"
+              detail="Remove streams tagged [Not 24/7] from the guide."
+              value={settings.hideNot24x7}
+              onValueChange={(value) => void update({ hideNot24x7: value })}
+            />
+            <ToggleRow
+              icon="lock-closed-outline"
+              title="HTTPS streams only"
+              detail="Hide plain HTTP links that iOS blocks and networks may filter."
+              value={settings.httpsOnly}
+              onValueChange={(value) => void update({ httpsOnly: value })}
+            />
+          </View>
+
+          <Text style={styles.section}>MAINTENANCE</Text>
+          <View style={styles.card}>
+            <Pressable
+              disabled={busy}
+              onPress={() =>
+                void runTool("Guide refreshed. Reopen Live TV to see it.", async () => {
+                  await loadPlaylist({ force: true });
+                })
+              }
+              style={[styles.toolRow, busy && styles.disabled]}
+            >
+              <Ionicons name="cloud-download-outline" size={17} color={C.accent} />
+              <Text style={styles.toolText}>Refresh guide from source now</Text>
+              <Ionicons name="chevron-forward" size={15} color={C.muted} />
+            </Pressable>
+            <Pressable
+              disabled={busy}
+              onPress={() =>
+                void runTool("Cached guide cleared.", async () => {
+                  await clearPlaylistCache();
+                })
+              }
+              style={[styles.toolRow, busy && styles.disabled]}
+            >
+              <Ionicons name="trash-outline" size={17} color={C.accent} />
+              <Text style={styles.toolText}>Clear cached guide</Text>
+              <Ionicons name="chevron-forward" size={15} color={C.muted} />
+            </Pressable>
+            <Pressable
+              disabled={busy}
+              onPress={() =>
+                void runTool("Recent searches cleared.", clearRecentTvSearches)
+              }
+              style={[styles.toolRow, busy && styles.disabled]}
+            >
+              <Ionicons name="time-outline" size={17} color={C.accent} />
+              <Text style={styles.toolText}>Clear search history</Text>
+              <Ionicons name="chevron-forward" size={15} color={C.muted} />
+            </Pressable>
+            <Pressable
+              disabled={busy}
+              onPress={() =>
+                void runTool("TV settings restored to defaults.", async () => {
+                  await saveTvSettings(DEFAULT_TV_SETTINGS);
+                  setSettings(DEFAULT_TV_SETTINGS);
+                })
+              }
+              style={[styles.toolRow, busy && styles.disabled]}
+            >
+              <Ionicons name="refresh-circle-outline" size={17} color={C.accent} />
+              <Text style={styles.toolText}>Reset all TV settings</Text>
+              <Ionicons name="chevron-forward" size={15} color={C.muted} />
+            </Pressable>
           </View>
 
           {notice && (
@@ -387,4 +561,14 @@ const styles = StyleSheet.create({
     borderColor: C.borderSoft,
   },
   linkButtonText: { flex: 1, color: C.text, fontSize: 13, fontWeight: "800" },
+  toolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderSoft,
+  },
+  toolText: { flex: 1, color: C.text, fontSize: 12.5, fontWeight: "700" },
+  disabled: { opacity: 0.5 },
 });

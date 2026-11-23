@@ -21,6 +21,10 @@ export type IptvChannel = {
   /** Set by the WALLORA admin panel and returned by the database channel API. */
   isFeatured?: boolean;
   previewUrl?: string;
+  /** Parsed from M3U name tags, used by the guide filter tools. */
+  geoBlocked?: boolean;
+  not24x7?: boolean;
+  insecure?: boolean;
 };
 
 export type PlaylistResult = {
@@ -145,6 +149,7 @@ export function parsePlaylist(text: string): IptvChannel[] {
       (comma >= 0 ? line.slice(comma + 1) : line).trim() || "Unknown channel";
     const group = attrs["group-title"]?.trim() || "Other";
 
+    const lowerName = name.toLowerCase();
     seen.add(url);
     channels.push({
       id: attrs["tvg-id"] || `${BufferSafeHash(url)}-${channels.length}`,
@@ -153,6 +158,9 @@ export function parsePlaylist(text: string): IptvChannel[] {
       logo: httpsLogo(attrs["tvg-logo"]),
       url,
       tvgId: attrs["tvg-id"],
+      geoBlocked: lowerName.includes("geo-blocked"),
+      not24x7: /not 24\/7|not 24x7/.test(lowerName),
+      insecure: /^http:\/\//i.test(url),
     });
   }
 
@@ -342,6 +350,11 @@ export async function getCustomPlaylistUrl(): Promise<string | null> {
 export async function setCustomPlaylistUrl(url: string | null): Promise<void> {
   if (url?.trim()) await AsyncStorage.setItem(CUSTOM_URL_KEY, url.trim());
   else await AsyncStorage.removeItem(CUSTOM_URL_KEY);
+  await clearPlaylistCache();
+}
+
+/** Force the next Live TV visit to rebuild its guide from the source. */
+export async function clearPlaylistCache(): Promise<void> {
   await AsyncStorage.removeItem(CACHE_KEY).catch(() => {});
 }
 

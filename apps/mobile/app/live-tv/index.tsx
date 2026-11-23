@@ -13,7 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -48,6 +48,12 @@ import {
   setFavoriteBoost,
   type RankedChannel,
 } from "../../lib/channelAnalytics";
+import { findChannelMatches } from "../../lib/tvSearch";
+import {
+  DEFAULT_TV_SETTINGS,
+  getTvSettings,
+  type TvSettings,
+} from "../../lib/tvSettings";
 
 const CHANNEL_COLORS = [
   "#2E5A88",
@@ -132,6 +138,7 @@ export default function LiveTvScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("All");
+  const [tvSettings, setTvSettings] = useState<TvSettings>(DEFAULT_TV_SETTINGS);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selected, setSelected] = useState<IptvChannel | null>(null);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
@@ -164,6 +171,22 @@ export default function LiveTvScreen() {
       alive = false;
     };
   }, []);
+
+  // Picking settings from this guide (or returning from TV settings) must
+  // refresh the local filters immediately.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      getTvSettings()
+        .then((stored) => {
+          if (alive) setTvSettings(stored);
+        })
+        .catch(() => {});
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
 
   const load = useCallback(
     async (force = false) => {
@@ -226,7 +249,29 @@ export default function LiveTvScreen() {
     setRefreshing(false);
   };
 
-  const channels = useMemo(() => playlist?.channels ?? [], [playlist]);
+  const sourceChannels = useMemo(() => playlist?.channels ?? [], [playlist]);
+
+  // Guide tools from TV settings: hide noisy public-stream categories and sort.
+  const channels = useMemo(() => {
+    const visible = sourceChannels.filter((channel) => {
+      if (tvSettings.hideGeoBlocked && channel.geoBlocked) return false;
+      if (tvSettings.hideNot24x7 && channel.not24x7) return false;
+      if (tvSettings.httpsOnly && channel.insecure) return false;
+      return true;
+    });
+    if (tvSettings.guideSort === "az") {
+      return [...visible].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (tvSettings.guideSort === "group") {
+      return [...visible].sort(
+        (a, b) =>
+          groupLabel(a.group).localeCompare(groupLabel(b.group)) ||
+          a.name.localeCompare(b.name),
+      );
+    }
+    return visible;
+  }, [sourceChannels, tvSettings.guideSort, tvSettings.hideGeoBlocked, tvSettings.hideNot24x7, tvSettings.httpsOnly]);
+
   const selectedId = selected ? uniqueChannelId(selected) : "";
 
   useEffect(() => {
@@ -287,8 +332,17 @@ export default function LiveTvScreen() {
     [trending],
   );
 
+  const matchedIds = useMemo(() => {
+    const clean = query.trim();
+    if (!clean) return null;
+    return new Set(
+      findChannelMatches(channels, clean, channels.length).map((match) =>
+        uniqueChannelId(match.channel),
+      ),
+    );
+  }, [channels, query]);
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return channels.filter((channel) => {
       const id = uniqueChannelId(channel);
       if (group === "Favorites" && !favoriteIds.has(id)) return false;
@@ -300,16 +354,10 @@ export default function LiveTvScreen() {
         groupLabel(channel.group) !== group
       )
         return false;
-      if (
-        q &&
-        !`${channel.name} ${groupLabel(channel.group)}`
-          .toLowerCase()
-          .includes(q)
-      )
-        return false;
+      if (matchedIds && !matchedIds.has(id)) return false;
       return true;
     });
-  }, [channels, favoriteIds, group, query, trendingIds, watchedIds]);
+  }, [channels, favoriteIds, group, matchedIds, trendingIds, watchedIds]);
 
   const heroChannel = selected ?? ranked[0] ?? channels[0] ?? null;
   const heroRank = heroChannel
@@ -723,7 +771,15 @@ export default function LiveTvScreen() {
               autoScroll={false}
             />
 
-            <SmartSearchBar value={query} onChangeText={setQuery} />
+            <SmartSearchBar
+              value={query}
+              onChangeText={setQuery}
+              channels={channels}
+              onSelectChannel={(channel) => {
+                setGroup("All");
+                setSelected(channel);
+              }}
+            />
 
             <ScrollView
               horizontal
