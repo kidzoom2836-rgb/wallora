@@ -3,8 +3,10 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -16,17 +18,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEvent } from "expo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  useVideoPlayer,
-  VideoView,
-  type VideoSource,
-} from "expo-video";
+import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
+import { WebView } from "react-native-webview";
 
 import { TvSignalSearching } from "../../components/media/TvSignalSearching";
 import {
+  DEFAULT_REEL_INTERESTS,
+  getReelInterests,
   getReelsApiKey,
   getReelsProvider,
+  loadPersonalizedReels,
   loadStockReels,
+  recordReelLike,
+  setReelInterests,
   setReelsApiKey,
   setReelsProvider,
   type ReelProvider,
@@ -34,9 +38,18 @@ import {
 } from "../../lib/reels";
 import { C, R } from "../../lib/theme";
 
+type Tab = "foryou" | "search" | "topics";
+
 function countLabel(value: number) {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
   return String(value);
+}
+
+function sourceLabel(source: StockReel["source"]) {
+  if (source === "youtube") return "YOUTUBE";
+  if (source === "pixabay") return "PIXABAY";
+  if (source === "pexels") return "PEXELS";
+  return "SAMPLE";
 }
 
 function ReelCard({
@@ -46,8 +59,6 @@ function ReelCard({
   likeCount,
   onLike,
   onShare,
-  onSettings,
-  insetsTop,
   insetsBottom,
   viewportHeight,
 }: {
@@ -57,12 +68,11 @@ function ReelCard({
   likeCount: number;
   onLike: () => void;
   onShare: () => void;
-  onSettings: () => void;
-  insetsTop: number;
   insetsBottom: number;
   viewportHeight: number;
 }) {
-  const source = useMemo<VideoSource>(
+  const isYouTube = reel.source === "youtube";
+  const videoSource = useMemo<VideoSource>(
     () => ({
       uri: reel.uri,
       contentType: "auto",
@@ -70,7 +80,7 @@ function ReelCard({
     }),
     [reel.title, reel.uri],
   );
-  const player = useVideoPlayer(source, (instance) => {
+  const player = useVideoPlayer(videoSource, (instance) => {
     instance.loop = true;
     instance.muted = false;
   });
@@ -80,9 +90,10 @@ function ReelCard({
   const lastTap = useRef(0);
 
   useEffect(() => {
+    if (isYouTube) return;
     if (active) player.play();
     else player.pause();
-  }, [active, player]);
+  }, [active, isYouTube, player]);
 
   const togglePlay = () => {
     if (player.playing) player.pause();
@@ -100,49 +111,43 @@ function ReelCard({
         Animated.timing(heartScale, { toValue: 1.25, duration: 180, useNativeDriver: true }),
         Animated.timing(heartScale, { toValue: 1, duration: 120, useNativeDriver: true }),
       ]).start(() => setTimeout(() => setHeartVisible(false), 420));
-    } else {
+    } else if (!isYouTube) {
       lastTap.current = now;
       togglePlay();
     }
   };
 
-  const buffering = status === "loading";
+  const buffering = !isYouTube && status === "loading";
+  const embedUrl = isYouTube
+    ? `${reel.uri}?autoplay=${active ? 1 : 0}&loop=1&playlist=${reel.videoId}&controls=1&playsinline=1&rel=0&modestbranding=1`
+    : "";
 
   return (
     <View style={[styles.reel, { height: viewportHeight }]}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
-        <VideoView
-          player={player}
+      {isYouTube ? (
+        <WebView
+          source={{ uri: embedUrl }}
           style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          surfaceType="textureView"
-          nativeControls={false}
+          originWhitelist={["*"]}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
         />
-      </Pressable>
+      ) : (
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            surfaceType="textureView"
+            nativeControls={false}
+          />
+        </Pressable>
+      )}
 
       <View style={styles.topShade} pointerEvents="none" />
       <View style={styles.bottomShade} pointerEvents="none" />
-
-      <View style={[styles.topBar, { paddingTop: insetsTop + 10 }]} pointerEvents="box-none">
-        <View style={styles.brandPill}>
-          <Ionicons name="tv-outline" size={13} color={C.accent} />
-          <Text style={styles.brandText}>WALLORA REELS</Text>
-        </View>
-        <Pressable onPress={onSettings} style={styles.sourcePill}>
-          <Ionicons
-            name={reel.source === "sample" ? "flash-outline" : "checkmark-circle-outline"}
-            size={11}
-            color={C.accent}
-          />
-          <Text style={styles.sourcePillText}>
-            {reel.source === "pexels"
-              ? "PEXELS"
-              : reel.source === "pixabay"
-                ? "PIXABAY"
-                : "SAMPLE"}
-          </Text>
-        </Pressable>
-      </View>
 
       <Animated.View
         pointerEvents="none"
@@ -167,7 +172,7 @@ function ReelCard({
               {reel.creator}
             </Text>
             <View style={styles.sourceBadge}>
-              <Text style={styles.sourceBadgeText}>ROYALTY-FREE</Text>
+              <Text style={styles.sourceBadgeText}>{sourceLabel(reel.source)}</Text>
             </View>
           </View>
           <Text style={styles.caption} numberOfLines={3}>
@@ -176,9 +181,11 @@ function ReelCard({
           <View style={styles.metaRow}>
             <Ionicons name="information-circle-outline" size={11} color={C.muted} />
             <Text style={styles.metaText} numberOfLines={1}>
-              {reel.source === "sample"
-                ? "Pexels sample · add a key for fresh clips"
-                : `Via ${reel.source === "pexels" ? "Pexels" : "Pixabay"} API`}
+              {isYouTube
+                ? `YouTube Short · ${reel.durationSec ? `${reel.durationSec}s` : "short"}`
+                : reel.source === "sample"
+                  ? "Pexels sample · add a key for fresh clips"
+                  : `Via ${reel.source === "pexels" ? "Pexels" : "Pixabay"} API`}
             </Text>
           </View>
         </View>
@@ -192,11 +199,66 @@ function ReelCard({
             <Ionicons name="share-outline" size={26} color={C.white} />
             <Text style={styles.actionCount}>Share</Text>
           </Pressable>
-          <Pressable onPress={onSettings} style={styles.action}>
-            <Ionicons name="settings-outline" size={25} color={C.white} />
-            <Text style={styles.actionCount}>Source</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function InterestPicker({
+  selected,
+  onToggle,
+}: {
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <View style={styles.interestGrid}>
+      {DEFAULT_REEL_INTERESTS.map((interest) => {
+        const active = selected.includes(interest);
+        return (
+          <Pressable
+            key={interest}
+            onPress={() => onToggle(interest)}
+            style={[styles.interestChip, active && styles.interestChipActive]}
+          >
+            <Ionicons
+              name={active ? "checkmark-circle" : "add-circle-outline"}
+              size={14}
+              color={active ? C.bg : C.accent}
+            />
+            <Text style={[styles.interestText, active && styles.interestTextActive]}>
+              {interest.replace(" shorts", "")}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function ModalShell({
+  visible,
+  title,
+  children,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <View style={styles.modalBackdrop}>
+      <View style={styles.modalCard}>
+        <View style={styles.modalHead}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Pressable onPress={onClose} hitSlop={10}>
+            <Ionicons name="close" size={20} color={C.textSoft} />
           </Pressable>
         </View>
+        <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
       </View>
     </View>
   );
@@ -217,141 +279,198 @@ function SourceSettings({
   onKey: (value: string) => void;
   onClose: () => void;
 }) {
-  if (!visible) return null;
   return (
-    <View style={styles.modalBackdrop}>
-      <View style={styles.modalCard}>
-        <View style={styles.modalHead}>
-          <Text style={styles.modalTitle}>Reels source</Text>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <Ionicons name="close" size={20} color={C.textSoft} />
+    <ModalShell visible={visible} title="Reels source" onClose={onClose}>
+      <Text style={styles.modalText}>
+        YouTube powers your personal For You feed. Pixabay and Pexels provide royalty-free stock
+        clips. Keys are stored on this device.
+      </Text>
+      <View style={styles.providerRow}>
+        {(["youtube", "pixabay", "pexels"] as const).map((value) => (
+          <Pressable
+            key={value}
+            onPress={() => onProvider(value)}
+            style={[styles.providerChip, provider === value && styles.providerChipActive]}
+          >
+            <Text style={[styles.providerText, provider === value && styles.providerTextActive]}>
+              {value === "youtube" ? "YouTube" : value === "pixabay" ? "Pixabay" : "Pexels"}
+            </Text>
           </Pressable>
-        </View>
-        <Text style={styles.modalText}>
-          Pixabay streams fresh 9:16 royalty-free clips by default. Add your own key to use a
-          private quota, or switch to Pexels. Without API access, WALLORA Reels plays verified samples.
-        </Text>
-        <View style={styles.providerRow}>
-          {(["pixabay", "pexels"] as const).map((value) => (
-            <Pressable
-              key={value}
-              onPress={() => onProvider(value)}
-              style={[styles.providerChip, provider === value && styles.providerChipActive]}
-            >
-              <Text style={[styles.providerText, provider === value && styles.providerTextActive]}>
-                {value === "pexels" ? "Pexels" : "Pixabay"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <TextInput
-          value={apiKey}
-          onChangeText={onKey}
-          placeholder={provider === "pexels" ? "Pexels API key" : "Pixabay API key"}
-          placeholderTextColor={C.muted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-          style={styles.keyInput}
-        />
-        <Text style={styles.modalHint}>
-          {provider === "pexels"
+        ))}
+      </View>
+      <TextInput
+        value={apiKey}
+        onChangeText={onKey}
+        placeholder={
+          provider === "youtube"
+            ? "YouTube Data API key"
+            : provider === "pexels"
+              ? "Pexels API key"
+              : "Pixabay API key"
+        }
+        placeholderTextColor={C.muted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+        style={styles.keyInput}
+      />
+      <Text style={styles.modalHint}>
+        {provider === "youtube"
+          ? "Uses short YouTube videos matched to your interests. Leave blank to use the local key."
+          : provider === "pexels"
             ? "Get a free key at pexels.com/api — look for portrait orientation."
             : "Get a free key at pixabay.com/api — WALLORA requests orientation=vertical."}
-        </Text>
-        <Pressable style={styles.modalButton} onPress={onClose}>
-          <Text style={styles.modalButtonText}>Done</Text>
-        </Pressable>
-      </View>
-    </View>
+      </Text>
+      <Pressable style={styles.modalButton} onPress={onClose}>
+        <Text style={styles.modalButtonText}>Done</Text>
+      </Pressable>
+    </ModalShell>
   );
 }
 
 export default function ReelsScreen() {
   const insets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
-  const [reels, setReels] = useState<StockReel[]>([]);
-  const [provider, setProviderState] = useState<ReelProvider>("pixabay");
+  const [tab, setTab] = useState<Tab>("foryou");
+  const [source, setSource] = useState<ReelProvider>("youtube");
   const [apiKey, setApiKey] = useState("");
+  const [reels, setReels] = useState<StockReel[]>([]);
+  const [searchResults, setSearchResults] = useState<StockReel[]>([]);
+  const [showingSearch, setShowingSearch] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [draftInterests, setDraftInterests] = useState<string[]>([]);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const [likes, setLikes] = useState<Record<string, number>>({});
-  const [settingsVisible, setSettingsVisible] = useState(false);
 
-  const load = useCallback(async (nextProvider?: ReelProvider, force = false) => {
-    setError(null);
-    const selected = nextProvider ?? provider;
-    try {
-      const result = await loadStockReels({ provider: selected, force });
-      setReels(result.reels);
-      setError(result.error ?? null);
-      setActiveIndex(0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load WALLORA Reels.");
-      setReels([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [provider]);
+  const feed = showingSearch ? searchResults : reels;
+
+  const loadFeed = useCallback(
+    async (nextSource: ReelProvider = source, force = false) => {
+      setError(null);
+      try {
+        const result =
+          nextSource === "youtube"
+            ? await loadPersonalizedReels({ force })
+            : await loadStockReels({ provider: nextSource, force });
+        setReels(result.reels);
+        setError(result.error ?? null);
+        setActiveIndex(0);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not load WALLORA Reels.");
+        setReels([]);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [source],
+  );
 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const savedProvider = await getReelsProvider();
-      const savedKey = await getReelsApiKey(savedProvider);
+      const [savedSource, savedInterests] = await Promise.all([
+        getReelsProvider(),
+        getReelInterests(),
+      ]);
+      const key = await getReelsApiKey(savedSource);
       if (!alive) return;
-      setProviderState(savedProvider);
-      setApiKey(savedKey);
-      const result = await loadStockReels({ provider: savedProvider });
-      if (!alive) return;
-      setReels(result.reels);
-      setError(result.error ?? null);
-      setActiveIndex(0);
-      setLoading(false);
+      setSource(savedSource);
+      setApiKey(key);
+      if (!savedInterests.length) {
+        setDraftInterests(DEFAULT_REEL_INTERESTS.slice(0, 4));
+        setPrefsOpen(true);
+      }
+      await loadFeed(savedSource);
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [loadFeed]);
+
+  const runSearch = useCallback(async () => {
+    const query = searchText.trim();
+    if (!query) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const result = await loadStockReels({ provider: "youtube", query: `${query} shorts` });
+      setSearchResults(result.reels);
+      setShowingSearch(true);
+      setTab("foryou");
+      setActiveIndex(0);
+      setError(result.error ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not search reels.");
+    } finally {
+      setSearching(false);
+    }
+  }, [searchText]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void load(provider, true);
-  }, [load, provider]);
+    if (showingSearch && searchText.trim()) void runSearch();
+    else void loadFeed(source, true);
+  }, [loadFeed, runSearch, searchText, showingSearch, source]);
 
   const changeProvider = useCallback(
     (value: ReelProvider) => {
-      setProviderState(value);
+      setSource(value);
+      setShowingSearch(false);
       void (async () => {
         await setReelsProvider(value);
-        const key = await getReelsApiKey(value);
-        setApiKey(key);
-        await load(value, true);
+        setApiKey(await getReelsApiKey(value));
+        await loadFeed(value, true);
       })();
     },
-    [load],
+    [loadFeed],
   );
 
   const changeKey = useCallback(
     (value: string) => {
       setApiKey(value);
       void (async () => {
-        await setReelsApiKey(provider, value);
-        await load(provider, true);
+        await setReelsApiKey(source, value);
+        await loadFeed(source, true);
       })();
     },
-    [load, provider],
+    [loadFeed, source],
   );
 
-  const toggleLike = useCallback((id: string) => {
-    const next = !liked[id];
-    setLiked((prev) => ({ ...prev, [id]: next }));
-    setLikes((prev) => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) + (next ? 1 : -1)) }));
-  }, [liked]);
+  const saveInterests = useCallback(async () => {
+    const chosen = draftInterests.length ? draftInterests : DEFAULT_REEL_INTERESTS.slice(0, 5);
+    await setReelInterests(chosen);
+    setPrefsOpen(false);
+    setSource("youtube");
+    await setReelsProvider("youtube");
+    setApiKey(await getReelsApiKey("youtube"));
+    setShowingSearch(false);
+    setTab("foryou");
+    await loadFeed("youtube", true);
+  }, [draftInterests, loadFeed]);
+
+  const toggleInterest = useCallback((value: string) => {
+    setDraftInterests((prev) =>
+      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value],
+    );
+  }, []);
+
+  const toggleLike = useCallback(
+    (reel: StockReel) => {
+      const next = !liked[reel.id];
+      setLiked((prev) => ({ ...prev, [reel.id]: next }));
+      setLikes((prev) => ({ ...prev, [reel.id]: Math.max(0, (prev[reel.id] ?? 0) + (next ? 1 : -1)) }));
+      if (next) void recordReelLike(reel);
+    },
+    [liked],
+  );
 
   const share = useCallback(async (reel: StockReel) => {
     try {
@@ -367,96 +486,250 @@ export default function ReelsScreen() {
 
   const viewConfig = useMemo(() => ({ itemVisiblePercentThreshold: 70 }), []);
 
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
+      <Pressable onPress={() => router.back()} style={styles.headerButton} hitSlop={8}>
+        <Ionicons name="arrow-back" size={19} color={C.white} />
+      </Pressable>
+      <View style={styles.tabs}>
+        {(
+          [
+            ["foryou", "For You"],
+            ["search", "Search"],
+            ["topics", "Topics"],
+          ] as const
+        ).map(([id, label]) => (
+          <Pressable
+            key={id}
+            onPress={() => setTab(id)}
+            style={[styles.tab, tab === id && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, tab === id && styles.tabTextActive]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable onPress={() => setSettingsVisible(true)} style={styles.headerButton} hitSlop={8}>
+        <Ionicons name="options-outline" size={19} color={C.white} />
+      </Pressable>
+    </View>
+  );
+
+  let content: React.ReactNode;
+
   if (loading) {
-    return (
-      <View style={[styles.screen, styles.center]}>
+    content = (
+      <View style={styles.center}>
         <TvSignalSearching label="OPENING WALLORA REELS" detail="Preparing your vertical feed…" compact />
+      </View>
+    );
+  } else if (tab === "search") {
+    content = (
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.page, { paddingTop: insets.top + 66 }]}>
+        <Text style={styles.pageTitle}>Find your next reel</Text>
+        <Text style={styles.pageSubtitle}>Search YouTube shorts by topic, mood, creator or vibe.</Text>
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={18} color={C.muted} />
+          <TextInput
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={() => void runSearch()}
+            placeholder="Try dancing, football, cooking…"
+            placeholderTextColor={C.muted}
+            style={styles.searchInput}
+            returnKeyType="search"
+          />
+          {searching ? <ActivityIndicator color={C.accent} size="small" /> : null}
+        </View>
+        <View style={styles.suggestionRow}>
+          {["funny", "travel", "gaming", "cooking", "dance"].map((value) => (
+            <Pressable
+              key={value}
+              onPress={() => {
+                setSearchText(value);
+                setSearchResults([]);
+              }}
+              style={styles.suggestionChip}
+            >
+              <Text style={styles.suggestionText}>#{value}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable style={styles.primaryButton} onPress={() => void runSearch()} disabled={searching}>
+          <Text style={styles.primaryButtonText}>{searching ? "Searching…" : "Search reels"}</Text>
+        </Pressable>
+        {searchResults.length ? (
+          <View style={styles.resultGrid}>
+            {searchResults.map((reel, index) => (
+              <Pressable
+                key={reel.id}
+                onPress={() => {
+                  setShowingSearch(true);
+                  setActiveIndex(index);
+                  setTab("foryou");
+                }}
+                style={styles.resultCard}
+              >
+                {reel.poster ? (
+                  <Image source={{ uri: reel.poster }} style={styles.resultPoster} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.resultPoster, styles.resultPlaceholder]}>
+                    <Ionicons name="videocam-outline" size={24} color={C.muted} />
+                  </View>
+                )}
+                <Text style={styles.resultTitle} numberOfLines={2}>
+                  {reel.title}
+                </Text>
+                <Text style={styles.resultCreator} numberOfLines={1}>
+                  {reel.creator}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </ScrollView>
+    );
+  } else if (tab === "topics") {
+    content = (
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.page, { paddingTop: insets.top + 66 }]}>
+        <Text style={styles.pageTitle}>Train your For You</Text>
+        <Text style={styles.pageSubtitle}>
+          Pick what you actually watch. WALLORA searches each topic, mixes the results, then ranks
+          them by your likes and popularity.
+        </Text>
+        <InterestPicker selected={draftInterests} onToggle={toggleInterest} />
+        <Pressable style={styles.primaryButton} onPress={() => void saveInterests()}>
+          <Text style={styles.primaryButtonText}>Save and refresh my feed</Text>
+        </Pressable>
+        <Text style={styles.algorithmNote}>
+          Liking a reel teaches the algorithm. Your choices and likes stay on this device.
+        </Text>
+      </ScrollView>
+    );
+  } else {
+    content = (
+      <View style={styles.screen}>
+        <FlatList
+          data={feed}
+          keyExtractor={(item) => item.id}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={2}
+          maxToRenderPerBatch={3}
+          windowSize={4}
+          removeClippedSubviews
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
+          onViewableItemsChanged={({ viewableItems }) => {
+            const first = viewableItems[0];
+            if (first?.index != null) setActiveIndex(first.index);
+          }}
+          viewabilityConfig={viewConfig}
+          renderItem={({ item, index }) => (
+            <ReelCard
+              reel={item}
+              active={index === activeIndex}
+              liked={!!liked[item.id]}
+              likeCount={likes[item.id] ?? 0}
+              onLike={() => toggleLike(item)}
+              onShare={() => void share(item)}
+              insetsBottom={insets.bottom}
+              viewportHeight={viewportHeight}
+            />
+          )}
+          ListEmptyComponent={
+            <View style={[styles.empty, { height: viewportHeight }]}>
+              <Ionicons name="videocam-outline" size={44} color={C.muted} />
+              <Text style={styles.emptyTitle}>No reels available</Text>
+              <Text style={styles.emptyText}>
+                {error ?? "Choose a few topics in Topics or add a YouTube key in Source settings."}
+              </Text>
+              <View style={styles.emptyActions}>
+                <Pressable style={styles.emptyButton} onPress={() => setPrefsOpen(true)}>
+                  <Text style={styles.emptyButtonText}>Choose topics</Text>
+                </Pressable>
+                <Pressable style={styles.emptyButtonGhost} onPress={onRefresh}>
+                  <Text style={styles.emptyButtonGhostText}>Refresh</Text>
+                </Pressable>
+              </View>
+            </View>
+          }
+        />
+        {showingSearch ? (
+          <Pressable
+            style={[styles.backToFeed, { top: insets.top + 62 }]}
+            onPress={() => setShowingSearch(false)}
+          >
+            <Ionicons name="arrow-undo-outline" size={14} color={C.white} />
+            <Text style={styles.backToFeedText}>Back to For You</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <FlatList
-        data={reels}
-        keyExtractor={(item) => item.id}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={3}
-        maxToRenderPerBatch={4}
-        windowSize={5}
-        removeClippedSubviews
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
-        onViewableItemsChanged={({ viewableItems }) => {
-          const first = viewableItems[0];
-          if (first?.index != null) setActiveIndex(first.index);
-        }}
-        viewabilityConfig={viewConfig}
-        renderItem={({ item, index }) => (
-          <ReelCard
-            reel={item}
-            active={index === activeIndex}
-            liked={!!liked[item.id]}
-            likeCount={likes[item.id] ?? 0}
-            onLike={() => toggleLike(item.id)}
-            onShare={() => void share(item)}
-            onSettings={() => setSettingsVisible(true)}
-            insetsTop={insets.top}
-            insetsBottom={insets.bottom}
-            viewportHeight={viewportHeight}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={[styles.empty, { height: viewportHeight }]}>
-            <Ionicons name="videocam-outline" size={44} color={C.muted} />
-            <Text style={styles.emptyTitle}>No reels available</Text>
-            <Text style={styles.emptyText}>
-              {error ?? "Add a free Pexels or Pixabay key to load vertical clips."}
-            </Text>
-            <View style={styles.emptyActions}>
-              <Pressable style={styles.emptyButton} onPress={() => setSettingsVisible(true)}>
-                <Text style={styles.emptyButtonText}>Set source</Text>
-              </Pressable>
-              <Pressable style={styles.emptyButtonGhost} onPress={onRefresh}>
-                <Text style={styles.emptyButtonGhostText}>Refresh</Text>
-              </Pressable>
-              <Pressable style={styles.emptyButtonGhost} onPress={() => router.back()}>
-                <Text style={styles.emptyButtonGhostText}>Back</Text>
-              </Pressable>
-            </View>
-          </View>
-        }
-      />
+      {content}
+      {header}
+      <ModalShell
+        visible={prefsOpen}
+        title="What do you want to watch?"
+        onClose={() => setPrefsOpen(false)}
+      >
+        <Text style={styles.modalText}>
+          Choose at least a few topics. WALLORA builds your For You feed from these and improves it
+          every time you like a reel.
+        </Text>
+        <InterestPicker selected={draftInterests} onToggle={toggleInterest} />
+        <Pressable style={styles.modalButton} onPress={() => void saveInterests()}>
+          <Text style={styles.modalButtonText}>Build my feed</Text>
+        </Pressable>
+      </ModalShell>
       <SourceSettings
         visible={settingsVisible}
-        provider={provider}
+        provider={source}
         apiKey={apiKey}
         onProvider={changeProvider}
         onKey={changeKey}
         onClose={() => setSettingsVisible(false)}
       />
-      {refreshing && reels.length === 0 ? <ActivityIndicator color={C.accent} style={styles.refreshing} /> : null}
+      {refreshing && feed.length === 0 ? <ActivityIndicator color={C.accent} style={styles.refreshing} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bgDeep },
-  center: { alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: C.bgDeep },
+  page: { paddingHorizontal: 18, paddingBottom: 40 },
+  pageTitle: { color: C.text, fontSize: 26, fontWeight: "900", marginTop: 10 },
+  pageSubtitle: { color: C.textSoft, fontSize: 13, lineHeight: 20, marginTop: 6, marginBottom: 20 },
+  header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+  },
+  headerButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
+  tabs: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: R.pill, padding: 3 },
+  tab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill },
+  tabActive: { backgroundColor: C.accent },
+  tabText: { color: C.textSoft, fontSize: 12, fontWeight: "800" },
+  tabTextActive: { color: C.bg },
   reel: { width: "100%", backgroundColor: C.bgDeep, overflow: "hidden" },
-  topShade: { position: "absolute", top: 0, left: 0, right: 0, height: 150, backgroundColor: "rgba(0,0,0,0.45)" },
+  topShade: { position: "absolute", top: 0, left: 0, right: 0, height: 150, backgroundColor: "rgba(0,0,0,0.4)" },
   bottomShade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 300, backgroundColor: "rgba(0,0,0,0.55)" },
-  topBar: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
-  brandPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.pill, backgroundColor: "rgba(0,0,0,0.55)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
-  brandText: { color: C.accentBright, fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
-  sourcePill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: R.pill, backgroundColor: "rgba(0,0,0,0.55)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
-  sourcePillText: { color: C.white, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   heartBurst: { position: "absolute", alignSelf: "center", top: "42%", shadowColor: "#000", shadowRadius: 16, shadowOpacity: 0.5 },
   bufferWrap: { position: "absolute", alignSelf: "center", top: "38%" },
   bottom: { position: "absolute", left: 0, right: 0, flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 16, gap: 12 },
   info: { flex: 1, minWidth: 0 },
   authorRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.raised, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" },
+  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.raised, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" },
   author: { color: C.white, fontSize: 13, fontWeight: "800", flexShrink: 1 },
   sourceBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: R.pill, backgroundColor: C.accentDim, borderWidth: 1, borderColor: C.accent + "66" },
   sourceBadgeText: { color: C.accentBright, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
@@ -467,6 +740,28 @@ const styles = StyleSheet.create({
   action: { alignItems: "center", width: 44 },
   actionPressed: { opacity: 0.6 },
   actionCount: { color: C.white, fontSize: 10, fontWeight: "700", marginTop: 3 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, height: 48, borderRadius: R.md, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border },
+  searchInput: { flex: 1, color: C.text, fontSize: 14 },
+  suggestionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  suggestionChip: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border },
+  suggestionText: { color: C.accentBright, fontSize: 11, fontWeight: "700" },
+  primaryButton: { marginTop: 18, borderRadius: R.md, backgroundColor: C.accent, paddingVertical: 13, alignItems: "center" },
+  primaryButtonText: { color: C.bg, fontSize: 13, fontWeight: "900" },
+  resultGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 24 },
+  resultCard: { width: "47%", borderRadius: R.md, overflow: "hidden", backgroundColor: C.raised, borderWidth: 1, borderColor: C.border },
+  resultPoster: { width: "100%", height: 130, backgroundColor: C.bgDeep },
+  resultPlaceholder: { alignItems: "center", justifyContent: "center" },
+  resultTitle: { color: C.text, fontSize: 12, fontWeight: "800", paddingHorizontal: 9, paddingTop: 8 },
+  resultCreator: { color: C.muted, fontSize: 10, paddingHorizontal: 9, paddingBottom: 9, marginTop: 3 },
+  interestGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginVertical: 18 },
+  interestChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.pill, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border },
+  interestChipActive: { backgroundColor: C.accent, borderColor: C.accent },
+  interestText: { color: C.textSoft, fontSize: 12, fontWeight: "700" },
+  interestTextActive: { color: C.bg },
+  algorithmNote: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 16 },
+  errorText: { color: C.error, fontSize: 12, marginTop: 14 },
+  backToFeed: { position: "absolute", left: 14, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 11, paddingVertical: 7, borderRadius: R.pill, backgroundColor: "rgba(0,0,0,0.55)" },
+  backToFeedText: { color: C.white, fontSize: 11, fontWeight: "800" },
   empty: { width: "100%", alignItems: "center", justifyContent: "center", paddingHorizontal: 30, gap: 8 },
   emptyTitle: { color: C.text, fontSize: 18, fontWeight: "800", marginTop: 10 },
   emptyText: { color: C.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
@@ -474,20 +769,20 @@ const styles = StyleSheet.create({
   emptyButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: R.md, backgroundColor: C.accent },
   emptyButtonText: { color: C.bg, fontSize: 12, fontWeight: "800" },
   emptyButtonGhost: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: R.md, borderWidth: 1, borderColor: C.border },
-  emptyButtonGhostText: { color: C.textSoft, fontSize: 12, fontWeight: "700" },
-  modalBackdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", padding: 24 },
-  modalCard: { width: "100%", backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 18 },
+  emptyButtonGhostText: { color: C.textSoft, fontSize: 12, fontWeight: "800" },
+  modalBackdrop: { position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center", padding: 18, zIndex: 20 },
+  modalCard: { width: "100%", maxHeight: "80%", borderRadius: R.lg, backgroundColor: C.card, padding: 18, borderWidth: 1, borderColor: C.border },
   modalHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  modalTitle: { color: C.text, fontSize: 17, fontWeight: "800" },
+  modalTitle: { color: C.text, fontSize: 18, fontWeight: "900" },
   modalText: { color: C.textSoft, fontSize: 12, lineHeight: 18 },
-  providerRow: { flexDirection: "row", gap: 8, marginTop: 14 },
-  providerChip: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: R.md, borderWidth: 1, borderColor: C.border, backgroundColor: C.raised },
-  providerChipActive: { backgroundColor: C.accentDim, borderColor: C.accent + "88" },
-  providerText: { color: C.textSoft, fontSize: 12, fontWeight: "700" },
+  providerRow: { flexDirection: "row", gap: 8, marginTop: 16 },
+  providerChip: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: R.md, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border },
+  providerChipActive: { backgroundColor: C.accentDim, borderColor: C.accent },
+  providerText: { color: C.textSoft, fontSize: 11, fontWeight: "800" },
   providerTextActive: { color: C.accentBright },
-  keyInput: { marginTop: 12, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border, borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 10, color: C.text, fontSize: 13 },
-  modalHint: { color: C.muted, fontSize: 10.5, lineHeight: 15, marginTop: 8 },
-  modalButton: { marginTop: 16, backgroundColor: C.accent, borderRadius: R.md, paddingVertical: 12, alignItems: "center" },
-  modalButtonText: { color: C.bg, fontSize: 13, fontWeight: "800" },
-  refreshing: { position: "absolute", top: 20 },
+  keyInput: { marginTop: 14, height: 44, borderRadius: R.md, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border, paddingHorizontal: 12, color: C.text, fontSize: 12 },
+  modalHint: { color: C.muted, fontSize: 10, lineHeight: 15, marginTop: 8 },
+  modalButton: { marginTop: 16, borderRadius: R.md, backgroundColor: C.accent, paddingVertical: 12, alignItems: "center" },
+  modalButtonText: { color: C.bg, fontSize: 12, fontWeight: "900" },
+  refreshing: { position: "absolute", bottom: 30, alignSelf: "center" },
 });

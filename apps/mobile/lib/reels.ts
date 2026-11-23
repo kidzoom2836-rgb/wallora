@@ -3,17 +3,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 /**
  * WALLORA Reels data layer.
  *
- * Primary source is the Pixabay Video API (royalty-free, `orientation=vertical`,
- * direct MP4 embeds). Pexels is supported as an alternative. A verified public
- * Pexels MP4 set is kept as an offline fallback so the feed is never empty.
- *
- * Pixabay requires responses to be cached for 24 hours — implemented below
- * with AsyncStorage. Every reel keeps creator + creditUrl for attribution.
+ * Sources are royalty-free or creator-authorized vertical clips only:
+ *  - YouTube Data API (`videoDuration=short`) for a personalized For You feed
+ *  - Pixabay Video API (`orientation=vertical`) as the default stock fallback
+ *  - Pexels Video API as an alternative stock source
+ *  - A verified public Pexels MP4 set when no API is reachable
  *
  * No TV streams, no scraped drama APIs and no paywall circumvention.
  */
 
-export type ReelProvider = "pixabay" | "pexels";
+export type ReelProvider = "youtube" | "pixabay" | "pexels";
 
 export type StockReel = {
   id: string;
@@ -24,23 +23,44 @@ export type StockReel = {
   source: ReelProvider | "sample";
   durationSec?: number;
   creditUrl?: string;
+  videoId?: string;
+  topics?: string[];
+  viewCount?: number;
+  sourceQuery?: string;
 };
 
 const PROVIDER_KEY = "wallora.reels.provider.v1";
+const YOUTUBE_KEY = "wallora.reels.youtubeKey.v1";
 const PEXELS_KEY = "wallora.reels.pexelsKey.v1";
 const PIXABAY_KEY = "wallora.reels.pixabayKey.v1";
-const CACHE_PREFIX = "wallora.reels.cache.v3";
+const INTERESTS_KEY = "wallora.reels.interests.v1";
+const AFFINITY_KEY = "wallora.reels.affinity.v1";
+const CACHE_PREFIX = "wallora.reels.cache.v4";
 
-/** Built-in free Pixabay key so Reels work out of the box. Users can override it in Source settings. */
+/** Set in a gitignored apps/mobile/.env for local testing. */
+const DEFAULT_YOUTUBE_KEY = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY ?? "";
+/** Built-in free Pixabay key so stock reels work out of the box. */
 const DEFAULT_PIXABAY_KEY = "58789810-642de2f0ebbd0bb0c89a873db";
 
 /** Pixabay policy: cache API responses for at least 24 hours. */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
 /** Keep reels scrollable on ~1 Mbps connections by skipping oversized renditions. */
 const MAX_REEL_BYTES = 12 * 1024 * 1024;
 
-/** Verified 9:16 Pexels MP4s used only when offline / no API is reachable. */
+export const DEFAULT_REEL_INTERESTS = [
+  "funny shorts",
+  "travel shorts",
+  "music shorts",
+  "sports shorts",
+  "food shorts",
+  "nature shorts",
+  "dance shorts",
+  "tech shorts",
+  "animals shorts",
+  "fitness shorts",
+];
+
+/** Verified 9:16 Pexels MP4s used only when no API is reachable. */
 export const SAMPLE_REELS: StockReel[] = [
   {
     id: "pexels-4678261",
@@ -84,9 +104,14 @@ export const SAMPLE_REELS: StockReel[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Settings and preferences
+// ---------------------------------------------------------------------------
+
 export async function getReelsProvider(): Promise<ReelProvider> {
   const value = await AsyncStorage.getItem(PROVIDER_KEY).catch(() => null);
-  return value === "pexels" ? "pexels" : "pixabay";
+  if (value === "youtube" || value === "pixabay" || value === "pexels") return value;
+  return "youtube";
 }
 
 export async function setReelsProvider(provider: ReelProvider): Promise<void> {
@@ -94,21 +119,65 @@ export async function setReelsProvider(provider: ReelProvider): Promise<void> {
 }
 
 export async function getReelsApiKey(provider: ReelProvider): Promise<string> {
-  const storageKey = provider === "pexels" ? PEXELS_KEY : PIXABAY_KEY;
+  const storageKey =
+    provider === "youtube" ? YOUTUBE_KEY : provider === "pexels" ? PEXELS_KEY : PIXABAY_KEY;
   const stored = await AsyncStorage.getItem(storageKey).catch(() => null);
   if (stored) return stored;
-  return provider === "pixabay" ? DEFAULT_PIXABAY_KEY : "";
+  if (provider === "youtube") return DEFAULT_YOUTUBE_KEY;
+  if (provider === "pixabay") return DEFAULT_PIXABAY_KEY;
+  return "";
 }
 
 export async function setReelsApiKey(provider: ReelProvider, value: string): Promise<void> {
-  const storageKey = provider === "pexels" ? PEXELS_KEY : PIXABAY_KEY;
+  const storageKey =
+    provider === "youtube" ? YOUTUBE_KEY : provider === "pexels" ? PEXELS_KEY : PIXABAY_KEY;
   const trimmed = value.trim();
   if (trimmed) await AsyncStorage.setItem(storageKey, trimmed).catch(() => {});
   else await AsyncStorage.removeItem(storageKey).catch(() => {});
 }
 
+export async function getReelInterests(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(INTERESTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is string => typeof item === "string" && !!item.trim()).slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+export async function setReelInterests(values: string[]): Promise<void> {
+  const clean = [...new Set(values.map((v) => v.trim()).filter(Boolean))].slice(0, 12);
+  await AsyncStorage.setItem(INTERESTS_KEY, JSON.stringify(clean)).catch(() => {});
+}
+
+export async function getReelAffinity(): Promise<Record<string, number>> {
+  try {
+    const raw = await AsyncStorage.getItem(AFFINITY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Likes teach the For You algorithm which topics to rank higher. */
+export async function recordReelLike(reel: StockReel): Promise<void> {
+  const topics = reel.topics ?? [];
+  if (!topics.length) return;
+  const current = await getReelAffinity();
+  for (const topic of topics) current[topic] = (current[topic] ?? 0) + 1;
+  await AsyncStorage.setItem(AFFINITY_KEY, JSON.stringify(current)).catch(() => {});
+}
+
 // ---------------------------------------------------------------------------
-// 24-hour cache (Pixabay requirement)
+// 24-hour cache (Pixabay/YouTube quota protection)
 // ---------------------------------------------------------------------------
 
 type CachedPage = { fetchedAt: number; reels: StockReel[] };
@@ -140,17 +209,94 @@ async function writeCache(
 }
 
 // ---------------------------------------------------------------------------
-// Providers
+// Shared fetch helpers
 // ---------------------------------------------------------------------------
 
 async function fetchJson(url: string, init?: RequestInit): Promise<any> {
   const response = await fetch(url, init);
   if (!response.ok) {
-    // Pixabay errors are plain text, not JSON.
     const text = await response.text().catch(() => "");
-    throw new Error(text?.trim() || `Request failed (${response.status}).`);
+    let message = text?.trim() || `Request failed (${response.status}).`;
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed?.error?.message ?? parsed?.message ?? message;
+    } catch {
+      // Plain-text errors are valid for Pixabay.
+    }
+    throw new Error(message);
   }
   return response.json();
+}
+
+function parseIsoDuration(value?: string): number | undefined {
+  const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(value ?? "");
+  if (!match) return undefined;
+  const total =
+    Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
+  return total > 0 ? total : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Providers
+// ---------------------------------------------------------------------------
+
+async function fetchYouTube(apiKey: string, query: string, page: number): Promise<StockReel[]> {
+  const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+  searchUrl.searchParams.set("part", "snippet");
+  searchUrl.searchParams.set("type", "video");
+  searchUrl.searchParams.set("videoDuration", "short");
+  searchUrl.searchParams.set("maxResults", "12");
+  searchUrl.searchParams.set("q", query || "trending shorts");
+  searchUrl.searchParams.set("key", apiKey);
+  if (page > 1) searchUrl.searchParams.set("pageToken", String(page));
+
+  const search = await fetchJson(searchUrl.toString(), { headers: { Accept: "application/json" } });
+  const items: any[] = Array.isArray(search?.items) ? search.items : [];
+  const ids = items.map((item) => item?.id?.videoId).filter(Boolean);
+  if (!ids.length) return [];
+
+  const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+  detailsUrl.searchParams.set("part", "snippet,contentDetails,statistics");
+  detailsUrl.searchParams.set("id", ids.join(","));
+  detailsUrl.searchParams.set("key", apiKey);
+  const details = await fetchJson(detailsUrl.toString(), { headers: { Accept: "application/json" } });
+  const byId = new Map<string, any>(
+    (Array.isArray(details?.items) ? details.items : []).map((item: any) => [item?.id, item]),
+  );
+
+  return items
+    .map((item): StockReel | null => {
+      const videoId = item?.id?.videoId as string | undefined;
+      if (!videoId) return null;
+      const detail = byId.get(videoId) ?? item;
+      const snippet = detail?.snippet ?? item?.snippet ?? {};
+      const durationSec = parseIsoDuration(detail?.contentDetails?.duration);
+      if (durationSec && durationSec > 180) return null;
+
+      const tags: string[] = Array.isArray(snippet?.tags)
+        ? snippet.tags.filter((tag: unknown): tag is string => typeof tag === "string").slice(0, 8)
+        : [];
+      const reel: StockReel = {
+        id: `youtube-${videoId}`,
+        videoId,
+        uri: `https://www.youtube.com/embed/${videoId}`,
+        title: snippet?.title ?? "YouTube Short",
+        creator: snippet?.channelTitle ?? "YouTube creator",
+        source: "youtube",
+        durationSec,
+        creditUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        topics: [...new Set([query.toLowerCase(), ...tags.map((tag) => tag.toLowerCase())])],
+        viewCount: Number(detail?.statistics?.viewCount ?? 0) || 0,
+        sourceQuery: query,
+      };
+      const thumb =
+        snippet?.thumbnails?.medium?.url ??
+        snippet?.thumbnails?.high?.url ??
+        snippet?.thumbnails?.default?.url;
+      if (typeof thumb === "string") reel.poster = thumb;
+      return reel;
+    })
+    .filter((reel): reel is StockReel => reel !== null);
 }
 
 function pickVerticalPexelsFile(files: any[]) {
@@ -163,7 +309,6 @@ function pickVerticalPexelsFile(files: any[]) {
   );
 }
 
-/** Pexels: `GET /videos/search?query=&orientation=portrait&per_page=` */
 async function fetchPexels(apiKey: string, query: string, page: number): Promise<StockReel[]> {
   const url = new URL("https://api.pexels.com/videos/search");
   url.searchParams.set("query", query || "vertical nature");
@@ -186,6 +331,8 @@ async function fetchPexels(apiKey: string, query: string, page: number): Promise
         source: "pexels",
         durationSec: typeof video.duration === "number" ? video.duration : undefined,
         creditUrl: video.url ?? undefined,
+        topics: query ? [query.toLowerCase()] : undefined,
+        sourceQuery: query,
       };
       if (typeof video.image === "string") reel.poster = video.image;
       return reel;
@@ -195,8 +342,7 @@ async function fetchPexels(apiKey: string, query: string, page: number): Promise
 
 /**
  * Pick a vertical MP4 rendition that is small enough for smooth mobile
- * scrolling. Pixabay "medium" files can exceed 100 MB, so prefer the smallest
- * portrait rendition under the size budget instead of always taking medium.
+ * scrolling. Pixabay "medium" files can exceed 100 MB.
  */
 function pickVerticalPixabayFile(videos: any) {
   const renditions = ["large", "medium", "small", "tiny"]
@@ -209,21 +355,19 @@ function pickVerticalPixabayFile(videos: any) {
     );
   if (!renditions.length) return null;
 
-  // Prefer at least 720px tall, but accept any portrait rendition if none qualify.
   const tallEnough = renditions.filter((file) => (file.height ?? 0) >= 720);
   return (tallEnough.length ? tallEnough : renditions).sort(
     (a, b) => (a.size ?? 0) - (b.size ?? 0),
   )[0];
 }
 
-/** Pixabay: `GET /api/videos/?key=&orientation=vertical&safesearch=true` */
 async function fetchPixabay(apiKey: string, query: string, page: number): Promise<StockReel[]> {
   const url = new URL("https://pixabay.com/api/videos/");
   url.searchParams.set("key", apiKey);
   if (query) url.searchParams.set("q", query);
   url.searchParams.set("orientation", "vertical");
   url.searchParams.set("safesearch", "true");
-  // Pixabay's orientation filter is loose: a 20-result page can contain only
+  // Pixabay's orientation filter is loose; a 20-result page can contain only
   // ~4 portrait renditions. Fetch the max allowed page and filter locally.
   url.searchParams.set("per_page", "200");
   url.searchParams.set("page", String(page));
@@ -233,14 +377,17 @@ async function fetchPixabay(apiKey: string, query: string, page: number): Promis
     .map((hit): StockReel | null => {
       const file = pickVerticalPixabayFile(hit?.videos);
       if (!file?.url) return null;
+      const tags = typeof hit.tags === "string" ? hit.tags.split(",").slice(0, 8) : [];
       const reel: StockReel = {
         id: `pixabay-${hit.id}`,
         uri: file.url,
-        title: (hit.tags ?? "Pixabay video").split(",").slice(0, 3).join(" · "),
+        title: tags.slice(0, 3).join(" · ") || "Pixabay video",
         creator: hit.user ?? "Pixabay creator",
         source: "pixabay",
         durationSec: typeof hit.duration === "number" ? hit.duration : undefined,
         creditUrl: hit.pageURL ?? `https://pixabay.com/videos/${hit.id}/`,
+        topics: tags.map((tag: string) => tag.trim().toLowerCase()),
+        sourceQuery: query,
       };
       if (typeof file.thumbnail === "string") reel.poster = file.thumbnail;
       return reel;
@@ -255,10 +402,7 @@ export type LoadReelsResult = {
   cached?: boolean;
 };
 
-/**
- * Fetch a reel page with a 24-hour cache, stale-cache fallback and an offline
- * sample fallback. `force` is used by pull-to-refresh for an explicit human request.
- */
+/** Fetch one provider page with a 24-hour cache and offline fallbacks. */
 export async function loadStockReels(options: {
   provider: ReelProvider;
   query?: string;
@@ -278,34 +422,84 @@ export async function loadStockReels(options: {
 
   if (!apiKey) {
     if (cached?.reels.length) return { reels: cached.reels, provider: options.provider, cached: true };
+    if (options.provider === "youtube") {
+      const stock = await loadStockReels({ provider: "pixabay", query, page, force: options.force });
+      return { ...stock, error: stock.error ?? "YouTube key not set — showing Pixabay clips." };
+    }
     return { reels: SAMPLE_REELS, provider: "sample" };
   }
 
   try {
     const reels =
-      options.provider === "pixabay"
-        ? await fetchPixabay(apiKey, query, page)
-        : await fetchPexels(apiKey, query, page);
+      options.provider === "youtube"
+        ? await fetchYouTube(apiKey, query, page)
+        : options.provider === "pixabay"
+          ? await fetchPixabay(apiKey, query, page)
+          : await fetchPexels(apiKey, query, page);
     if (!reels.length) {
       if (cached?.reels.length) return { reels: cached.reels, provider: options.provider, cached: true };
+      if (options.provider === "youtube") {
+        return loadStockReels({ provider: "pixabay", query, page, force: options.force });
+      }
       return { reels: SAMPLE_REELS, provider: "sample" };
     }
     await writeCache(options.provider, query, page, reels);
     return { reels, provider: options.provider };
   } catch (error) {
-    // Serve stale cache before samples so the feed stays continuous.
+    const message = error instanceof Error ? error.message : "Could not load reels.";
     if (cached?.reels.length) {
-      return {
-        reels: cached.reels,
-        provider: options.provider,
-        cached: true,
-        error: error instanceof Error ? error.message : "Could not refresh reels.",
-      };
+      return { reels: cached.reels, provider: options.provider, cached: true, error: message };
     }
-    return {
-      reels: SAMPLE_REELS,
-      provider: "sample",
-      error: error instanceof Error ? error.message : "Could not load reels.",
-    };
+    if (options.provider === "youtube") {
+      const stock = await loadStockReels({ provider: "pixabay", query, page, force: options.force });
+      return { ...stock, error: message };
+    }
+    return { reels: SAMPLE_REELS, provider: "sample", error: message };
   }
+}
+
+function reelScore(reel: StockReel, affinity: Record<string, number>, interests: string[]): number {
+  const topics = reel.topics ?? [];
+  const affinityScore = topics.reduce((sum, topic) => sum + (affinity[topic] ?? 0), 0);
+  const interestScore = topics.some((topic) => interests.includes(topic)) ? 4 : 0;
+  const popularity = Math.log10((reel.viewCount ?? 0) + 1) * 1.5;
+  const shortBonus = reel.durationSec && reel.durationSec <= 60 ? 1 : 0;
+  return affinityScore * 3 + interestScore + popularity + shortBonus;
+}
+
+/**
+ * Personalized For You feed. Queries one page per saved interest, interleaves
+ * the results for variety, then ranks them using likes and popularity.
+ */
+export async function loadPersonalizedReels(options: { force?: boolean } = {}): Promise<LoadReelsResult> {
+  const [interests, affinity] = await Promise.all([getReelInterests(), getReelAffinity()]);
+  // Keep within YouTube's daily quota: each search costs ~100 units.
+  const queries = (interests.length ? interests : DEFAULT_REEL_INTERESTS.slice(0, 5)).slice(0, 5);
+  const pages = await Promise.all(
+    queries.map((query) => loadStockReels({ provider: "youtube", query, page: 1, force: options.force })),
+  );
+
+  const grouped = pages.map((page) =>
+    [...page.reels].sort((a, b) => reelScore(b, affinity, queries) - reelScore(a, affinity, queries)),
+  );
+  const seen = new Set<string>();
+  const merged: StockReel[] = [];
+  const maxLength = Math.max(0, ...grouped.map((list) => list.length));
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const list of grouped) {
+      const reel = list[index];
+      if (!reel || seen.has(reel.id)) continue;
+      seen.add(reel.id);
+      merged.push(reel);
+    }
+  }
+
+  const errors = pages.map((page) => page.error).filter(Boolean) as string[];
+  const provider = pages.some((page) => page.provider === "youtube") ? "youtube" : pages[0]?.provider ?? "sample";
+  return {
+    reels: merged,
+    provider,
+    cached: pages.every((page) => page.cached),
+    error: errors[0],
+  };
 }
