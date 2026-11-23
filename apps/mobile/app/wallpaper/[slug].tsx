@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator, Share, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Image, Pressable, ActivityIndicator, Share, TextInput, Alert, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,12 @@ import { API_BASE, assetUrl } from "../../lib/config";
 import { addAsWallpaper, downloadWallpaper } from "../../lib/downloads";
 import { withVerification } from "../../lib/verification";
 import { TierTick } from "../../components/ui/VerifiedBadge";
+import {
+  WallpaperMockupControls,
+  WallpaperMockupOverlay,
+  type WallpaperMockupMode,
+  type WallpaperMockupPlatform,
+} from "../../components/ui/WallpaperMockupPreview";
 
 const C = {
   bg: "#0B0C0F",
@@ -73,6 +79,10 @@ export default function WallpaperDetailScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [activeVariation, setActiveVariation] = useState(0);
+  const [mockupMode, setMockupMode] = useState<WallpaperMockupMode>("off");
+  const [mockupPlatform, setMockupPlatform] = useState<WallpaperMockupPlatform>(
+    Platform.OS === "ios" ? "ios" : "android",
+  );
 
   const notice = (message: string) => {
     setToast(message);
@@ -290,18 +300,31 @@ export default function WallpaperDetailScreen() {
           ) : (
             <View style={[styles.preview, { backgroundColor: detail.dominantColor ?? C.raised, aspectRatio: 1 / ratio }]} />
           )}
-          <View style={styles.previewShade} />
+          {mockupMode === "off" ? <View style={styles.previewShade} /> : null}
+          <WallpaperMockupOverlay
+            mode={mockupMode}
+            platform={mockupPlatform}
+            accentColor={detail.dominantColor}
+          />
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color={C.text} />
           </Pressable>
           <Pressable style={styles.shareFloat} onPress={share}>
             <Ionicons name="share-outline" size={18} color={C.text} />
           </Pressable>
-          <View style={styles.previewCaption}>
-            <Text style={styles.previewEyebrow}>{detail.category?.name ?? "WALLORA"} · {detail.orientation.toUpperCase()}</Text>
-            <Text style={styles.previewTitle}>{detail.title}</Text>
-          </View>
+          {mockupMode === "off" ? (
+            <View style={styles.previewCaption}>
+              <Text style={styles.previewEyebrow}>{detail.category?.name ?? "WALLORA"} · {detail.orientation.toUpperCase()}</Text>
+              <Text style={styles.previewTitle}>{detail.title}</Text>
+            </View>
+          ) : null}
         </View>
+        <WallpaperMockupControls
+          mode={mockupMode}
+          platform={mockupPlatform}
+          onMode={setMockupMode}
+          onPlatform={setMockupPlatform}
+        />
 
         {/* One post can contain multiple approved variations. */}
         {(detail.variations?.length ?? 0) > 1 && (
