@@ -5,7 +5,6 @@ import {
   FlatList,
   Image,
   Pressable,
-  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -158,6 +157,10 @@ function ReelCard({
           allowsInlineMediaPlayback
           allowsFullscreenVideo
           mediaPlaybackRequiresUserAction={false}
+          // The paged FlatList owns vertical gestures. Without this, YouTube's
+          // page eats the swipe and the next reel only scrolls halfway.
+          scrollEnabled={false}
+          bounces={false}
         />
       ) : (
         <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
@@ -187,7 +190,7 @@ function ReelCard({
         </View>
       ) : null}
 
-      <View style={[styles.bottom, { paddingBottom: insetsBottom + 16 }]} pointerEvents="box-none">
+      <View style={[styles.bottom, { paddingBottom: insetsBottom + 18, paddingRight: 78 }]} pointerEvents="box-none">
         <View style={styles.info}>
           <View style={styles.authorRow}>
             <View style={styles.avatar}>
@@ -214,17 +217,25 @@ function ReelCard({
             </Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.actions}>
-          <Pressable onPress={onLike} style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
-            <Ionicons name={liked ? "heart" : "heart-outline"} size={28} color={liked ? C.error : C.white} />
-            <Text style={styles.actionCount}>{countLabel(likeCount)}</Text>
-          </Pressable>
-          <Pressable onPress={onShare} style={styles.action}>
-            <Ionicons name="share-outline" size={26} color={C.white} />
-            <Text style={styles.actionCount}>Share</Text>
-          </Pressable>
-        </View>
+      <View style={[styles.actionRail, { bottom: insetsBottom + 92 }]} pointerEvents="box-none">
+        <Pressable
+          onPress={onLike}
+          hitSlop={6}
+          style={({ pressed }) => [styles.railButton, pressed && styles.railButtonPressed]}
+        >
+          <Ionicons name={liked ? "heart" : "heart-outline"} size={25} color={liked ? C.error : C.white} />
+        </Pressable>
+        <Text style={styles.railCount}>{countLabel(likeCount)}</Text>
+        <Pressable
+          onPress={onShare}
+          hitSlop={6}
+          style={({ pressed }) => [styles.railButton, pressed && styles.railButtonPressed]}
+        >
+          <Ionicons name="share-outline" size={23} color={C.white} />
+        </Pressable>
+        <Text style={styles.railCount}>Share</Text>
       </View>
     </View>
   );
@@ -533,9 +544,14 @@ export default function ReelsScreen() {
           </Pressable>
         ))}
       </View>
-      <Pressable onPress={() => setSettingsVisible(true)} style={styles.headerButton} hitSlop={8}>
-        <Ionicons name="options-outline" size={19} color={C.white} />
-      </Pressable>
+      <View style={styles.headerActions}>
+        <Pressable onPress={onRefresh} style={styles.headerButton} hitSlop={8}>
+          <Ionicons name="refresh-outline" size={19} color={C.white} />
+        </Pressable>
+        <Pressable onPress={() => setSettingsVisible(true)} style={styles.headerButton} hitSlop={8}>
+          <Ionicons name="options-outline" size={19} color={C.white} />
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -637,13 +653,25 @@ export default function ReelsScreen() {
         <FlatList
           data={feed}
           keyExtractor={(item) => item.id}
+          style={{ height: viewportHeight }}
           pagingEnabled
+          decelerationRate="fast"
+          overScrollMode="never"
+          bounces={false}
           showsVerticalScrollIndicator={false}
           initialNumToRender={2}
           maxToRenderPerBatch={3}
           windowSize={4}
-          removeClippedSubviews
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
+          // Exact offsets make paging snap cleanly instead of drifting between reels.
+          getItemLayout={(_, index) => ({
+            length: viewportHeight,
+            offset: viewportHeight * index,
+            index,
+          })}
+          onMomentumScrollEnd={(event) => {
+            const index = Math.round(event.nativeEvent.contentOffset.y / viewportHeight);
+            setActiveIndex(Math.min(Math.max(index, 0), Math.max(feed.length - 1, 0)));
+          }}
           onViewableItemsChanged={({ viewableItems }) => {
             const first = viewableItems[0];
             if (first?.index != null) setActiveIndex(first.index);
@@ -740,6 +768,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 10,
   },
+  headerActions: { flexDirection: "row", gap: 8 },
   headerButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
   tabs: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: R.pill, padding: 3 },
   tab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill },
@@ -761,10 +790,26 @@ const styles = StyleSheet.create({
   caption: { color: C.white, fontSize: 13, lineHeight: 19, textShadowColor: "#000", textShadowRadius: 3 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
   metaText: { color: C.textSoft, fontSize: 10, flexShrink: 1 },
-  actions: { alignItems: "center", gap: 16 },
-  action: { alignItems: "center", width: 44 },
-  actionPressed: { opacity: 0.6 },
-  actionCount: { color: C.white, fontSize: 10, fontWeight: "700", marginTop: 3 },
+  actionRail: { position: "absolute", right: 8, alignItems: "center", gap: 4 },
+  railButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.42)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  railButtonPressed: { opacity: 0.6 },
+  railCount: {
+    color: C.white,
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 12,
+    textShadowColor: "#000",
+    textShadowRadius: 3,
+  },
   searchBox: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, height: 48, borderRadius: R.md, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border },
   searchInput: { flex: 1, color: C.text, fontSize: 14 },
   suggestionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
