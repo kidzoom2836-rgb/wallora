@@ -82,6 +82,15 @@ export async function GET(request: NextRequest) {
     50,
     Math.max(1, parseInt(searchParams.get("limit") ?? "12", 10) || 12),
   );
+  const kindParam = searchParams.get("kind");
+  const kind =
+    kindParam === "channel_clip" ||
+    kindParam === "image" ||
+    kindParam === "wallpaper" ||
+    kindParam === "project" ||
+    kindParam === "text"
+      ? kindParam
+      : undefined;
 
   const session = await getAuthSession();
   const data = await listPosts({
@@ -90,6 +99,7 @@ export async function GET(request: NextRequest) {
     page,
     limit,
     viewerId: session?.user?.id ?? null,
+    kind,
   });
   return NextResponse.json({ data });
 }

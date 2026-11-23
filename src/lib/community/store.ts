@@ -526,8 +526,14 @@ export async function listPosts(opts: {
   page: number;
   limit: number;
   viewerId: string | null;
+  kind?: PostKind;
 }): Promise<{ items: CommunityPost[]; pagination: FeedPagination }> {
-  const posts = await readPosts();
+  const allPosts = await readPosts();
+  // A client can ask for only video clips (WALLORA Reels). Applied before
+  // search/sort/pagination so totals describe the filtered feed.
+  const posts = opts.kind
+    ? allPosts.filter((post) => post.kind === opts.kind)
+    : allPosts;
   const [likes, reposts] = await Promise.all([
     readMemberships(LIKES_KEY),
     readMemberships(REPOSTS_KEY),

@@ -547,9 +547,18 @@ export default function CommunityScreen() {
         title="Community"
         subtitle="Real conversations, real work"
         right={
-          <Pressable onPress={onRefresh} hitSlop={10} style={styles.refreshButton}>
-            <Ionicons name="refresh-outline" size={19} color={C.accent} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push("/reels")}
+              hitSlop={10}
+              style={styles.refreshButton}
+            >
+              <Ionicons name="play-circle-outline" size={19} color={C.accent} />
+            </Pressable>
+            <Pressable onPress={onRefresh} hitSlop={10} style={styles.refreshButton}>
+              <Ionicons name="refresh-outline" size={19} color={C.accent} />
+            </Pressable>
+          </View>
         }
       />
       <FlatList
@@ -715,6 +724,7 @@ export default function CommunityScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   refreshButton: {
     width: 36,
     height: 36,
