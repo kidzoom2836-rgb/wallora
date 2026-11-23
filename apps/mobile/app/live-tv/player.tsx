@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEvent } from "expo";
@@ -24,6 +18,7 @@ import {
 
 import { EmptyState } from "../../components/ui/States";
 import { TvWatermark } from "../../components/media/TvWatermark";
+import { TvSignalSearching } from "../../components/media/TvSignalSearching";
 import {
   hasAcceptedTvTerms,
   TvWelcomeModal,
@@ -427,8 +422,11 @@ export default function LiveTvPlayerScreen() {
   if (loadingGuide) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator color={C.accent} size="large" />
-        <Text style={styles.loadingText}>Opening WALLORA TV…</Text>
+        <TvSignalSearching
+          label="OPENING WALLORA TV"
+          detail="Loading your secure channel guide…"
+          compact
+        />
       </View>
     );
   }
@@ -535,15 +533,23 @@ export default function LiveTvPlayerScreen() {
           </View>
         ) : status === "loading" && !reconnecting ? (
           <View style={styles.centerCard}>
-            <ActivityIndicator color={C.accent} size="large" />
-            <Text style={styles.centerTitle}>Connecting to stream…</Text>
-            <Text style={styles.centerDetail}>Your WALLORA TV player is opening the channel.</Text>
+            <TvSignalSearching
+              label="SEARCHING SIGNAL"
+              detail="Your WALLORA TV player is locking onto this channel."
+              channelName={channel.name}
+              attempt={attempt}
+              compact
+            />
           </View>
         ) : reconnecting ? (
           <View style={styles.centerCard}>
-            <ActivityIndicator color={C.accent} />
-            <Text style={styles.centerTitle}>Keeping your stream alive</Text>
-            <Text style={styles.centerDetail}>{reconnectReason}</Text>
+            <TvSignalSearching
+              label="RESCANNING SIGNAL"
+              detail={reconnectReason}
+              channelName={channel.name}
+              attempt={attempt}
+              compact
+            />
           </View>
         ) : reconnectFailed ? (
           <View style={styles.centerCard}>

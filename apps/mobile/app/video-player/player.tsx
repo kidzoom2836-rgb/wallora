@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  PanResponder,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEvent } from "expo";
@@ -24,6 +17,7 @@ import {
 
 import { EmptyState } from "../../components/ui/States";
 import { TvWatermark } from "../../components/media/TvWatermark";
+import { TvSignalSearching } from "../../components/media/TvSignalSearching";
 import { C, R } from "../../lib/theme";
 import {
   clamp,
@@ -442,8 +436,11 @@ export default function VideoPlayerScreen() {
   if (loading) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator color={C.accent} size="large" />
-        <Text style={styles.loadingText}>Opening WALLORA Player…</Text>
+        <TvSignalSearching
+          label="OPENING WALLORA PLAYER"
+          detail="Preparing your video library…"
+          compact
+        />
       </View>
     );
   }
@@ -526,8 +523,12 @@ export default function VideoPlayerScreen() {
         <View style={styles.statusWrap} pointerEvents="box-none">
           {status === "loading" && !errorNotice ? (
             <View style={styles.centerCard}>
-              <ActivityIndicator color={C.accent} size="large" />
-              <Text style={styles.centerTitle}>Loading video…</Text>
+              <TvSignalSearching
+                label="BUFFERING VIDEO"
+                detail="Preparing the smoothest playback for your connection…"
+                channelName={item.title}
+                compact
+              />
             </View>
           ) : errorNotice ? (
             <View style={styles.centerCard}>
