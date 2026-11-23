@@ -33,6 +33,8 @@ Copy `.env.example` values into `.env` (never committed):
 - `NEXTAUTH_SECRET` — JWT secret (`openssl rand -base64 32`)
 - `NEXTAUTH_URL` — app base URL (e.g. `http://localhost:3000` in dev)
 - `R2_*` (optional in dev, required on Vercel) — Cloudflare R2 credentials for object storage
+- `PIXABAY_API_KEY` (optional) — enables the super-admin Pixabay wallpaper importer at
+  `POST /api/v1/admin/wallpapers/import/pixabay`
 
 ### Seeded admin login
 
