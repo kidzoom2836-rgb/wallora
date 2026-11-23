@@ -29,6 +29,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Tv,
   UploadCloud,
   Users,
   X,
@@ -45,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TvChannelsTab } from "@/components/admin/tv-channels-tab";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 
@@ -149,6 +151,7 @@ type TabId =
   | "uploads"
   | "verification"
   | "people"
+  | "tv"
   | "ai"
   | "notifications"
   | "audit";
@@ -158,6 +161,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutDashboard; hint: stri
   { id: "uploads", label: "Uploads", icon: UploadCloud, hint: "Moderation queue" },
   { id: "verification", label: "Verification", icon: BadgeCheck, hint: "Badge applications" },
   { id: "people", label: "People & Roles", icon: Users, hint: "Roles & official tick" },
+  { id: "tv", label: "WALLORA TV", icon: Tv, hint: "Database channel guide" },
   { id: "ai", label: "AI & Models", icon: Cpu, hint: "NVIDIA / text / image" },
   { id: "notifications", label: "Push Alerts", icon: Bell, hint: "Features & drops" },
   { id: "audit", label: "Audit Log", icon: FileClock, hint: "Admin actions" },
@@ -275,6 +279,7 @@ export function AdminKenyaPanel({ user }: { user: { name: string; email: string 
           {tab === "uploads" && <UploadsTab />}
           {tab === "verification" && <VerificationTab />}
           {tab === "people" && <PeopleTab />}
+          {tab === "tv" && <TvChannelsTab />}
           {tab === "ai" && <AITab />}
           {tab === "notifications" && <NotificationsTab />}
           {tab === "audit" && <AuditTab />}
@@ -483,7 +488,6 @@ function UploadsTab() {
               <div key={w.id} className="overflow-hidden rounded-2xl border border-border bg-surface">
                 <div className="relative aspect-[4/3] bg-raised">
                   {w.asset?.objectKey ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={w.asset.objectKey} alt={w.title} className="size-full object-cover" />
                   ) : (
                     <div className="flex size-full items-center justify-center text-secondary-text">

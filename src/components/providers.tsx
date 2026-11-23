@@ -3,6 +3,7 @@
 import * as React from "react";
 import { SessionProvider } from "next-auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { VerificationProvider } from "@/components/verification/verification-gate";
 
 /**
@@ -25,9 +26,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        <VerificationProvider>{children}</VerificationProvider>
-      </SessionProvider>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem
+        disableTransitionOnChange
+        themes={["dark", "light"]}
+      >
+        <SessionProvider>
+          <VerificationProvider>{children}</VerificationProvider>
+        </SessionProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

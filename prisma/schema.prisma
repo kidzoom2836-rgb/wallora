@@ -54,6 +54,7 @@ model User {
   followers     Follow[]       @relation("Following")
   products      Product[]
   purchases     Purchase[]
+  tvChannels    TvChannel[]
 
   @@index([role])
   @@index([status])
@@ -93,6 +94,49 @@ model UserSettings {
   updatedAt                DateTime  @updatedAt
 
   user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// WALLORA TV channels (Phase 13)
+// ---------------------------------------------------------------------------
+
+/// A channel in the WALLORA TV guide. Stream URLs are third-party HLS/HTTP
+/// endpoints; the database is the source of truth for the guide metadata.
+model TvChannel {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  groupName   String    @default("General")
+  logoUrl     String?
+  streamUrl   String
+  previewUrl  String?
+  status      String    @default("active") // active|hidden|disabled
+  sortOrder   Int       @default(0)
+  isFeatured  Boolean   @default(false)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([status, sortOrder])
+  @@index([groupName])
+  @@index([isFeatured])
+}
+
+/// An M3U source that administrators can sync channels from.
+model TvPlaylistSource {
+  id             String    @id @default(cuid())
+  name           String
+  url            String    @unique
+  enabled        Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  lastChannelCount Int     @default(0)
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([enabled])
 }
 
 // ---------------------------------------------------------------------------

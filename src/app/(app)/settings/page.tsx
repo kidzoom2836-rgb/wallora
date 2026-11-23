@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -84,6 +85,7 @@ const SECTIONS = [
 export default function SettingsPage() {
   const qc = useQueryClient();
   const router = useRouter();
+  const { setTheme } = useTheme();
   const [active, setActive] = React.useState<string>("profile");
   const [displayName, setDisplayName] = React.useState("");
   const [bio, setBio] = React.useState("");
@@ -128,8 +130,13 @@ export default function SettingsPage() {
   }, [meQuery.data]);
 
   React.useEffect(() => {
-    if (settingsQuery.data?.data) setFormSettings(settingsQuery.data.data);
-  }, [settingsQuery.data]);
+    const settings = settingsQuery.data?.data;
+    if (!settings) return;
+    setFormSettings(settings);
+    if (settings.theme === "dark" || settings.theme === "light" || settings.theme === "system") {
+      setTheme(settings.theme);
+    }
+  }, [settingsQuery.data, setTheme]);
 
   React.useEffect(() => {
     const hash = window.location.hash.replace("#", "");
@@ -195,6 +202,7 @@ export default function SettingsPage() {
       });
       const payload = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(payload.error?.message ?? "Could not save settings");
+      setTheme(formSettings.theme);
       toast.success("Settings saved");
       qc.invalidateQueries({ queryKey: ["settings"] });
     } catch (err) {
@@ -459,20 +467,34 @@ export default function SettingsPage() {
 
             {/* APPEARANCE */}
             <section id="appearance" className={cn("settings-card", active !== "appearance" && "hidden lg:block")}>
-              <SectionHeader icon={Palette} title="Appearance" subtitle="WALLORA is a dark-mode-first creative space." />
+              <SectionHeader icon={Palette} title="Appearance" subtitle="Choose how WALLORA looks on this device." />
               <div className="mt-6 max-w-sm space-y-3">
                 <Label>Theme</Label>
-                <Select value="dark" disabled>
+                <Select
+                  value={formSettings.theme}
+                  onValueChange={(v) => {
+                    setFormSettings((s) => ({ ...s, theme: v }));
+                    setTheme(v);
+                  }}
+                >
                   <SelectTrigger className="border-border bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-popover">
                     <SelectItem value="dark">Dark</SelectItem>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="system">System</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-secondary-text">
-                  Dark mode is the supported theme in this release. Your saved preference stays dark.
+                  Dark is the signature WALLORA look. Light and System are also available. Save to keep this choice.
                 </p>
+                <div className="flex justify-end pt-1">
+                  <Button onClick={saveSettings} disabled={savingSettings} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save appearance
+                  </Button>
+                </div>
               </div>
             </section>
 
