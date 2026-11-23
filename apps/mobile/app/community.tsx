@@ -5,7 +5,6 @@ import {
   Text,
   Image,
   FlatList,
-  Linking,
   Pressable,
   TextInput,
   RefreshControl,
@@ -721,21 +720,6 @@ export default function CommunityScreen() {
                     item.channelGroup ??
                     (item.videoUrl ? "9s clip · WALLORA TV" : "Streaming on WALLORA")
                   }
-                  onPress={() => {
-                    if (item.channelId) {
-                      router.push({
-                        pathname: "/live-tv",
-                        params: { channel: item.channelId },
-                      });
-                    } else if (item.refId) {
-                      router.push({
-                        pathname: "/video-player/player",
-                        params: { id: item.refId },
-                      });
-                    } else if (clipUri) {
-                      void Linking.openURL(clipUri).catch(() => {});
-                    }
-                  }}
                 />
               ) : null}
 

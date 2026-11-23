@@ -22,6 +22,8 @@ import { EmptyState } from "../../components/ui/States";
 import { MediaRail } from "../../components/ui/MediaRail";
 import type { MediaItem } from "../../components/ui/MediaCard";
 import { SmartSearchBar } from "../../components/media/SmartSearchBar";
+import { ChannelDetailModal } from "../../components/media/ChannelDetailModal";
+import { ProgramReminderModal } from "../../components/media/ProgramReminderModal";
 import {
   hasAcceptedTvTerms,
   TvWelcomeModal,
@@ -155,6 +157,9 @@ export default function LiveTvScreen() {
   const [recommendChannel, setRecommendChannel] = useState<IptvChannel | null>(
     null,
   );
+  const [detailChannel, setDetailChannel] = useState<IptvChannel | null>(null);
+  const [programChannel, setProgramChannel] = useState<IptvChannel | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -367,10 +372,6 @@ export default function LiveTvScreen() {
     : -1;
   const heroIndex = Math.max(0, heroRank);
 
-  const selectChannel = useCallback((channel: IptvChannel) => {
-    setSelected(channel);
-  }, []);
-
   const toMediaItem = useCallback(
     (channel: IptvChannel, index: number, badge?: string): MediaItem => {
       const id = uniqueChannelId(channel);
@@ -383,10 +384,10 @@ export default function LiveTvScreen() {
         rank: index + 1,
         likes: communityLikes[id] || undefined,
         accentColor: colorFor(index),
-        onPress: () => selectChannel(channel),
+        onPress: () => setDetailChannel(channel),
       };
     },
-    [communityLikes, selectChannel],
+    [communityLikes],
   );
 
   const mostWatchedItems = useMemo(
@@ -405,9 +406,13 @@ export default function LiveTvScreen() {
         .map((channel, i) => toMediaItem(channel, i)),
     [channels, favoriteIds, toMediaItem],
   );
-  const allItems = useMemo(
+  const recommendedItems = useMemo(
     () => ranked.slice(0, 12).map((channel, i) => toMediaItem(channel, i)),
     [ranked, toMediaItem],
+  );
+  const allItems = useMemo(
+    () => channels.slice(0, 12).map((channel, i) => toMediaItem(channel, i)),
+    [channels, toMediaItem],
   );
   const featuredItems = useMemo(() => {
     const seen = new Set<string>();
@@ -442,12 +447,18 @@ export default function LiveTvScreen() {
         return;
       }
       setSelected(channel);
+      setDetailChannel(null);
       router.push({
         pathname: "/live-tv/player",
         params: { channel: uniqueChannelId(channel) },
       });
     },
     [termsAccepted],
+  );
+
+  const watchDetail = useCallback(
+    () => openPlayer(detailChannel ?? undefined),
+    [detailChannel, openPlayer],
   );
 
 
@@ -488,7 +499,7 @@ export default function LiveTvScreen() {
     const active = id === selectedId;
     return (
       <Pressable
-        onPress={() => selectChannel(item)}
+        onPress={() => setDetailChannel(item)}
         style={({ pressed }) => [
           styles.channelRow,
           active && styles.channelRowActive,
@@ -574,6 +585,14 @@ export default function LiveTvScreen() {
         }
         ListHeaderComponent={
           <View>
+            {notice && <Text style={styles.notice}>{notice}</Text>}
+            <SmartSearchBar
+              value={query}
+              onChangeText={setQuery}
+              channels={channels}
+              onSelectChannel={(channel) => setDetailChannel(channel)}
+            />
+
             {heroChannel && (
               <View style={[styles.heroCard, { backgroundColor: colorFor(heroIndex) }]}>
                 <LinearGradient
@@ -707,6 +726,28 @@ export default function LiveTvScreen() {
               </Pressable>
             </View>
 
+            <Text style={styles.sectionLabel}>EXPLORE WALLORA TV</Text>
+            <View style={styles.exploreGrid}>
+              {[
+                { label: "Categories", icon: "pricetags-outline" as const },
+                { label: "Countries", icon: "earth-outline" as const },
+                { label: "Genres", icon: "film-outline" as const },
+                { label: "A–Z guide", icon: "grid-outline" as const },
+              ].map((tile) => (
+                <Pressable
+                  key={tile.label}
+                  onPress={() => router.push("/live-tv/explore")}
+                  style={({ pressed }) => [
+                    styles.exploreTile,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons name={tile.icon} size={18} color={C.accent} />
+                  <Text style={styles.exploreTileText}>{tile.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
             <View style={styles.infoRow}>
               <Ionicons
                 name="information-circle-outline"
@@ -724,61 +765,55 @@ export default function LiveTvScreen() {
               title="Featured on WALLORA"
               subtitle="Admin-recommended channels"
               items={featuredItems}
-              onSeeAll={() => {
-                setGroup("All");
-                setQuery("");
-              }}
+              onSeeAll={() =>
+                router.push({ pathname: "/live-tv/collection", params: { type: "featured" } })
+              }
               autoScroll={false}
             />
             <MediaRail
               title="Most watched by you"
               subtitle="Your personal top channels"
               items={mostWatchedItems}
-              onSeeAll={() => {
-                setGroup("Most watched");
-                setQuery("");
-              }}
+              onSeeAll={() =>
+                router.push({ pathname: "/live-tv/collection", params: { type: "watched" } })
+              }
               autoScroll={false}
             />
             <MediaRail
               title="Trending in WALLORA"
               subtitle="Popular with the community"
               items={trendingItems}
-              onSeeAll={() => {
-                setGroup("Trending");
-                setQuery("");
-              }}
+              onSeeAll={() =>
+                router.push({ pathname: "/live-tv/collection", params: { type: "trending" } })
+              }
               autoScroll={false}
             />
             <MediaRail
               title="Favorites"
               subtitle="Saved for quick access"
               items={favoritesItems}
-              onSeeAll={() => {
-                setGroup("Favorites");
-                setQuery("");
-              }}
+              onSeeAll={() =>
+                router.push({ pathname: "/live-tv/collection", params: { type: "favorites" } })
+              }
+              autoScroll={false}
+            />
+            <MediaRail
+              title="Recommended for you"
+              subtitle="Picked from your favorites, history and community likes"
+              items={recommendedItems}
+              onSeeAll={() =>
+                router.push({ pathname: "/live-tv/collection", params: { type: "recommended" } })
+              }
               autoScroll={false}
             />
             <MediaRail
               title="All channels"
               subtitle="Top channels from the current playlist"
               items={allItems}
-              onSeeAll={() => {
-                setGroup("All");
-                setQuery("");
-              }}
+              onSeeAll={() =>
+                router.push({ pathname: "/live-tv/collection", params: { type: "all", sort: "az" } })
+              }
               autoScroll={false}
-            />
-
-            <SmartSearchBar
-              value={query}
-              onChangeText={setQuery}
-              channels={channels}
-              onSelectChannel={(channel) => {
-                setGroup("All");
-                setSelected(channel);
-              }}
             />
 
             <ScrollView
@@ -844,6 +879,48 @@ export default function LiveTvScreen() {
           setShowWelcome(false);
         }}
         onLater={() => setShowWelcome(false)}
+      />
+
+      <ChannelDetailModal
+        channel={detailChannel}
+        visible={!!detailChannel}
+        isFavorite={
+          !!detailChannel && favoriteIds.has(uniqueChannelId(detailChannel))
+        }
+        likes={detailChannel ? communityLikes[uniqueChannelId(detailChannel)] : undefined}
+        rank={
+          detailChannel
+            ? (() => {
+                const index = ranked.findIndex(
+                  (channel) =>
+                    uniqueChannelId(channel) === uniqueChannelId(detailChannel!),
+                );
+                return index >= 0 ? index : undefined;
+              })()
+            : undefined
+        }
+        onClose={() => setDetailChannel(null)}
+        onWatch={watchDetail}
+        onToggleFavorite={() => {
+          if (detailChannel) void handleToggleFavorite(detailChannel);
+        }}
+        onRecommend={() => {
+          if (detailChannel) {
+            setRecommendChannel(detailChannel);
+            setDetailChannel(null);
+          }
+        }}
+        onMarkProgram={() => {
+          setProgramChannel(detailChannel);
+          setDetailChannel(null);
+        }}
+      />
+
+      <ProgramReminderModal
+        channel={programChannel}
+        visible={!!programChannel}
+        onClose={() => setProgramChannel(null)}
+        onSaved={setNotice}
       />
 
       {recommendChannel && (
@@ -1277,6 +1354,46 @@ const styles = StyleSheet.create({
     color: C.text,
     fontSize: 12,
     fontWeight: "700",
+  },
+  notice: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: R.md,
+    backgroundColor: C.accentDim,
+    color: C.accentBright,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  sectionLabel: {
+    color: C.muted,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.3,
+    marginHorizontal: 18,
+    marginTop: 18,
+  },
+  exploreGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  exploreTile: {
+    width: "47%",
+    minHeight: 66,
+    borderRadius: R.lg,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderSoft,
+    padding: 12,
+    gap: 7,
+  },
+  exploreTileText: {
+    color: C.text,
+    fontSize: 12,
+    fontWeight: "800",
   },
   infoRow: {
     flexDirection: "row",
