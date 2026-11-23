@@ -176,6 +176,13 @@ const QUICK_ACTIONS: {
     tone: "supreme",
   },
   {
+    label: "Reels",
+    caption: "9s TV clips",
+    icon: "play-circle-outline",
+    route: "/reels",
+    tone: "accent",
+  },
+  {
     label: "Imagine",
     caption: "Generate art",
     icon: "sparkles",
