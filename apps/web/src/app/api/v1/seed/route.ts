@@ -6,8 +6,15 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 export async function POST(req: NextRequest) {
+  // Development-only convenience endpoint: it writes shared categories and
+  // wallpapers, so it must never be reachable in a deployed environment.
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const session = await auth.api.getSession({ headers: req.headers });
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Seed categories
   const cats = [
@@ -19,7 +26,10 @@ export async function POST(req: NextRequest) {
   ];
   for (const c of cats) {
     try {
-      await db.insert(categories).values({ id: randomUUID(), name: c.name, slug: c.slug }).onConflictDoNothing();
+      await db
+        .insert(categories)
+        .values({ id: randomUUID(), name: c.name, slug: c.slug })
+        .onConflictDoNothing();
     } catch {}
   }
 
@@ -40,7 +50,10 @@ export async function POST(req: NextRequest) {
   let inserted = 0;
   for (const s of samples) {
     const id = `wp-${s.title.toLowerCase().replace(/\s+/g, "-")}`;
-    const existing = await db.select().from(wallpapers).where(eq(wallpapers.id, id));
+    const existing = await db
+      .select()
+      .from(wallpapers)
+      .where(eq(wallpapers.id, id));
     if (existing.length > 0) continue;
     await db.insert(wallpapers).values({
       id,

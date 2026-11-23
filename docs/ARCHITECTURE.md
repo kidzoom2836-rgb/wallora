@@ -8,4 +8,7 @@ Monorepo managed with pnpm workspaces.
 - packages/*: shared libraries
 
 ## Status
-Phase 0 — Foundation in progress.
+
+Phase 13 — Final quality, security and release is in progress. The live web
+platform is tracked in `WALLORA-web/docs/DEVELOPMENT_PHASES.md`; this repository
+holds the native client, shared packages, web scaffold and worker.

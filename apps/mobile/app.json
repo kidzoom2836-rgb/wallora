@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.wallora.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -37,12 +37,35 @@
         }
       ],
       [
+        "expo-media-library",
+        {
+          "photosPermission": "WALLORA saves wallpapers to your gallery so you can set them on your device.",
+          "savePhotosPermission": "WALLORA saves wallpapers to your gallery so you can set them on your device.",
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#D7B879",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
+      "./plugins/withCleartextTraffic.js",
+      "expo-asset"
     ],
     "extra": {
       "router": {

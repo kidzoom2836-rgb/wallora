@@ -25,13 +25,14 @@ import { VerifiedBadge } from "../../components/ui/VerifiedBadge";
 
 type Tab = "following" | "uploads" | "websites" | "saved" | "downloads";
 
-const TABS: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "following", label: "Following", icon: "people-outline" },
-  { id: "uploads", label: "Uploads", icon: "cloud-upload-outline" },
-  { id: "websites", label: "Websites", icon: "globe-outline" },
-  { id: "saved", label: "Saved", icon: "bookmark-outline" },
-  { id: "downloads", label: "Downloads", icon: "download-outline" },
-];
+const TABS: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] =
+  [
+    { id: "following", label: "Following", icon: "people-outline" },
+    { id: "uploads", label: "Uploads", icon: "cloud-upload-outline" },
+    { id: "websites", label: "Websites", icon: "globe-outline" },
+    { id: "saved", label: "Saved", icon: "bookmark-outline" },
+    { id: "downloads", label: "Downloads", icon: "download-outline" },
+  ];
 
 type CardItem = {
   id: string;
@@ -45,13 +46,50 @@ type CardItem = {
   onPress?: () => void;
 };
 
-type Creator = { username?: string; displayName?: string; tier?: string | null };
-type Wallpaper = { id: string; slug: string; title: string; asset?: { objectKey: string } | null; creator?: Creator | null; createdAt?: string };
-type Post = { id: string; body: string; imageUrl?: string | null; author?: Creator | null; createdAt?: string; kind?: string };
-type Upload = { id: string; slug: string; title: string; status: string; assets?: { variant: string; objectKey: string }[]; createdAt: string };
+type Creator = {
+  username?: string;
+  displayName?: string;
+  tier?: string | null;
+};
+type Wallpaper = {
+  id: string;
+  slug: string;
+  title: string;
+  asset?: { objectKey: string } | null;
+  creator?: Creator | null;
+  createdAt?: string;
+};
+type Post = {
+  id: string;
+  body: string;
+  imageUrl?: string | null;
+  author?: Creator | null;
+  createdAt?: string;
+  kind?: string;
+};
+type Upload = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  assets?: { variant: string; objectKey: string }[];
+  createdAt: string;
+};
 type Favorite = { wallpaper: Wallpaper };
-type Site = { id: string; slug: string; title: string; prompt: string; published?: boolean };
-type Download = { id: string; title: string; localUri: string; creator?: string; createdAt: number };
+type Site = {
+  id: string;
+  slug: string;
+  title: string;
+  prompt: string;
+  published?: boolean;
+};
+type Download = {
+  id: string;
+  title: string;
+  localUri: string;
+  creator?: string;
+  createdAt: number;
+};
 
 const STATUS_COLOR: Record<string, string> = {
   approved: C.success,
@@ -79,11 +117,17 @@ export default function SpaceScreen() {
 
   const loadFollowing = useCallback(async () => {
     const [wallRes, postRes] = await Promise.allSettled([
-      apiJson<{ items: Wallpaper[] }>("/api/v1/wallpapers?sort=newest&limit=12"),
-      apiJson<{ items: Post[] }>("/api/v1/community/posts?sort=recent&limit=12"),
+      apiJson<{ items: Wallpaper[] }>(
+        "/api/v1/wallpapers?sort=newest&limit=12",
+      ),
+      apiJson<{ items: Post[] }>(
+        "/api/v1/community/posts?sort=recent&limit=12",
+      ),
     ]);
-    const walls = wallRes.status === "fulfilled" ? wallRes.value.items ?? [] : [];
-    const posts = postRes.status === "fulfilled" ? postRes.value.items ?? [] : [];
+    const walls =
+      wallRes.status === "fulfilled" ? (wallRes.value.items ?? []) : [];
+    const posts =
+      postRes.status === "fulfilled" ? (postRes.value.items ?? []) : [];
 
     const usernames = Array.from(
       new Set(
@@ -104,7 +148,9 @@ export default function SpaceScreen() {
         }
       }),
     );
-    const followed = new Set(profiles.filter((p) => p.following).map((p) => p.username));
+    const followed = new Set(
+      profiles.filter((p) => p.following).map((p) => p.username),
+    );
     const profileMap = new Map(profiles.map((p) => [p.username, p.profile]));
     setFollowedCount(followed.size);
 
@@ -113,12 +159,19 @@ export default function SpaceScreen() {
         id: `w-${w.id}`,
         title: w.title,
         imageUrl: assetUrl(w.asset?.objectKey) ?? "",
-        subtitle: w.creator?.displayName ?? w.creator?.username ?? "WALLORA creator",
+        subtitle:
+          w.creator?.displayName ?? w.creator?.username ?? "WALLORA creator",
         creator: w.creator?.displayName ?? w.creator?.username,
         tier: w.creator?.tier,
         badge: followed.has(w.creator?.username ?? "") ? "FOLLOWING" : "NEW",
-        badgeColor: followed.has(w.creator?.username ?? "") ? C.success : C.accent,
-        onPress: () => router.push({ pathname: "/wallpaper/[slug]", params: { slug: w.slug } }),
+        badgeColor: followed.has(w.creator?.username ?? "")
+          ? C.success
+          : C.accent,
+        onPress: () =>
+          router.push({
+            pathname: "/wallpaper/[slug]",
+            params: { slug: w.slug },
+          }),
       })),
       ...posts
         .filter((p) => p.imageUrl)
@@ -128,9 +181,14 @@ export default function SpaceScreen() {
           imageUrl: assetUrl(p.imageUrl) ?? "",
           subtitle: "Community post",
           creator: p.author?.displayName ?? p.author?.username,
-          tier: p.author?.tier ?? profileMap.get(p.author?.username ?? "")?.tier,
-          badge: followed.has(p.author?.username ?? "") ? "FOLLOWING" : "COMMUNITY",
-          badgeColor: followed.has(p.author?.username ?? "") ? C.success : C.blue,
+          tier:
+            p.author?.tier ?? profileMap.get(p.author?.username ?? "")?.tier,
+          badge: followed.has(p.author?.username ?? "")
+            ? "FOLLOWING"
+            : "COMMUNITY",
+          badgeColor: followed.has(p.author?.username ?? "")
+            ? C.success
+            : C.blue,
           onPress: () => router.push("/community"),
         })),
     ];
@@ -155,9 +213,11 @@ export default function SpaceScreen() {
         apiJson<{ sites: Site[] }>("/api/v1/sites"),
       ]);
       if (upRes.status === "fulfilled") setUploads(upRes.value.items ?? []);
-      if (siteRes.status === "fulfilled") setPublicSites(siteRes.value.sites ?? []);
+      if (siteRes.status === "fulfilled")
+        setPublicSites(siteRes.value.sites ?? []);
       if (favRes.status === "fulfilled") setFavorites(favRes.value.items ?? []);
-      if (ownSiteRes.status === "fulfilled") setSites(ownSiteRes.value.sites ?? []);
+      if (ownSiteRes.status === "fulfilled")
+        setSites(ownSiteRes.value.sites ?? []);
     }
     setDownloads(await readDownloads());
   }, [loadFollowing, user]);
@@ -175,7 +235,9 @@ export default function SpaceScreen() {
   };
 
   const uploadCards: CardItem[] = uploads.map((u) => {
-    const ref = u.assets?.find((a) => a.variant === "grid")?.objectKey ?? u.assets?.[0]?.objectKey;
+    const ref =
+      u.assets?.find((a) => a.variant === "grid")?.objectKey ??
+      u.assets?.[0]?.objectKey;
     return {
       id: u.id,
       title: u.title,
@@ -183,7 +245,11 @@ export default function SpaceScreen() {
       subtitle: new Date(u.createdAt).toLocaleDateString(),
       badge: u.status.toUpperCase(),
       badgeColor: STATUS_COLOR[u.status] ?? C.muted,
-      onPress: () => router.push({ pathname: "/wallpaper/[slug]", params: { slug: u.slug } }),
+      onPress: () =>
+        router.push({
+          pathname: "/wallpaper/[slug]",
+          params: { slug: u.slug },
+        }),
     };
   });
 
@@ -195,7 +261,11 @@ export default function SpaceScreen() {
     tier: f.wallpaper.creator?.tier,
     badge: "SAVED",
     badgeColor: C.accent,
-    onPress: () => router.push({ pathname: "/wallpaper/[slug]", params: { slug: f.wallpaper.slug } }),
+    onPress: () =>
+      router.push({
+        pathname: "/wallpaper/[slug]",
+        params: { slug: f.wallpaper.slug },
+      }),
   }));
 
   const websiteCards: CardItem[] = [
@@ -205,7 +275,8 @@ export default function SpaceScreen() {
       subtitle: site.prompt,
       badge: site.published ? "PUBLISHED" : "DRAFT",
       badgeColor: site.published ? C.success : C.muted,
-      onPress: () => Linking.openURL(`${API_BASE}/sites/${site.slug}`).catch(() => {}),
+      onPress: () =>
+        Linking.openURL(`${API_BASE}/sites/${site.slug}`).catch(() => {}),
     })),
     ...publicSites.map((site) => ({
       id: `public-${site.id}`,
@@ -213,7 +284,8 @@ export default function SpaceScreen() {
       subtitle: site.prompt,
       badge: "LIVE",
       badgeColor: C.blue,
-      onPress: () => Linking.openURL(`${API_BASE}/sites/${site.slug}`).catch(() => {}),
+      onPress: () =>
+        Linking.openURL(`${API_BASE}/sites/${site.slug}`).catch(() => {}),
     })),
   ];
 
@@ -240,7 +312,9 @@ export default function SpaceScreen() {
 
   const title =
     tab === "following"
-      ? followedCount > 0 ? "From creators you follow" : "Suggested creators"
+      ? followedCount > 0
+        ? "From creators you follow"
+        : "Suggested creators"
       : tab === "uploads"
         ? "Your uploads"
         : tab === "websites"
@@ -269,7 +343,11 @@ export default function SpaceScreen() {
         subtitle="Your creative world, connected"
         showBack={false}
         right={
-          <Pressable onPress={() => router.push("/settings")} hitSlop={10} style={styles.headerBtn}>
+          <Pressable
+            onPress={() => router.push("/settings")}
+            hitSlop={10}
+            style={styles.headerBtn}
+          >
             <Ionicons name="settings-outline" size={19} color={C.text} />
           </Pressable>
         }
@@ -293,15 +371,27 @@ export default function SpaceScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 30 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={C.accent}
+          />
+        }
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 30 },
+        ]}
       >
         <View style={styles.heroPanel}>
           <View style={styles.heroGlow} />
           <Text style={styles.heroEyebrow}>YOUR SPACE</Text>
-          <Text style={styles.heroTitle}>Everything you follow, save, build and download.</Text>
+          <Text style={styles.heroTitle}>
+            Everything you follow, save, build and download.
+          </Text>
           <Text style={styles.heroText}>
-            WALLORA Space brings real uploads, websites, saved walls and offline downloads into one dashboard.
+            WALLORA Space brings real uploads, websites, saved walls and offline
+            downloads into one dashboard.
           </Text>
           <View style={styles.heroStats}>
             <SpaceStat value={String(followedCount)} label="Following" />
@@ -314,7 +404,10 @@ export default function SpaceScreen() {
         <View style={styles.quickActions}>
           <Pressable
             onPress={() => router.push("/watch-themes")}
-            style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.quickAction,
+              pressed && styles.pressed,
+            ]}
           >
             <View style={[styles.quickIcon, { backgroundColor: C.accentDim }]}>
               <Ionicons name="watch-outline" size={18} color={C.accent} />
@@ -327,16 +420,53 @@ export default function SpaceScreen() {
           </Pressable>
           <Pressable
             onPress={() => router.push("/downloads")}
-            style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.quickAction,
+              pressed && styles.pressed,
+            ]}
           >
             <View style={[styles.quickIcon, { backgroundColor: C.successDim }]}>
               <Ionicons name="download-outline" size={18} color={C.success} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickTitle}>Offline Downloads</Text>
-              <Text style={styles.quickSub}>{downloads.length} saved on this device</Text>
+              <Text style={styles.quickSub}>
+                {downloads.length} saved on this device
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={15} color={C.muted} />
+          </Pressable>
+        </View>
+
+        <Text style={styles.appsEyebrow}>WALLORA PLAYERS</Text>
+        <View style={styles.appsRow}>
+          <Pressable
+            onPress={() => router.push("/live-tv")}
+            style={[styles.appTile, styles.appLive]}
+          >
+            <Ionicons name="tv-outline" size={21} color={C.accent} />
+            <Text style={styles.appName}>Live TV</Text>
+            <Text style={styles.appSub}>1,400+ channels</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/music")}
+            style={[styles.appTile, styles.appMusic]}
+          >
+            <Ionicons
+              name="musical-notes-outline"
+              size={21}
+              color={C.supreme}
+            />
+            <Text style={styles.appName}>Music</Text>
+            <Text style={styles.appSub}>Background audio</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/video-player")}
+            style={[styles.appTile, styles.appVideo]}
+          >
+            <Ionicons name="film-outline" size={21} color={C.blue} />
+            <Text style={styles.appName}>Video</Text>
+            <Text style={styles.appSub}>Import & stream</Text>
           </Pressable>
         </View>
 
@@ -350,7 +480,13 @@ export default function SpaceScreen() {
           </View>
         ) : activeCards.length === 0 ? (
           <EmptyState
-            icon={tab === "downloads" ? "download-outline" : tab === "saved" ? "bookmark-outline" : "sparkles-outline"}
+            icon={
+              tab === "downloads"
+                ? "download-outline"
+                : tab === "saved"
+                  ? "bookmark-outline"
+                  : "sparkles-outline"
+            }
             title="Nothing here yet"
             message={
               tab === "following"
@@ -372,18 +508,35 @@ export default function SpaceScreen() {
               <Pressable
                 key={item.id}
                 onPress={item.onPress}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.card,
+                  pressed && styles.pressed,
+                ]}
               >
                 <View style={styles.cardImageWrap}>
                   {item.imageUrl ? (
-                    <Image source={{ uri: item.imageUrl }} style={styles.cardImage} resizeMode="cover" />
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={styles.cardImage}
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <View style={[styles.cardImage, { backgroundColor: item.badgeColor ?? C.raised }]}>
+                    <View
+                      style={[
+                        styles.cardImage,
+                        { backgroundColor: item.badgeColor ?? C.raised },
+                      ]}
+                    >
                       <Ionicons name="globe-outline" size={28} color={C.bg} />
                     </View>
                   )}
                   {item.badge && (
-                    <View style={[styles.badge, { backgroundColor: item.badgeColor ?? C.accent }]}>
+                    <View
+                      style={[
+                        styles.badge,
+                        { backgroundColor: item.badgeColor ?? C.accent },
+                      ]}
+                    >
                       <Text style={styles.badgeText}>{item.badge}</Text>
                     </View>
                   )}
@@ -397,7 +550,13 @@ export default function SpaceScreen() {
                       <Text style={styles.cardSub} numberOfLines={1}>
                         {item.creator ?? item.subtitle}
                       </Text>
-                      {item.tier && <VerifiedBadge tier={item.tier} size="sm" showLabel={false} />}
+                      {item.tier && (
+                        <VerifiedBadge
+                          tier={item.tier}
+                          size="sm"
+                          showLabel={false}
+                        />
+                      )}
                     </View>
                   )}
                 </View>
@@ -407,14 +566,20 @@ export default function SpaceScreen() {
         )}
 
         {tab === "uploads" && (
-          <Pressable onPress={() => router.push("/my-uploads")} style={styles.fullCta}>
+          <Pressable
+            onPress={() => router.push("/my-uploads")}
+            style={styles.fullCta}
+          >
             <Ionicons name="cloud-upload-outline" size={17} color={C.accent} />
             <Text style={styles.fullCtaText}>Open full upload manager</Text>
             <Ionicons name="chevron-forward" size={16} color={C.muted} />
           </Pressable>
         )}
         {tab === "websites" && (
-          <Pressable onPress={() => router.push("/sites")} style={styles.fullCta}>
+          <Pressable
+            onPress={() => router.push("/sites")}
+            style={styles.fullCta}
+          >
             <Ionicons name="globe-outline" size={17} color={C.accent} />
             <Text style={styles.fullCtaText}>Explore all sites</Text>
             <Ionicons name="chevron-forward" size={16} color={C.muted} />
@@ -436,36 +601,166 @@ function SpaceStat({ value, label }: { value: string; label: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  headerBtn: { width: 38, height: 38, borderRadius: R.md, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
-  tabs: { gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
+  headerBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: R.md,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabs: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderSoft,
+  },
   content: { padding: 16 },
-  heroPanel: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.xl, padding: 18, overflow: "hidden", marginBottom: 24 },
-  heroGlow: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(185,140,255,0.14)", top: -100, right: -70 },
-  heroEyebrow: { color: C.supreme, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
-  heroTitle: { color: C.text, fontSize: 19, fontWeight: "800", lineHeight: 25, marginTop: 8 },
+  heroPanel: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.xl,
+    padding: 18,
+    overflow: "hidden",
+    marginBottom: 24,
+  },
+  heroGlow: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(185,140,255,0.14)",
+    top: -100,
+    right: -70,
+  },
+  heroEyebrow: {
+    color: C.supreme,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+  },
+  heroTitle: {
+    color: C.text,
+    fontSize: 19,
+    fontWeight: "800",
+    lineHeight: 25,
+    marginTop: 8,
+  },
   heroText: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 7 },
-  heroStats: { flexDirection: "row", marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: C.border },
+  heroStats: {
+    flexDirection: "row",
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
   stat: { flex: 1, alignItems: "center" },
   statValue: { color: C.text, fontSize: 16, fontWeight: "800" },
   statLabel: { color: C.muted, fontSize: 10, marginTop: 2 },
-  quickActions: { flexDirection: "row", gap: 10, marginTop: -12, marginBottom: 24 },
-  quickAction: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 11 },
-  quickIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  quickActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: -12,
+    marginBottom: 24,
+  },
+  quickAction: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.lg,
+    padding: 11,
+  },
+  quickIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   quickTitle: { color: C.text, fontSize: 11.5, fontWeight: "800" },
   quickSub: { color: C.muted, fontSize: 9.5, marginTop: 2 },
+  appsEyebrow: {
+    color: C.accent,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.4,
+    marginBottom: 10,
+  },
+  appsRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
+  appTile: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 14,
+    borderRadius: R.lg,
+    borderWidth: 1,
+    backgroundColor: C.card,
+  },
+  appLive: { borderColor: C.accentDim },
+  appMusic: { borderColor: C.supremeDim },
+  appVideo: { borderColor: C.blueDim },
+  appName: { color: C.text, fontSize: 12, fontWeight: "800", marginTop: 4 },
+  appSub: { color: C.muted, fontSize: 9 },
   error: { color: C.error, fontSize: 12, marginBottom: 10 },
   loading: { paddingVertical: 50, alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  card: { width: "47%", backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, overflow: "hidden" },
+  card: {
+    width: "47%",
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.lg,
+    overflow: "hidden",
+  },
   cardImageWrap: { height: 150, backgroundColor: C.raised },
-  cardImage: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  badge: { position: "absolute", top: 8, left: 8, borderRadius: R.pill, paddingHorizontal: 7, paddingVertical: 3 },
-  badgeText: { color: C.bg, fontSize: 8, fontWeight: "900", letterSpacing: 0.6 },
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    borderRadius: R.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    color: C.bg,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
   cardBody: { padding: 10 },
   cardTitle: { color: C.text, fontSize: 12.5, fontWeight: "700" },
-  creatorRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
+  creatorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 4,
+  },
   cardSub: { color: C.muted, fontSize: 10.5, flex: 1 },
   pressed: { opacity: 0.75 },
-  fullCta: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 18, padding: 14, borderRadius: R.md, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  fullCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 18,
+    padding: 14,
+    borderRadius: R.md,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
   fullCtaText: { flex: 1, color: C.textSoft, fontSize: 12, fontWeight: "700" },
 });

@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal } from "lucide-react";
 
-interface Wallpaper { id: string; title: string; imageUrl: string; thumbnailUrl: string | null; likes: number; downloads: number; likedByMe: boolean; }
+interface Wallpaper {
+  id: string;
+  title: string;
+  imageUrl: string;
+  thumbnailUrl: string | null;
+  likes: number;
+  downloads: number;
+  likedByMe: boolean;
+}
 
 export default function DiscoverPage() {
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
@@ -14,10 +22,17 @@ export default function DiscoverPage() {
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    fetch("/api/v1/wallpapers").then((r) => r.json()).then((d) => { setWallpapers(d.wallpapers ?? []); setLoading(false); });
+    fetch("/api/v1/wallpapers")
+      .then((r) => r.json())
+      .then((d) => {
+        setWallpapers(d.wallpapers ?? []);
+        setLoading(false);
+      });
   }, []);
 
-  const filtered = wallpapers.filter((w) => w.title.toLowerCase().includes(q.toLowerCase()));
+  const filtered = wallpapers.filter((w) =>
+    w.title.toLowerCase().includes(q.toLowerCase()),
+  );
 
   return (
     <div className="space-y-6">
@@ -26,7 +41,12 @@ export default function DiscoverPage() {
         <div className="flex gap-2">
           <div className="relative flex-1 md:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="pl-9" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search…"
+              className="pl-9"
+            />
           </div>
           <Button variant="outline" size="icon" aria-label="Filters">
             <SlidersHorizontal className="h-4 w-4" />
@@ -37,12 +57,18 @@ export default function DiscoverPage() {
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No wallpapers yet. Run seed to add samples.</p>
+        <p className="text-sm text-muted-foreground">
+          No wallpapers yet. Run seed to add samples.
+        </p>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((w) => (
             <a key={w.id} href={`/wallpapers/${w.id}`} className="no-underline">
-              <ImageCard title={w.title} creator="creator" src={w.thumbnailUrl || w.imageUrl} />
+              <ImageCard
+                title={w.title}
+                creator="creator"
+                src={w.thumbnailUrl || w.imageUrl}
+              />
             </a>
           ))}
         </div>
@@ -50,4 +76,3 @@ export default function DiscoverPage() {
     </div>
   );
 }
-EOF
