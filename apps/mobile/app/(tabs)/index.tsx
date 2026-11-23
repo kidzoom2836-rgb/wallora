@@ -177,7 +177,7 @@ const QUICK_ACTIONS: {
   },
   {
     label: "Reels",
-    caption: "9s TV clips",
+    caption: "Vertical shorts",
     icon: "play-circle-outline",
     route: "/reels",
     tone: "accent",

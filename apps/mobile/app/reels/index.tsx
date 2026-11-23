@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Dimensions,
   FlatList,
   Pressable,
   RefreshControl,
@@ -10,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,8 +34,6 @@ import {
 } from "../../lib/reels";
 import { C, R } from "../../lib/theme";
 
-const VIEWPORT_HEIGHT = Dimensions.get("window").height;
-
 function countLabel(value: number) {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
   return String(value);
@@ -51,6 +49,7 @@ function ReelCard({
   onSettings,
   insetsTop,
   insetsBottom,
+  viewportHeight,
 }: {
   reel: StockReel;
   active: boolean;
@@ -61,6 +60,7 @@ function ReelCard({
   onSettings: () => void;
   insetsTop: number;
   insetsBottom: number;
+  viewportHeight: number;
 }) {
   const source = useMemo<VideoSource>(
     () => ({
@@ -109,7 +109,7 @@ function ReelCard({
   const buffering = status === "loading";
 
   return (
-    <View style={styles.reel}>
+    <View style={[styles.reel, { height: viewportHeight }]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
         <VideoView
           player={player}
@@ -269,6 +269,7 @@ function SourceSettings({
 
 export default function ReelsScreen() {
   const insets = useSafeAreaInsets();
+  const { height: viewportHeight } = useWindowDimensions();
   const [reels, setReels] = useState<StockReel[]>([]);
   const [provider, setProviderState] = useState<ReelProvider>("pexels");
   const [apiKey, setApiKey] = useState("");
@@ -367,7 +368,7 @@ export default function ReelsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.screen}>
+      <View style={[styles.screen, styles.center]}>
         <TvSignalSearching label="OPENING WALLORA REELS" detail="Preparing your vertical feed…" compact />
       </View>
     );
@@ -401,10 +402,11 @@ export default function ReelsScreen() {
             onSettings={() => setSettingsVisible(true)}
             insetsTop={insets.top}
             insetsBottom={insets.bottom}
+            viewportHeight={viewportHeight}
           />
         )}
         ListEmptyComponent={
-          <View style={styles.empty}>
+          <View style={[styles.empty, { height: viewportHeight }]}>
             <Ionicons name="videocam-outline" size={44} color={C.muted} />
             <Text style={styles.emptyTitle}>No reels available</Text>
             <Text style={styles.emptyText}>
@@ -438,8 +440,9 @@ export default function ReelsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bgDeep, alignItems: "center", justifyContent: "center" },
-  reel: { height: VIEWPORT_HEIGHT, width: "100%", backgroundColor: C.bgDeep, overflow: "hidden" },
+  screen: { flex: 1, backgroundColor: C.bgDeep },
+  center: { alignItems: "center", justifyContent: "center" },
+  reel: { width: "100%", backgroundColor: C.bgDeep, overflow: "hidden" },
   topShade: { position: "absolute", top: 0, left: 0, right: 0, height: 150, backgroundColor: "rgba(0,0,0,0.45)" },
   bottomShade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 300, backgroundColor: "rgba(0,0,0,0.55)" },
   topBar: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
@@ -463,7 +466,7 @@ const styles = StyleSheet.create({
   action: { alignItems: "center", width: 44 },
   actionPressed: { opacity: 0.6 },
   actionCount: { color: C.white, fontSize: 10, fontWeight: "700", marginTop: 3 },
-  empty: { flex: 1, width: undefined, alignItems: "center", justifyContent: "center", paddingHorizontal: 30, gap: 8 },
+  empty: { width: "100%", alignItems: "center", justifyContent: "center", paddingHorizontal: 30, gap: 8 },
   emptyTitle: { color: C.text, fontSize: 18, fontWeight: "800", marginTop: 10 },
   emptyText: { color: C.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
   emptyActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 10, marginTop: 14 },
