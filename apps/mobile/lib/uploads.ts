@@ -4,7 +4,7 @@ import { File as ExpoFile, Paths } from "expo-file-system";
 import { Platform } from "react-native";
 
 import { apiFetch, apiJson } from "./api";
-import { API_BASE, assetUrl } from "./config";
+import { assetUrl } from "./config";
 
 /** Images are capped at the same limit as the web upload pipeline. */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -380,12 +380,6 @@ export type CaptureChannelClipInput = {
   userId?: string;
 };
 
-type LiveSegment = { uri: string; duration: number };
-
-/** Vercel serverless functions cap request bodies at 4.5MB. */
-const MAX_ON_DEVICE_CLIP_BYTES = 4 * 1024 * 1024;
-const CLIP_FETCH_TIMEOUT_MS = 20_000;
-
 async function fetchHlsText(url: string): Promise<string> {
   const response = await expoFetch(url, {
     headers: { Accept: "application/vnd.apple.mpegurl,text/plain,*/*" },
@@ -395,137 +389,24 @@ async function fetchHlsText(url: string): Promise<string> {
   return response.text();
 }
 
-/** Follow a master playlist to its first variant and collect the live tail. */
-async function resolveLiveSegments(streamUrl: string, durationSec: number): Promise<LiveSegment[]> {
-  let playlistUrl = streamUrl;
-  let text = await fetchHlsText(playlistUrl);
-  let lines = text.split(/\r?\n/).map((line) => line.trim());
-
-  if (lines.some((line) => line.startsWith("#EXT-X-STREAM-INF"))) {
-    const variant = lines.findIndex(
-      (line, index) =>
-        index > 0 &&
-        !line.startsWith("#") &&
-        lines[index - 1]?.startsWith("#EXT-X-STREAM-INF"),
-    );
-    if (variant < 0) throw new Error("This channel has no playable variant.");
-    playlistUrl = new URL(lines[variant], playlistUrl).toString();
-    text = await fetchHlsText(playlistUrl);
-    lines = text.split(/\r?\n/).map((line) => line.trim());
-  }
-
-  if (lines.some((line) => line.startsWith("#EXT-X-KEY:METHOD=AES-128"))) {
-    throw new Error("This channel encrypts its segments and cannot be clipped on-device.");
-  }
-
-  const segments: LiveSegment[] = [];
-  let pending: number | null = null;
-  for (const line of lines) {
-    if (line.startsWith("#EXTINF:")) {
-      const value = Number.parseFloat(line.slice(8).split(",")[0]);
-      pending = Number.isFinite(value) && value > 0 ? value : null;
-      continue;
-    }
-    if (!line || line.startsWith("#") || pending === null) continue;
-    let uri: string;
-    try {
-      uri = new URL(line, playlistUrl).toString();
-    } catch {
-      continue;
-    }
-    if (!/^https?:$/.test(new URL(uri).protocol)) continue;
-    segments.push({ uri, duration: pending });
-    pending = null;
-  }
-
-  const tail: LiveSegment[] = [];
-  let total = 0;
-  for (let i = segments.length - 1; i >= 0 && total < durationSec; i -= 1) {
-    tail.unshift(segments[i]);
-    total += segments[i].duration;
-  }
-  if (!tail.length) throw new Error("No clippable segments were found in this channel.");
-  return tail.slice(-4);
-}
-
-/** Fetch the live tail, join the TS segments and upload through storage. */
+/**
+ * Validate an HLS stream and share it directly. Older backends cannot remux
+ * captured TS segments into MP4, and raw TS is not playable by expo-video.
+ * Sharing the HLS URL keeps the community card playable instead of silently
+ * posting a dead video file.
+ */
 async function captureOnDevice(input: CaptureChannelClipInput): Promise<UploadedClip> {
-  if (!input.userId) throw new Error("Sign in to capture a live preview.");
-  const duration = input.durationSec ?? 9;
-  const segments = await resolveLiveSegments(input.streamUrl, duration);
-
-  const buffers: ArrayBuffer[] = [];
-  let totalBytes = 0;
-  for (const segment of segments) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CLIP_FETCH_TIMEOUT_MS);
-    let response: Response;
-    try {
-      response = await expoFetch(segment.uri, {
-        headers: { Accept: "video/mp2t,video/*,*/*" },
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!response.ok) throw new Error(`Channel segment failed (${response.status}).`);
-    const buffer = await response.arrayBuffer();
-    if (!buffer.byteLength) throw new Error("The channel returned an empty segment.");
-    if (totalBytes + buffer.byteLength > MAX_ON_DEVICE_CLIP_BYTES) break;
-    buffers.push(buffer);
-    totalBytes += buffer.byteLength;
+  if (!input.userId) throw new Error("Sign in to share a live preview.");
+  const playlist = await fetchHlsText(input.streamUrl);
+  if (!playlist.includes("#EXTM3U")) {
+    throw new Error("This channel does not provide a playable live stream.");
   }
-  if (!buffers.length || !totalBytes) {
-    throw new Error("This channel's preview is too large to capture on this connection.");
-  }
-
-  const merged = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const buffer of buffers) {
-    merged.set(new Uint8Array(buffer), offset);
-    offset += buffer.byteLength;
-  }
-
-  const localFile = new ExpoFile(
-    Paths.cache,
-    `wallora-live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ts`,
-  );
-  await localFile.write(merged);
-
-  const key = `w/${input.userId}/clips/live-${Date.now()}.ts`;
-  const form = new FormData();
-  form.append("key", key);
-  form.append("file", localFile as unknown as Blob, "live-preview.ts");
-
-  try {
-    const response = await apiFetch("/api/v1/uploads/receive", {
-      method: "POST",
-      body: form,
-      rawBody: true,
-    });
-    const text = await response.text();
-    let payload: any = {};
-    try {
-      payload = text ? JSON.parse(text) : {};
-    } catch {
-      /* non-JSON error */
-    }
-    if (!response.ok) {
-      throw new Error(payload?.error?.message ?? `Preview upload failed (${response.status}).`);
-    }
-    return {
-      key: payload?.data?.key ?? key,
-      videoUrl: `${API_BASE}/api/v1/storage/${payload?.data?.key ?? key}`,
-      contentType: "video/mp2t",
-      size: payload?.data?.size ?? totalBytes,
-    };
-  } finally {
-    try {
-      localFile.delete();
-    } catch {
-      /* cache cleanup is best-effort */
-    }
-  }
+  return {
+    key: `live:${input.channelId ?? "channel"}`,
+    videoUrl: input.streamUrl,
+    contentType: "application/vnd.apple.mpegurl",
+    size: 0,
+  };
 }
 
 /**

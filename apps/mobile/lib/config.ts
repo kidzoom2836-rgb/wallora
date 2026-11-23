@@ -17,3 +17,19 @@ export function assetUrl(ref?: string | null): string | undefined {
   if (ref.startsWith("/")) return `${API_BASE}${ref}`;
   return `${API_BASE}/${ref}`;
 }
+
+/**
+ * Older backend versions double-prefixed community clip URLs. Collapse repeated
+ * `/api/v1/storage/` segments so existing posts can still resolve.
+ */
+export function normalizeMediaUrl(ref?: string | null): string | undefined {
+  const url = assetUrl(ref);
+  return url?.replace(/(\/api\/v1\/storage\/){2,}/g, "/api/v1/storage/");
+}
+
+/** Raw MPEG-TS captures are not playable by expo-video; HLS and MP4 are. */
+export function isPlayableClipUri(uri?: string | null): boolean {
+  if (!uri || !/^https?:\/\//i.test(uri)) return false;
+  if (/\.ts(?:[?#]|$)/i.test(uri)) return false;
+  return /\.(mp4|m4v|mov|webm|m3u8)(?:[?#]|$)/i.test(uri);
+}

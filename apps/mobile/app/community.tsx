@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   Image,
   FlatList,
+  Linking,
   Pressable,
   TextInput,
   RefreshControl,
@@ -17,7 +19,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { apiJson } from "../lib/api";
-import { API_BASE, assetUrl } from "../lib/config";
+import { API_BASE, assetUrl, isPlayableClipUri, normalizeMediaUrl } from "../lib/config";
+import { canDeletePost, deleteErrorMessage } from "../lib/communityPermissions";
 import { pickCommunityImage, uploadCommunityImage, type PickedImage } from "../lib/uploads";
 import { withVerification } from "../lib/verification";
 import { C, R, S } from "../lib/theme";
@@ -86,7 +89,9 @@ const LIVE_PREVIEW_MARKER = /9s live preview:\s*(https?:\/\/\S+)/i;
  */
 function resolvePostMedia(post: CommunityPost): { uri: string | null; body: string } {
   const marker = post.body?.match(LIVE_PREVIEW_MARKER);
-  const uri = post.videoUrl ?? post.streamUrl ?? marker?.[1] ?? null;
+  const uri = [post.videoUrl, post.streamUrl, marker?.[1]]
+    .map(normalizeMediaUrl)
+    .find(isPlayableClipUri) ?? null;
   const body = (post.body ?? "").replace(LIVE_PREVIEW_MARKER, "").trim();
   return { uri, body };
 }
@@ -440,6 +445,37 @@ export default function CommunityScreen() {
     }
   };
 
+  const deletePost = (post: CommunityPost) => {
+    if (busyId) return;
+    Alert.alert(
+      "Delete post?",
+      "This post and its comments will be removed. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setBusyId(post.id);
+              setNotice(null);
+              try {
+                await apiJson(`/api/v1/community/posts/${post.id}`, { method: "DELETE" });
+                setPosts((prev) => prev.filter((p) => p.id !== post.id));
+                setTotal((prev) => Math.max(0, prev - 1));
+                setNotice({ message: "Post deleted.", tone: "success" });
+              } catch (e: any) {
+                setNotice({ message: deleteErrorMessage(e), tone: "error" });
+              } finally {
+                setBusyId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   const sharePost = async (post: CommunityPost) => {
     if (!requireAuth() || busyId) return;
     setBusyId(post.id);
@@ -696,6 +732,8 @@ export default function CommunityScreen() {
                         pathname: "/video-player/player",
                         params: { id: item.refId },
                       });
+                    } else if (clipUri) {
+                      void Linking.openURL(clipUri).catch(() => {});
                     }
                   }}
                 />
@@ -743,6 +781,16 @@ export default function CommunityScreen() {
                   <Ionicons name="share-outline" size={16} color={C.textSoft} />
                   <Text style={styles.actionText}>Share</Text>
                 </Pressable>
+                {canDeletePost(user, item) ? (
+                  <Pressable
+                    onPress={() => deletePost(item)}
+                    disabled={busy}
+                    style={[styles.action, styles.deleteAction]}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={C.error} />
+                    <Text style={[styles.actionText, styles.deleteActionText]}>Delete</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           );
@@ -939,6 +987,8 @@ const styles = StyleSheet.create({
   },
   actionActive: { backgroundColor: C.raised },
   actionText: { fontSize: 12, fontWeight: "700", color: C.textSoft },
+  deleteAction: { backgroundColor: "rgba(255,90,90,0.08)" },
+  deleteActionText: { color: C.error },
   state: { alignItems: "center", paddingVertical: 64, gap: S.sm },
   stateText: { fontSize: 15, fontWeight: "700", color: C.text, textAlign: "center", marginTop: 6 },
   stateSub: { fontSize: 12, color: C.muted, textAlign: "center", paddingHorizontal: S.xl, lineHeight: 18 },
