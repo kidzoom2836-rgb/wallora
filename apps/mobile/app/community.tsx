@@ -76,6 +76,21 @@ type ActionResult = {
 
 const PAGE_SIZE = 12;
 
+/** Legacy text posts from older backend deployments carry the clip URL in the body. */
+const LIVE_PREVIEW_MARKER = /9s live preview:\s*(https?:\/\/\S+)/i;
+
+/**
+ * Resolve the playable media for a post. Prefer the uploaded 9s clip over the
+ * live stream, and fall back to the body marker written by older deployments.
+ * Returns the body text with the raw marker stripped so it is not shown as a link.
+ */
+function resolvePostMedia(post: CommunityPost): { uri: string | null; body: string } {
+  const marker = post.body?.match(LIVE_PREVIEW_MARKER);
+  const uri = post.videoUrl ?? post.streamUrl ?? marker?.[1] ?? null;
+  const body = (post.body ?? "").replace(LIVE_PREVIEW_MARKER, "").trim();
+  return { uri, body };
+}
+
 function countLabel(value: number | undefined) {
   const n = typeof value === "number" ? value : 0;
   if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
@@ -617,8 +632,11 @@ export default function CommunityScreen() {
         }
         renderItem={({ item }) => {
           const image = assetUrl(item.imageUrl);
-          const clipUri = item.streamUrl ?? item.videoUrl ?? null;
-          const isClip = item.kind === "channel_clip" && !!clipUri;
+          const media = resolvePostMedia(item);
+          const clipUri = media.uri;
+          // Render a playable video whenever a usable URL exists — older
+          // backends store these as `text` posts with the URL in the body.
+          const isClip = !!clipUri && !image;
           const busy = busyId === item.id;
           return (
             <View style={styles.postCard}>
@@ -654,20 +672,32 @@ export default function CommunityScreen() {
               </View>
 
               <Pressable onPress={() => router.push(`/community/${item.id}`)}>
-                <Text style={styles.body}>{item.body || (image ? "Image shared on WALLORA" : "")}</Text>
+                <Text style={styles.body}>
+                  {media.body || (image ? "Image shared on WALLORA" : isClip ? "Video shared on WALLORA" : "")}
+                </Text>
               </Pressable>
 
               {isClip && clipUri ? (
                 <ChannelClipCard
                   uri={clipUri}
-                  title={item.channelName ?? "WALLORA TV channel"}
-                  subtitle={item.channelGroup ?? "Live on WALLORA TV"}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/live-tv",
-                      params: item.channelId ? { channel: item.channelId } : {},
-                    })
+                  title={item.channelName ?? "WALLORA video"}
+                  subtitle={
+                    item.channelGroup ??
+                    (item.videoUrl ? "9s clip · WALLORA TV" : "Streaming on WALLORA")
                   }
+                  onPress={() => {
+                    if (item.channelId) {
+                      router.push({
+                        pathname: "/live-tv",
+                        params: { channel: item.channelId },
+                      });
+                    } else if (item.refId) {
+                      router.push({
+                        pathname: "/video-player/player",
+                        params: { id: item.refId },
+                      });
+                    }
+                  }}
                 />
               ) : null}
 
