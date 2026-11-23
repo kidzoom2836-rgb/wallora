@@ -28,6 +28,7 @@ import {
   disablePushNotifications,
   enablePushNotifications,
   getPushPreference,
+  getRemotePushUnavailableMessage,
   sendTestNotification,
 } from "../lib/pushNotifications";
 
@@ -108,6 +109,8 @@ export default function SettingsScreen() {
   const [accountBusy, setAccountBusy] = useState(false);
   const [appThemeId, setAppThemeId] = useState<AppThemeId>(() => getActiveThemeId());
   const [themeBusy, setThemeBusy] = useState(false);
+  const pushUnavailable = getRemotePushUnavailableMessage();
+  const pushDisabled = !settings.pushNotifications || !!pushUnavailable;
 
   const load = useCallback(async () => {
     if (!user) {
@@ -304,6 +307,11 @@ export default function SettingsScreen() {
   };
 
   const togglePush = async (value: boolean) => {
+    if (value && pushUnavailable) {
+      update("pushNotifications", false);
+      setNotice({ text: pushUnavailable, tone: "info" });
+      return;
+    }
     update("pushNotifications", value);
     if (value) {
       const enabled = await enablePushNotifications();
@@ -633,11 +641,14 @@ export default function SettingsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>Push notifications</Text>
-              <Text style={styles.rowSub}>Replies, follows and project shoutouts.</Text>
+              <Text style={styles.rowSub}>
+                {pushUnavailable ?? "Replies, follows and project shoutouts."}
+              </Text>
             </View>
             <Switch
-              value={!!settings.pushNotifications}
+              value={!!settings.pushNotifications && !pushUnavailable}
               onValueChange={(value) => void togglePush(value)}
+              disabled={!!pushUnavailable}
               trackColor={{ false: C.raised, true: C.accent }}
               thumbColor={C.text}
             />
@@ -645,20 +656,15 @@ export default function SettingsScreen() {
           <View style={styles.rowDivider} />
           <Pressable
             onPress={() => void testPush()}
-            disabled={!settings.pushNotifications}
-            style={[styles.testPushButton, !settings.pushNotifications && styles.buttonDisabled]}
+            disabled={pushDisabled}
+            style={[styles.testPushButton, pushDisabled && styles.buttonDisabled]}
           >
             <Ionicons
               name="notifications-outline"
               size={15}
-              color={settings.pushNotifications ? C.accent : C.muted}
+              color={pushDisabled ? C.muted : C.accent}
             />
-            <Text
-              style={[
-                styles.testPushText,
-                !settings.pushNotifications && { color: C.muted },
-              ]}
-            >
+            <Text style={[styles.testPushText, pushDisabled && { color: C.muted }]}>
               Send a test notification
             </Text>
           </Pressable>
