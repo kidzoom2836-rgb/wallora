@@ -1,9 +1,10 @@
 /**
  * WALLORA Live TV — M3U playlist loading, parsing and persistence.
  *
- * Default source is the community "mu iptv" playlist on GitHub. Users can
- * replace it with their own M3U URL from the Live TV screen. Everything is
- * cached on device so the channel guide still opens without a connection.
+ * The backend guide is the source of truth. While it is unavailable, the app
+ * falls back to curated public iptv-org playlists so the guide is never empty.
+ * Users can replace the source with their own M3U URL from the Live TV screen.
+ * Everything is cached on device so the guide still opens without a connection.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -30,11 +31,24 @@ export type PlaylistResult = {
   offline: boolean;
 };
 
-export const DEFAULT_PLAYLIST_URL =
-  "https://raw.githubusercontent.com/nn2wdw5jvc-max/mu-iptv/main/EDEM_2.m3u";
+export const DEFAULT_PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/ke.m3u";
+
+/**
+ * Curated iptv-org playlists used as an on-device fallback when the backend
+ * guide is down. Small, regional/category lists load faster than the 11.5k
+ * channel index and keep low-bandwidth devices usable.
+ */
+export const LOCAL_PLAYLIST_SOURCES = [
+  "https://iptv-org.github.io/iptv/countries/ke.m3u",
+  "https://iptv-org.github.io/iptv/categories/news.m3u",
+  "https://iptv-org.github.io/iptv/categories/sports.m3u",
+  "https://iptv-org.github.io/iptv/categories/movies.m3u",
+  "https://iptv-org.github.io/iptv/categories/kids.m3u",
+] as const;
 
 const CACHE_KEY = "wallora.iptv.playlist.v2";
 const DB_SOURCE = "wallora.database.channels";
+const LOCAL_SOURCE = "wallora.iptv.iptvorg";
 const CUSTOM_URL_KEY = "wallora.iptv.customUrl.v1";
 const FAVORITES_KEY = "wallora.iptv.favorites.v1";
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -200,7 +214,12 @@ export async function loadPlaylist(options?: {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as PlaylistResult;
-      if (parsed?.source === cacheSource) cached = parsed;
+      if (
+        parsed?.source === cacheSource ||
+        (!customUrl && parsed?.source === LOCAL_SOURCE)
+      ) {
+        cached = parsed;
+      }
     }
   } catch {
     cached = null;
@@ -258,17 +277,50 @@ export async function loadPlaylist(options?: {
   }
 
   try {
-    const response = await fetchWithTimeout(url);
-    if (!response.ok)
-      throw new Error(`Playlist request failed (${response.status})`);
-    const channels = parsePlaylist(await response.text());
+    let channels: IptvChannel[] = [];
+    let source = cacheSource;
+    let sourceLabel = "Your playlist";
+
+    if (customUrl) {
+      const response = await fetchWithTimeout(url);
+      if (!response.ok)
+        throw new Error(`Playlist request failed (${response.status})`);
+      channels = parsePlaylist(await response.text());
+    } else {
+      // Backend is down: load the curated iptv-org lists in parallel. A failed
+      // playlist is skipped instead of breaking the whole guide.
+      const responses = await Promise.allSettled(
+        LOCAL_PLAYLIST_SOURCES.map((playlistUrl) =>
+          fetchWithTimeout(playlistUrl).then((response) => {
+            if (!response.ok) throw new Error(`Playlist ${response.status}`);
+            return response.text();
+          }),
+        ),
+      );
+      const seenUrls = new Set<string>();
+      const seenIds = new Set<string>();
+      for (const response of responses) {
+        if (response.status !== "fulfilled") continue;
+        for (const channel of parsePlaylist(response.value)) {
+          if (seenUrls.has(channel.url)) continue;
+          seenUrls.add(channel.url);
+          let id = channel.id;
+          if (seenIds.has(id)) id = `${id}-${channels.length}`;
+          seenIds.add(id);
+          channels.push({ ...channel, id });
+        }
+      }
+      source = LOCAL_SOURCE;
+      sourceLabel = "WALLORA TV · iptv-org";
+    }
+
     if (channels.length < 3)
       throw new Error("Playlist has no playable channels");
 
     const result: PlaylistResult = {
       channels,
-      source: cacheSource,
-      sourceLabel: customUrl ? "Your playlist" : "Community playlist",
+      source,
+      sourceLabel,
       fetchedAt: Date.now(),
       offline: false,
     };
