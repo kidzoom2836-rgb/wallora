@@ -3,7 +3,6 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -423,15 +422,6 @@ export default function CommunityPostDetailScreen() {
                     post.channelGroup ??
                     (post.videoUrl ? "9s clip · WALLORA TV" : "Streaming on WALLORA")
                   }
-                  onPress={() => {
-                    if (post.channelId) {
-                      router.push({ pathname: "/live-tv", params: { channel: post.channelId } });
-                    } else if (post.refId) {
-                      router.push({ pathname: "/video-player/player", params: { id: post.refId } });
-                    } else if (clipUri) {
-                      void Linking.openURL(clipUri).catch(() => {});
-                    }
-                  }}
                 />
               ) : null}
 

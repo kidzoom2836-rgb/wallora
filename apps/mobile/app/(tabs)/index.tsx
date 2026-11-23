@@ -33,6 +33,8 @@ import { MediaRail } from "../../components/ui/MediaRail";
 import type { MediaItem } from "../../components/ui/MediaCard";
 import { VerifiedBadge } from "../../components/ui/VerifiedBadge";
 import { LiveNowModal } from "../../components/media/LiveNowModal";
+import { UpcomingReminderRail } from "../../components/media/UpcomingReminderRail";
+import { listTvReminders, type TvReminder } from "../../lib/tvReminders";
 import {
   groupLabel,
   loadPlaylist,
@@ -276,6 +278,7 @@ export default function HomeScreen() {
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date());
   const [showWelcome, setShowWelcome] = useState(false);
   const [liveChannels, setLiveChannels] = useState<IptvChannel[]>([]);
+  const [reminders, setReminders] = useState<TvReminder[]>([]);
   const [showLivePopup, setShowLivePopup] = useState(false);
 
   const heroGlow = useSharedValue(0.55);
@@ -331,6 +334,9 @@ export default function HomeScreen() {
     // Load live channels independently so a slow playlist never blocks the home feed.
     loadPlaylist()
       .then((result) => setLiveChannels(result.channels ?? []))
+      .catch(() => {});
+    listTvReminders()
+      .then(setReminders)
       .catch(() => {});
 
     const [
@@ -733,6 +739,18 @@ export default function HomeScreen() {
             />
           </View>
         </Animated.View>
+
+        <UpcomingReminderRail
+          reminders={reminders}
+          channels={liveChannels}
+          onWatch={(channelId) =>
+            router.push({
+              pathname: "/live-tv/player",
+              params: { channel: channelId },
+            })
+          }
+          onSeeAll={() => router.push("/live-tv/reminders")}
+        />
 
         {/* Live TV — channels on air right now */}
         <MediaRail

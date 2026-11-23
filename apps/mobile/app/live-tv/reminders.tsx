@@ -4,11 +4,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { EmptyState } from "../../components/ui/States";
+import { ProgramReminderModal } from "../../components/media/ProgramReminderModal";
 import { C, R } from "../../lib/theme";
 import { groupLabel, loadPlaylist, uniqueChannelId, type IptvChannel } from "../../lib/iptv";
 import {
   addTvReminder,
   listTvReminders,
+  nextStartAt,
   removeTvReminder,
   type TvReminder,
 } from "../../lib/tvReminders";
@@ -23,6 +25,7 @@ export default function LiveTvRemindersScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [programChannel, setProgramChannel] = useState<IptvChannel | null>(null);
 
   const refresh = useCallback(async () => {
     const [playlist, saved] = await Promise.all([
@@ -146,6 +149,19 @@ export default function LiveTvRemindersScreen() {
             </Text>
           </Pressable>
 
+          <Pressable
+            onPress={() => setProgramChannel(selected)}
+            disabled={!selected}
+            style={[styles.aiButton, !selected && styles.disabled]}
+          >
+            <Ionicons name="sparkles-outline" size={16} color={C.accent} />
+            <Text style={styles.aiButtonText}>AI mark a program in this channel</Text>
+          </Pressable>
+          <Text style={styles.aiHint}>
+            Suggests a daily soap, news or sports slot from the channel category and
+            current time. You can edit the name and time before saving.
+          </Text>
+
           {notice && (
             <View style={styles.notice}>
               <Ionicons name="information-circle-outline" size={15} color={C.accent} />
@@ -167,17 +183,24 @@ export default function LiveTvRemindersScreen() {
                   <View style={styles.reminderIcon}>
                     <Ionicons name="tv-outline" size={17} color={C.accent} />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.reminderTitle} numberOfLines={1}>
+                      {reminder.programTitle}
+                    </Text>
+                    <Text style={styles.reminderChannel} numberOfLines={1}>
                       {reminder.channelName}
                     </Text>
                     <Text style={styles.reminderTime}>
-                      {new Date(reminder.startsAt).toLocaleString([], {
+                      {reminder.repeat === "daily" ? "Every day · " : ""}
+                      {new Date(nextStartAt(reminder)).toLocaleString([], {
                         month: "short",
                         day: "numeric",
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                      {reminder.leadMinutes > 0
+                        ? ` · ${reminder.leadMinutes}m before`
+                        : ""}
                     </Text>
                   </View>
                   <Pressable
@@ -194,6 +217,16 @@ export default function LiveTvRemindersScreen() {
           )}
         </ScrollView>
       )}
+
+      <ProgramReminderModal
+        channel={programChannel}
+        visible={!!programChannel}
+        onClose={() => setProgramChannel(null)}
+        onSaved={(message) => {
+          setNotice(message);
+          void listTvReminders().then(setReminders);
+        }}
+      />
     </View>
   );
 }
@@ -249,6 +282,20 @@ const styles = StyleSheet.create({
     backgroundColor: C.accent,
   },
   primaryButtonText: { color: C.bg, fontSize: 13, fontWeight: "900" },
+  aiButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 44,
+    marginTop: 9,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: "rgba(215,184,121,0.35)",
+    backgroundColor: C.accentDim,
+  },
+  aiButtonText: { color: C.accent, fontSize: 12, fontWeight: "900" },
+  aiHint: { color: C.mutedDark, fontSize: 10, lineHeight: 14, marginTop: 7 },
   disabled: { opacity: 0.5 },
   notice: {
     flexDirection: "row",
@@ -280,5 +327,6 @@ const styles = StyleSheet.create({
     backgroundColor: C.accentDim,
   },
   reminderTitle: { color: C.text, fontSize: 12.5, fontWeight: "800" },
+  reminderChannel: { color: C.textSoft, fontSize: 10.5, marginTop: 2 },
   reminderTime: { color: C.muted, fontSize: 10.5, marginTop: 3 },
 });
