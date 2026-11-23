@@ -42,6 +42,7 @@ export function ChannelRecommendComposer({
         channelId: channel.id,
         streamUrl: channel.url,
         durationSec: 9,
+        userId: user?.id,
       });
       setClip(captured);
       return captured;
@@ -59,16 +60,32 @@ export function ChannelRecommendComposer({
     setBusy(true);
     setNotice(null);
     try {
-      const preview = clip ?? (await capture());
+      // Capture is best-effort. A stale backend or a too-large/geo-blocked
+      // segment must never stop the user from sharing the channel.
+      let preview: UploadedClip | null = clip;
+      try {
+        preview = clip ?? (await capture());
+      } catch (captureError) {
+        setNotice({
+          message:
+            captureError instanceof Error && captureError.message
+              ? `Sharing as a live channel link — ${captureError.message}`
+              : "Sharing as a live channel link.",
+          tone: "info",
+        });
+      }
+
+      const bodyText = body.trim() || `Recommended ${channel.name}`;
+      const clipUrl = preview?.videoUrl ?? channel.url;
       const postBody = {
-        body: body.trim() || `Recommended ${channel.name}`,
+        body: `${bodyText}\n9s live preview: ${clipUrl}`,
         channelId: channel.id,
         refId: channel.id,
         channelName: channel.name,
         channelGroup: channel.group,
         previewUrl: channel.logo ?? null,
         streamUrl: channel.url,
-        videoUrl: preview.videoUrl,
+        ...(preview ? { videoUrl: preview.videoUrl } : {}),
         durationSec: 9,
       };
 
@@ -78,28 +95,24 @@ export function ChannelRecommendComposer({
             method: "POST",
             body: JSON.stringify({ ...postBody, kind: "channel_clip" }),
           });
-          return { legacy: false };
+          return { legacy: false, captured: !!preview };
         } catch (error) {
           if (!isLegacyEnumError(error)) throw error;
-          // Older deployed schemas reject `channel_clip`. Keep the post and
-          // include the captured clip URL so nothing is lost for the user.
+          // Older deployed schemas reject `channel_clip`. The body already
+          // carries the clip/live URL so WALLORA Reels can still play it.
           await apiJson("/api/v1/community/posts", {
             method: "POST",
-            body: JSON.stringify({
-              ...postBody,
-              kind: "text",
-              body: `${postBody.body}\n9s live preview: ${preview.videoUrl}`,
-            }),
+            body: JSON.stringify({ ...postBody, kind: "text" }),
           });
-          return { legacy: true };
+          return { legacy: true, captured: !!preview };
         }
       });
 
       if (posted) {
         setNotice({
-          message: posted.legacy
-            ? "Posted with a preview link — update the backend to show inline clips."
-            : "9-second live preview posted to the community.",
+          message: posted.captured
+            ? "9-second live preview posted to the community."
+            : "Live channel posted — the clip will appear once the backend is updated.",
           tone: "success",
         });
         setBody("");
@@ -110,7 +123,7 @@ export function ChannelRecommendComposer({
       }
     } catch (error) {
       setNotice({
-        message: error instanceof Error ? error.message : "Could not capture or publish this preview.",
+        message: error instanceof Error ? error.message : "Could not publish this channel.",
         tone: "error",
       });
     } finally {

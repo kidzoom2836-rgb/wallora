@@ -2,17 +2,15 @@
 
 ## Short answer
 
-The repos in the research note technically match “free short dramas”, but most of them work by
-calling unofficial DramaBox/ReelShort/ShortMax endpoints, unlocking VIP episodes, or reselling
-scraped HLS/MP4 links. That is a fast way to get a copyright complaint, an account ban, or a
-sudden API shutdown — not a foundation for WALLORA.
+WALLORA Reels is a vertical, full-screen short-video feed built on **royalty-free sources**:
 
-WALLORA should build **WALLORA Reels** from content it can actually stand behind:
+1. Pexels Video API and Pixabay Video API for fresh 9:16 clips (free API keys),
+2. a verified Pexels sample set so the feed works with no configuration, and
+3. community video posts that carry a direct MP4/playable URL.
 
-1. the 9-second clips now captured directly from licensed/available live channels,
-2. original shorts uploaded by verified creators,
-3. licensed partner shorts, and
-4. royalty-free stock clips for templates and filler.
+Live TV channels are deliberately **not** part of the Reels feed. Short drama apps that rely on
+unofficial DramaBox/ReelShort/ShortMax endpoints, VIP unlocks, or scraped HLS/MP4 links are rejected:
+they create copyright/ToS risk and break without notice.
 
 ## What I evaluated
 
@@ -21,16 +19,21 @@ WALLORA should build **WALLORA Reels** from content it can actually stand behind
 | `fahmih6/dramabox_player`, `beranalpa/DramaBox-API*`, `FreeReels-API`, `dramabos-api`, `anichin-api` | High technical fit: catalogs, episode lists, direct HLS/MP4, sometimes VIP unlock | **Do not ship.** Unofficial endpoints, paywall circumvention, and third-party copyrighted catalogs create legal/ToS and reliability risk. |
 | `xuliang2024/minitv` | Strong product reference: provider uploads, review/distribution, coin unlocks | Use as a **product pattern** for creator onboarding and rights workflow, not as a content source. |
 | PeerTube | Open-source, federated, official REST API, self-hostable | Good **Phase 3 distribution backend** if WALLORA hosts its own shorts. |
-| Pexels / Pixabay / Coverr APIs | Royalty-free vertical stock clips, free commercial use | Good for **trailers, templates, and fillers** once API keys are available. |
+| Pexels Video API | Free key, direct vertical MP4 links, attribution supported | **Phase 1 source.** `GET /videos/search?orientation=portrait`. |
+| Pixabay Video API | Free key, `orientation=vertical`, direct MP4 links | **Phase 1 source.** `GET /api/videos/?orientation=vertical`. |
+| Coverr | Royalty-free vertical stock clips | Backup stock source when Pixabay/Pexels keys are unavailable. |
 | OpenMontage, PineDrama | AI studios for producing original vertical shorts | Good **content pipeline** ideas; AGPL/self-hosted. Useful for generating WALLORA-owned series. |
 
-## Recommended build path
+## Build path
 
-### Phase 1 — First-party reels (now possible)
-- Reuse `community.channel_clip` posts and the new live-capture endpoint.
-- Feed a vertical, full-screen `app/reels/index.tsx` from posts that have `videoUrl`.
-- Swipe up/down, tap to pause, double-tap to like, and reuse existing community like/comment/share APIs.
-- Show source badges: `WALLORA TV · channel name`, `Community · creator`, or `Stock · license`.
+### Phase 1 — Royalty-free vertical feed (shipped)
+- `apps/mobile/lib/reels.ts` loads Pexels or Pixabay using keys saved in the Reels source settings.
+- `orientation=portrait` (Pexels) / `orientation=vertical` (Pixabay) keeps results 9:16.
+- With no key configured, the feed plays a verified set of public Pexels vertical MP4s
+  (HTTP 206, `video/mp4`) so WALLORA Reels is never empty.
+- `app/reels/index.tsx` renders a paging vertical feed with swipe, tap-to-pause,
+  double-tap-to-like, share, and per-item source/license badges.
+- Attribution: every reel keeps `creator`, `source`, and `creditUrl` so the origin is visible.
 
 ### Phase 2 — Creator shorts
 - Add a dedicated `reels/new.tsx` upload flow with rights attestation.
@@ -38,8 +41,8 @@ WALLORA should build **WALLORA Reels** from content it can actually stand behind
 - Moderation queue in `/adminkenya` before a reel enters the public feed.
 
 ### Phase 3 — Licensed partners and stock
-- Integrate Pexels/Pixabay only with API keys and attribution stored on each asset.
 - Add partner feeds only with signed license agreements and official APIs.
+- Optional PeerTube backend if WALLORA self-hosts its own shorts.
 
 ## Data model sketch
 
@@ -59,8 +62,15 @@ model Reel {
 }
 ```
 
+## Configuration
+
+- Open WALLORA Reels → **Source** chip → choose Pexels or Pixabay → paste a free API key.
+- Pexels key: https://www.pexels.com/api/
+- Pixabay key: https://pixabay.com/api/docs/
+- Keys are stored on-device with AsyncStorage; no key is shipped in the app bundle.
+
 ## What I need from you to proceed
 
-1. Confirm Phase 1 MVP: WALLORA TV clips + community shorts only.
-2. Decide whether to add Pexels/Pixabay in Phase 2 and provide API keys.
+1. Provide Pexels and/or Pixabay API keys if you want fresh, rotating content beyond the samples.
+2. Confirm whether community video posts should later appear in Reels alongside stock clips.
 3. Confirm that no paywall-bypassing drama APIs will be used in WALLORA.
