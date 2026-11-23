@@ -228,11 +228,11 @@ function SourceSettings({
           </Pressable>
         </View>
         <Text style={styles.modalText}>
-          Add a free API key to stream fresh 9:16 royalty-free clips. Without a key, WALLORA Reels
-          plays verified Pexels samples.
+          Pixabay streams fresh 9:16 royalty-free clips by default. Add your own key to use a
+          private quota, or switch to Pexels. Without API access, WALLORA Reels plays verified samples.
         </Text>
         <View style={styles.providerRow}>
-          {(["pexels", "pixabay"] as const).map((value) => (
+          {(["pixabay", "pexels"] as const).map((value) => (
             <Pressable
               key={value}
               onPress={() => onProvider(value)}
@@ -271,7 +271,7 @@ export default function ReelsScreen() {
   const insets = useSafeAreaInsets();
   const { height: viewportHeight } = useWindowDimensions();
   const [reels, setReels] = useState<StockReel[]>([]);
-  const [provider, setProviderState] = useState<ReelProvider>("pexels");
+  const [provider, setProviderState] = useState<ReelProvider>("pixabay");
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -281,11 +281,11 @@ export default function ReelsScreen() {
   const [likes, setLikes] = useState<Record<string, number>>({});
   const [settingsVisible, setSettingsVisible] = useState(false);
 
-  const load = useCallback(async (nextProvider?: ReelProvider) => {
+  const load = useCallback(async (nextProvider?: ReelProvider, force = false) => {
     setError(null);
     const selected = nextProvider ?? provider;
     try {
-      const result = await loadStockReels({ provider: selected });
+      const result = await loadStockReels({ provider: selected, force });
       setReels(result.reels);
       setError(result.error ?? null);
       setActiveIndex(0);
@@ -310,6 +310,7 @@ export default function ReelsScreen() {
       if (!alive) return;
       setReels(result.reels);
       setError(result.error ?? null);
+      setActiveIndex(0);
       setLoading(false);
     })();
     return () => {
@@ -319,8 +320,8 @@ export default function ReelsScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void load();
-  }, [load]);
+    void load(provider, true);
+  }, [load, provider]);
 
   const changeProvider = useCallback(
     (value: ReelProvider) => {
@@ -329,7 +330,7 @@ export default function ReelsScreen() {
         await setReelsProvider(value);
         const key = await getReelsApiKey(value);
         setApiKey(key);
-        await load(value);
+        await load(value, true);
       })();
     },
     [load],
@@ -340,7 +341,7 @@ export default function ReelsScreen() {
       setApiKey(value);
       void (async () => {
         await setReelsApiKey(provider, value);
-        await load(provider);
+        await load(provider, true);
       })();
     },
     [load, provider],
