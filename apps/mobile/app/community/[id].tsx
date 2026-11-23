@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   ActivityIndicator,
   Image,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,8 +18,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenHeader } from "../../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../../components/ui/VerifiedBadge";
+import { ChannelClipCard } from "../../components/media/ChannelClipCard";
 import { apiJson } from "../../lib/api";
-import { API_BASE, assetUrl } from "../../lib/config";
+import { API_BASE, assetUrl, isPlayableClipUri, normalizeMediaUrl } from "../../lib/config";
+import { canDeletePost, deleteErrorMessage } from "../../lib/communityPermissions";
 import { useAuth } from "../../lib/auth";
 import { C, R, S } from "../../lib/theme";
 import { withVerification } from "../../lib/verification";
@@ -37,6 +41,11 @@ type CommunityPost = {
   kind?: string | null;
   refId?: string | null;
   imageUrl?: string | null;
+  channelId?: string | null;
+  channelName?: string | null;
+  channelGroup?: string | null;
+  streamUrl?: string | null;
+  videoUrl?: string | null;
   likeCount: number;
   commentCount?: number;
   repostCount: number;
@@ -72,6 +81,17 @@ type ActionResult = {
 type Notice = { message: string; tone: "error" | "success" | "info" };
 
 const MAX_COMMENT_LENGTH = 500;
+
+const LIVE_PREVIEW_MARKER = /9s live preview:\s*(https?:\/\/\S+)/i;
+
+function resolvePostMedia(post: CommunityPost): { uri: string | null; body: string } {
+  const marker = post.body?.match(LIVE_PREVIEW_MARKER);
+  const uri = [post.videoUrl, post.streamUrl, marker?.[1]]
+    .map(normalizeMediaUrl)
+    .find(isPlayableClipUri) ?? null;
+  const body = (post.body ?? "").replace(LIVE_PREVIEW_MARKER, "").trim();
+  return { uri, body };
+}
 
 function countLabel(value: number | undefined) {
   const n = typeof value === "number" ? value : 0;
@@ -322,9 +342,9 @@ export default function CommunityPostDetailScreen() {
     }
   };
 
-  const canDelete = !!user?.id && !!post?.author?.id && post.author.id === user.id;
+  const canDelete = canDeletePost(user, post);
 
-  const deletePost = async () => {
+  const performDelete = async () => {
     if (!post || !canDelete || deleting) return;
     setDeleting(true);
     setNotice(null);
@@ -333,12 +353,26 @@ export default function CommunityPostDetailScreen() {
       setDeleting(false);
       router.back();
     } catch (e: any) {
-      setNotice({ message: e?.message ?? "Could not delete this post.", tone: "error" });
+      setNotice({ message: deleteErrorMessage(e), tone: "error" });
       setDeleting(false);
     }
   };
 
+  const deletePost = () => {
+    Alert.alert(
+      "Delete post?",
+      "This post and its comments will be removed. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => void performDelete() },
+      ],
+    );
+  };
+
   const image = assetUrl(post?.imageUrl);
+  const media = post ? resolvePostMedia(post) : { uri: null, body: "" };
+  const clipUri = media.uri;
+  const isClip = !!clipUri && !image;
 
   return (
     <View style={styles.root}>
@@ -377,7 +411,29 @@ export default function CommunityPostDetailScreen() {
             <View style={styles.postCard}>
               <AuthorLine author={post.author} createdAt={post.createdAt} />
 
-              <Text style={styles.body}>{post.body}</Text>
+              <Text style={styles.body}>
+                {media.body || (image ? "Image shared on WALLORA" : isClip ? "Video shared on WALLORA" : "")}
+              </Text>
+
+              {isClip && clipUri ? (
+                <ChannelClipCard
+                  uri={clipUri}
+                  title={post.channelName ?? "WALLORA video"}
+                  subtitle={
+                    post.channelGroup ??
+                    (post.videoUrl ? "9s clip · WALLORA TV" : "Streaming on WALLORA")
+                  }
+                  onPress={() => {
+                    if (post.channelId) {
+                      router.push({ pathname: "/live-tv", params: { channel: post.channelId } });
+                    } else if (post.refId) {
+                      router.push({ pathname: "/video-player/player", params: { id: post.refId } });
+                    } else if (clipUri) {
+                      void Linking.openURL(clipUri).catch(() => {});
+                    }
+                  }}
+                />
+              ) : null}
 
               {image ? (
                 <Image source={{ uri: image }} style={styles.postImage} resizeMode="cover" />

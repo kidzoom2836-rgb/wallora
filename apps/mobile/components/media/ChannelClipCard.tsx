@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { useVideoPlayer, VideoView, type ContentType } from "expo-video";
 import { Ionicons } from "@expo/vector-icons";
 import { C, R } from "../../lib/theme";
 
@@ -18,8 +18,10 @@ export function ChannelClipCard({
   subtitle?: string;
   onPress: () => void;
 }) {
+  const isLive = /\.m3u8(?:[?#]|$)/i.test(uri);
+  const contentType: ContentType = isLive ? "hls" : "auto";
   const player = useVideoPlayer(
-    { uri, metadata: { title, artist: "WALLORA TV" } },
+    { uri, contentType, metadata: { title, artist: "WALLORA TV" } },
     (instance) => {
       instance.muted = true;
       instance.loop = true;
@@ -44,7 +46,7 @@ export function ChannelClipCard({
       <View style={styles.shade} />
       <View style={styles.badge}>
         <View style={styles.dot} />
-        <Text style={styles.badgeText}>9s PREVIEW</Text>
+        <Text style={styles.badgeText}>{isLive ? "LIVE PREVIEW" : "9s PREVIEW"}</Text>
       </View>
       <View style={styles.bottom}>
         <View style={{ flex: 1, minWidth: 0 }}>

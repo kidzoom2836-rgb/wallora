@@ -377,37 +377,72 @@ export type CaptureChannelClipInput = {
   channelId?: string;
   streamUrl: string;
   durationSec?: number;
+  userId?: string;
 };
 
+async function fetchHlsText(url: string): Promise<string> {
+  const response = await expoFetch(url, {
+    headers: { Accept: "application/vnd.apple.mpegurl,text/plain,*/*" },
+    // Cleartext is allowed by the WALLORA Android network plugin.
+  });
+  if (!response.ok) throw new Error(`Channel playlist failed (${response.status}).`);
+  return response.text();
+}
+
 /**
- * Capture a short preview directly from a live channel on the backend.
- * The app no longer asks the user to upload a video from their gallery.
+ * Validate an HLS stream and share it directly. Older backends cannot remux
+ * captured TS segments into MP4, and raw TS is not playable by expo-video.
+ * Sharing the HLS URL keeps the community card playable instead of silently
+ * posting a dead video file.
+ */
+async function captureOnDevice(input: CaptureChannelClipInput): Promise<UploadedClip> {
+  if (!input.userId) throw new Error("Sign in to share a live preview.");
+  const playlist = await fetchHlsText(input.streamUrl);
+  if (!playlist.includes("#EXTM3U")) {
+    throw new Error("This channel does not provide a playable live stream.");
+  }
+  return {
+    key: `live:${input.channelId ?? "channel"}`,
+    videoUrl: input.streamUrl,
+    contentType: "application/vnd.apple.mpegurl",
+    size: 0,
+  };
+}
+
+/**
+ * Capture a short preview directly from a live channel — never from the
+ * user's gallery. The backend endpoint is preferred; older deployments fall
+ * back to an on-device HLS tail capture through the existing storage API.
  */
 export async function captureChannelClip(
   input: CaptureChannelClipInput,
 ): Promise<UploadedClip> {
-  const data = await apiJson<{
-    key?: string;
-    videoUrl?: string;
-    contentType?: string;
-    size?: number;
-  }>("/api/v1/community/clips/capture", {
-    method: "POST",
-    body: JSON.stringify({
-      channelId: input.channelId,
-      streamUrl: input.streamUrl,
-      durationSec: input.durationSec ?? 9,
-    }),
-  });
-  if (!data?.videoUrl) {
-    throw new Error("The WALLORA backend did not return a live preview clip.");
+  try {
+    const data = await apiJson<{
+      key?: string;
+      videoUrl?: string;
+      contentType?: string;
+      size?: number;
+    }>("/api/v1/community/clips/capture", {
+      method: "POST",
+      body: JSON.stringify({
+        channelId: input.channelId,
+        streamUrl: input.streamUrl,
+        durationSec: input.durationSec ?? 9,
+      }),
+    });
+    if (data?.videoUrl) {
+      return {
+        key: data.key ?? "",
+        videoUrl: assetUrl(data.videoUrl) ?? data.videoUrl,
+        contentType: data.contentType ?? "video/mp4",
+        size: data.size ?? 0,
+      };
+    }
+  } catch {
+    // Deployment without the capture route — try the on-device path.
   }
-  return {
-    key: data.key ?? "",
-    videoUrl: assetUrl(data.videoUrl) ?? data.videoUrl,
-    contentType: data.contentType ?? "video/mp4",
-    size: data.size ?? 0,
-  };
+  return captureOnDevice(input);
 }
 
 /** Upload a channel preview clip to the WALLORA backend. */
