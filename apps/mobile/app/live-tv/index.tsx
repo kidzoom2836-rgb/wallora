@@ -828,8 +828,8 @@ export default function LiveTvScreen() {
                   color={C.accent}
                 />
                 <Text style={styles.uploadNoticeText}>
-                  Your recommendation opens the community composer, where you
-                  can attach a 9-second clip before posting.
+                  A 9-second preview is captured directly from this live
+                  channel when you post — no upload needed.
                 </Text>
               </View>
 
@@ -838,7 +838,7 @@ export default function LiveTvScreen() {
                 style={styles.modalPrimary}
               >
                 <Ionicons name="people-outline" size={17} color={C.bg} />
-                <Text style={styles.modalPrimaryText}>Post to community</Text>
+                <Text style={styles.modalPrimaryText}>Post 9s live clip</Text>
               </Pressable>
               <Pressable
                 onPress={() => shareRecommendation(recommendChannel)}

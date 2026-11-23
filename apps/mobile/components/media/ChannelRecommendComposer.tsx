@@ -1,12 +1,23 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
 import { apiJson } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { pickChannelClip, uploadChannelClip, type PickedClip } from "../../lib/uploads";
+import {
+  captureChannelClip,
+  type UploadedClip,
+} from "../../lib/uploads";
 import { groupLabel, type IptvChannel } from "../../lib/iptv";
 import { withVerification } from "../../lib/verification";
 import { C, R } from "../../lib/theme";
+
+type Notice = { message: string; tone: "error" | "success" | "info" };
+
+function isLegacyEnumError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /expected one of|invalid_option|channel_clip|invalid option/i.test(message);
+}
 
 /** Composer used when a user taps "Recommend" on a live TV channel. */
 export function ChannelRecommendComposer({
@@ -18,25 +29,29 @@ export function ChannelRecommendComposer({
 }) {
   const { user } = useAuth();
   const [body, setBody] = useState(`You have to see ${channel.name} on WALLORA TV!`);
-  const [clip, setClip] = useState<PickedClip | null>(null);
+  const [clip, setClip] = useState<UploadedClip | null>(null);
+  const [capturing, setCapturing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ message: string; tone: "error" | "success" | "info" } | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
-  const attachClip = async () => {
+  const capture = async (): Promise<UploadedClip> => {
+    setCapturing(true);
     setNotice(null);
     try {
-      const picked = await pickChannelClip();
-      if (picked) setClip(picked);
-    } catch (error) {
-      setNotice({
-        message: error instanceof Error ? error.message : "Could not attach that video.",
-        tone: "error",
+      const captured = await captureChannelClip({
+        channelId: channel.id,
+        streamUrl: channel.url,
+        durationSec: 9,
       });
+      setClip(captured);
+      return captured;
+    } finally {
+      setCapturing(false);
     }
   };
 
   const submit = async () => {
-    if (busy) return;
+    if (busy || capturing) return;
     if (!user) {
       setNotice({ message: "Sign in to recommend channels to the community.", tone: "info" });
       return;
@@ -44,30 +59,49 @@ export function ChannelRecommendComposer({
     setBusy(true);
     setNotice(null);
     try {
+      const preview = clip ?? (await capture());
+      const postBody = {
+        body: body.trim() || `Recommended ${channel.name}`,
+        channelId: channel.id,
+        refId: channel.id,
+        channelName: channel.name,
+        channelGroup: channel.group,
+        previewUrl: channel.logo ?? null,
+        streamUrl: channel.url,
+        videoUrl: preview.videoUrl,
+        durationSec: 9,
+      };
+
       const posted = await withVerification(async () => {
-        const uploaded = clip ? await uploadChannelClip(clip) : null;
-        await apiJson("/api/v1/community/posts", {
-          method: "POST",
-          body: JSON.stringify({
-            body: body.trim() || `Recommended ${channel.name}`,
-            // Keep this as a text post for compatibility with every deployed
-            // backend schema. Channel metadata and the optional clip URL are
-            // still sent, and the current API stores them on the post.
-            kind: "text",
-            channelId: channel.id,
-            refId: channel.id,
-            channelName: channel.name,
-            channelGroup: channel.group,
-            previewUrl: channel.logo ?? null,
-            streamUrl: channel.url,
-            videoUrl: uploaded?.videoUrl ?? null,
-            durationSec: 9,
-          }),
-        });
-        return true;
+        try {
+          await apiJson("/api/v1/community/posts", {
+            method: "POST",
+            body: JSON.stringify({ ...postBody, kind: "channel_clip" }),
+          });
+          return { legacy: false };
+        } catch (error) {
+          if (!isLegacyEnumError(error)) throw error;
+          // Older deployed schemas reject `channel_clip`. Keep the post and
+          // include the captured clip URL so nothing is lost for the user.
+          await apiJson("/api/v1/community/posts", {
+            method: "POST",
+            body: JSON.stringify({
+              ...postBody,
+              kind: "text",
+              body: `${postBody.body}\n9s live preview: ${preview.videoUrl}`,
+            }),
+          });
+          return { legacy: true };
+        }
       });
+
       if (posted) {
-        setNotice({ message: "Channel recommended to the community.", tone: "success" });
+        setNotice({
+          message: posted.legacy
+            ? "Posted with a preview link — update the backend to show inline clips."
+            : "9-second live preview posted to the community.",
+          tone: "success",
+        });
         setBody("");
         setClip(null);
         onPosted();
@@ -76,7 +110,7 @@ export function ChannelRecommendComposer({
       }
     } catch (error) {
       setNotice({
-        message: error instanceof Error ? error.message : "Could not publish this recommendation.",
+        message: error instanceof Error ? error.message : "Could not capture or publish this preview.",
         tone: "error",
       });
     } finally {
@@ -96,7 +130,7 @@ export function ChannelRecommendComposer({
             {channel.name}
           </Text>
           <Text style={styles.subtitle} numberOfLines={1}>
-            {groupLabel(channel.group)} · 9-second preview
+            {groupLabel(channel.group)} · 9s captured from this channel
           </Text>
         </View>
       </View>
@@ -108,21 +142,29 @@ export function ChannelRecommendComposer({
         placeholderTextColor={C.muted}
         multiline
         maxLength={500}
-        editable={!busy}
+        editable={!busy && !capturing}
         style={styles.input}
       />
 
       <View style={styles.clipRow}>
-        <Pressable onPress={() => void attachClip()} disabled={busy} style={styles.clipButton}>
-          <Ionicons name="videocam-outline" size={15} color={C.accent} />
-          <Text style={styles.clipButtonText}>
-            {clip ? "Change 9s clip" : "Attach a 9s video (optional)"}
+        <View style={[styles.clipBadge, clip && styles.clipBadgeReady]}>
+          <Ionicons
+            name={clip ? "checkmark-circle" : capturing ? "radio-outline" : "videocam-outline"}
+            size={14}
+            color={clip ? C.success : C.accent}
+          />
+          <Text style={[styles.clipBadgeText, clip && styles.clipBadgeTextReady]} numberOfLines={1}>
+            {capturing
+              ? "Capturing 9s from live stream…"
+              : clip
+                ? "Live preview ready"
+                : "Preview captured on post"}
           </Text>
-        </Pressable>
-        {clip ? (
-          <Text style={styles.clipName} numberOfLines={1}>
-            {clip.fileName}
-          </Text>
+        </View>
+        {!capturing && !busy ? (
+          <Pressable onPress={() => void capture()} style={styles.recapture}>
+            <Text style={styles.recaptureText}>Recapture</Text>
+          </Pressable>
         ) : null}
       </View>
 
@@ -137,13 +179,17 @@ export function ChannelRecommendComposer({
         </View>
       ) : null}
 
-      <Pressable onPress={() => void submit()} disabled={busy} style={[styles.button, busy && styles.buttonDisabled]}>
-        {busy ? (
+      <Pressable
+        onPress={() => void submit()}
+        disabled={busy || capturing}
+        style={[styles.button, (busy || capturing) && styles.buttonDisabled]}
+      >
+        {busy || capturing ? (
           <ActivityIndicator color={C.bg} size="small" />
         ) : (
           <>
             <Ionicons name="send" size={15} color={C.bg} />
-            <Text style={styles.buttonText}>Post recommendation</Text>
+            <Text style={styles.buttonText}>Post 9s live clip</Text>
           </>
         )}
       </Pressable>
@@ -185,7 +231,9 @@ const styles = StyleSheet.create({
     padding: 11,
   },
   clipRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 9 },
-  clipButton: {
+  clipBadge: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -195,8 +243,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  clipButtonText: { color: C.accent, fontSize: 11, fontWeight: "700" },
-  clipName: { flex: 1, color: C.muted, fontSize: 10 },
+  clipBadgeReady: { borderColor: C.success + "66", backgroundColor: C.successDim },
+  clipBadgeText: { color: C.accent, fontSize: 11, fontWeight: "700", flex: 1 },
+  clipBadgeTextReady: { color: C.success },
+  recapture: { paddingHorizontal: 8, paddingVertical: 8 },
+  recaptureText: { color: C.textSoft, fontSize: 10.5, fontWeight: "700" },
   notice: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10 },
   noticeText: { color: C.textSoft, fontSize: 11, flex: 1 },
   button: {

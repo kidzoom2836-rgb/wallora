@@ -373,6 +373,43 @@ export async function pickChannelClip(): Promise<PickedClip | null> {
   return { uri: asset.uri, fileName, mimeType, fileSize, durationMs };
 }
 
+export type CaptureChannelClipInput = {
+  channelId?: string;
+  streamUrl: string;
+  durationSec?: number;
+};
+
+/**
+ * Capture a short preview directly from a live channel on the backend.
+ * The app no longer asks the user to upload a video from their gallery.
+ */
+export async function captureChannelClip(
+  input: CaptureChannelClipInput,
+): Promise<UploadedClip> {
+  const data = await apiJson<{
+    key?: string;
+    videoUrl?: string;
+    contentType?: string;
+    size?: number;
+  }>("/api/v1/community/clips/capture", {
+    method: "POST",
+    body: JSON.stringify({
+      channelId: input.channelId,
+      streamUrl: input.streamUrl,
+      durationSec: input.durationSec ?? 9,
+    }),
+  });
+  if (!data?.videoUrl) {
+    throw new Error("The WALLORA backend did not return a live preview clip.");
+  }
+  return {
+    key: data.key ?? "",
+    videoUrl: assetUrl(data.videoUrl) ?? data.videoUrl,
+    contentType: data.contentType ?? "video/mp4",
+    size: data.size ?? 0,
+  };
+}
+
 /** Upload a channel preview clip to the WALLORA backend. */
 export async function uploadChannelClip(clip: PickedClip): Promise<UploadedClip> {
   const file = await toFormUploadFile(clip);
