@@ -29,13 +29,16 @@ export type StockReel = {
 const PROVIDER_KEY = "wallora.reels.provider.v1";
 const PEXELS_KEY = "wallora.reels.pexelsKey.v1";
 const PIXABAY_KEY = "wallora.reels.pixabayKey.v1";
-const CACHE_PREFIX = "wallora.reels.cache.v1";
+const CACHE_PREFIX = "wallora.reels.cache.v3";
 
 /** Built-in free Pixabay key so Reels work out of the box. Users can override it in Source settings. */
 const DEFAULT_PIXABAY_KEY = "58789810-642de2f0ebbd0bb0c89a873db";
 
 /** Pixabay policy: cache API responses for at least 24 hours. */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Keep reels scrollable on ~1 Mbps connections by skipping oversized renditions. */
+const MAX_REEL_BYTES = 12 * 1024 * 1024;
 
 /** Verified 9:16 Pexels MP4s used only when offline / no API is reachable. */
 export const SAMPLE_REELS: StockReel[] = [
@@ -191,15 +194,26 @@ async function fetchPexels(apiKey: string, query: string, page: number): Promise
 }
 
 /**
- * Pick a vertical MP4 rendition. `medium` (~720p) is preferred for smooth
- * mobile scrolling and low data use; fall back to any portrait rendition.
+ * Pick a vertical MP4 rendition that is small enough for smooth mobile
+ * scrolling. Pixabay "medium" files can exceed 100 MB, so prefer the smallest
+ * portrait rendition under the size budget instead of always taking medium.
  */
 function pickVerticalPixabayFile(videos: any) {
-  const order = ["medium", "small", "tiny", "large"];
-  const renditions = order
+  const renditions = ["large", "medium", "small", "tiny"]
     .map((key) => videos?.[key])
-    .filter((file) => !!file?.url && (file.height ?? 0) >= (file.width ?? 0));
-  return renditions[0] ?? null;
+    .filter(
+      (file) =>
+        !!file?.url &&
+        (file.height ?? 0) >= (file.width ?? 0) &&
+        (!file.size || file.size <= MAX_REEL_BYTES),
+    );
+  if (!renditions.length) return null;
+
+  // Prefer at least 720px tall, but accept any portrait rendition if none qualify.
+  const tallEnough = renditions.filter((file) => (file.height ?? 0) >= 720);
+  return (tallEnough.length ? tallEnough : renditions).sort(
+    (a, b) => (a.size ?? 0) - (b.size ?? 0),
+  )[0];
 }
 
 /** Pixabay: `GET /api/videos/?key=&orientation=vertical&safesearch=true` */
@@ -209,7 +223,9 @@ async function fetchPixabay(apiKey: string, query: string, page: number): Promis
   if (query) url.searchParams.set("q", query);
   url.searchParams.set("orientation", "vertical");
   url.searchParams.set("safesearch", "true");
-  url.searchParams.set("per_page", "20");
+  // Pixabay's orientation filter is loose: a 20-result page can contain only
+  // ~4 portrait renditions. Fetch the max allowed page and filter locally.
+  url.searchParams.set("per_page", "200");
   url.searchParams.set("page", String(page));
   const json = await fetchJson(url.toString(), { headers: { Accept: "application/json" } });
   const hits: any[] = Array.isArray(json?.hits) ? json.hits : [];

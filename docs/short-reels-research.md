@@ -32,8 +32,10 @@ they create copyright/ToS risk and break without notice.
 - A shared free Pixabay key ships with the app so Reels works without setup; users can paste
   their own key in Source settings to get a private quota. Any key entered in settings is stored
   on-device with AsyncStorage.
-- `orientation=portrait` (Pexels) / `orientation=vertical` (Pixabay) keeps results 9:16; the
-  picker selects a portrait `medium` rendition first for smooth low-bandwidth playback.
+- `orientation=portrait` (Pexels) / `orientation=vertical` (Pixabay) keeps results 9:16. Pixabay's
+  orientation filter is loose, so the app requests the maximum 200 results per page, filters
+  portrait renditions locally, and picks the smallest file under a 12 MB budget so reels stay
+  scrollable on low-bandwidth connections.
 - Pixabay responses are cached in AsyncStorage for **24 hours**, as required by the Pixabay API.
   Stale cache is served before the sample fallback when the API is unavailable.
 - With no API access, the feed plays a verified set of public Pexels vertical MP4s
