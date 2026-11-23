@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthDialog } from "@/stores/auth-dialog";
 import { cn } from "@/lib/utils";
 
+import { ChannelClipPreview } from "./channel-clip-preview";
 import { CommunityAvatar } from "./community-avatar";
 import { CommunityComments } from "./community-comments";
 import { CommunityShareMenu } from "./community-share-menu";
@@ -205,7 +206,17 @@ export function CommunityPostCard({
           </div>
         )}
 
-        {post.imageUrl && (
+        {post.kind === "channel_clip" && (post.videoUrl || post.streamUrl) && (
+          <ChannelClipPreview
+            src={(post.videoUrl || post.streamUrl) as string}
+            poster={post.previewUrl}
+            title={post.body}
+            channelName={post.channelName}
+            durationSec={post.durationSec}
+          />
+        )}
+
+        {post.imageUrl && post.kind !== "channel_clip" && (
           <div className="ml-[52px] mt-4 overflow-hidden rounded-xl border border-border bg-raised">
             <Image
               src={post.imageUrl}

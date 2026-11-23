@@ -9,6 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -86,6 +94,11 @@ export default function StudioPage() {
   const [enhance, setEnhance] = React.useState(true);
   /** Generation ids already submitted for moderation in this session. */
   const [publishedIds, setPublishedIds] = React.useState<string[]>([]);
+  const [publishTarget, setPublishTarget] = React.useState<string | null>(null);
+  const [publishResult, setPublishResult] = React.useState<{
+    slug: string;
+    moderationNote: string;
+  } | null>(null);
 
   const authenticated = status === "authenticated" && !!session?.user;
 
@@ -165,12 +178,16 @@ export default function StudioPage() {
     },
     onSuccess: (data, id) => {
       setPublishedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-      toast.success("Submitted for review", {
-        description: "Your generation is a private wallpaper until an admin approves it.",
+      setPublishTarget(null);
+      setPublishResult({
+        slug: data.slug,
+        moderationNote:
+          data.moderationNote ?? "Your wallpaper is private until an admin approves it.",
       });
     },
     onError: (err: Error) => {
       toast.error("Publish failed", { description: err.message });
+      setPublishTarget(null);
     },
   });
 
@@ -511,7 +528,10 @@ export default function StudioPage() {
                       onDownload={() => handleDownload(gen)}
                       onRetry={() => retryMutation.mutate(gen.id)}
                       onDelete={() => deleteMutation.mutate(gen.id)}
-                      onPublish={() => publishMutation.mutate(gen.id)}
+                      onPublish={() => {
+                        setPublishResult(null);
+                        setPublishTarget(gen.id);
+                      }}
                       isRetrying={retryMutation.isPending}
                       isPublishing={publishMutation.isPending && publishMutation.variables === gen.id}
                       published={publishedIds.includes(gen.id)}
@@ -523,6 +543,86 @@ export default function StudioPage() {
           </div>
         </div>
       </div>
+
+      {/* Publish confirmation → completion popup */}
+      <Dialog
+        open={!!publishTarget || !!publishResult}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPublishTarget(null);
+            setPublishResult(null);
+          }
+        }}
+      >
+        <DialogContent className="border-border bg-surface text-foreground sm:max-w-md">
+          {publishResult ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 font-display">
+                  <CheckCircleIcon size={20} className="text-success" />
+                  Submitted to WALLORA
+                </DialogTitle>
+                <DialogDescription className="text-secondary-text">
+                  Your generation is now a private, pending wallpaper. You can keep creating while
+                  an admin reviews it.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="rounded-xl border border-border bg-background p-4">
+                <p className="text-xs uppercase tracking-wider text-secondary-text">Wallpaper slug</p>
+                <p className="mt-1 break-all text-sm text-foreground">{publishResult.slug}</p>
+                <p className="mt-3 text-xs leading-relaxed text-secondary-text">
+                  {publishResult.moderationNote}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => setPublishResult(null)}
+                >
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-display">Publish this wallpaper?</DialogTitle>
+                <DialogDescription className="text-secondary-text">
+                  This creates a private wallpaper post from your AI generation and sends it for
+                  admin review. It becomes visible to the community only after approval.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-primary">
+                <UploadIcon size={16} className="mt-0.5 shrink-0" />
+                <span>
+                  You keep the original in your studio. Publishing never removes your generation.
+                </span>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  className="border-border bg-background text-foreground hover:bg-raised"
+                  onClick={() => setPublishTarget(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={publishMutation.isPending}
+                  onClick={() => publishTarget && publishMutation.mutate(publishTarget)}
+                >
+                  {publishMutation.isPending ? (
+                    <LoaderIcon size={16} className="mr-2 animate-spin" />
+                  ) : (
+                    <UploadIcon size={16} className="mr-2" />
+                  )}
+                  Submit for review
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -21,15 +21,48 @@ const CreatePostSchema = z
       .max(2000, { message: "Posts must be 2000 characters or fewer." })
       .optional()
       .default(""),
-    kind: z.enum(["text", "wallpaper", "project", "image"]).optional().default("text"),
+    kind: z
+      .enum(["text", "wallpaper", "project", "image", "channel_clip"])
+      .optional()
+      .default("text"),
     refId: z.string().trim().max(300).nullish(),
     /** Storage key returned by /api/v1/uploads/presign for direct image posts. */
     imageKey: z.string().trim().max(300).nullish(),
     repostOf: z.string().trim().max(200).nullish(),
+    channelId: z.string().trim().max(200).nullish(),
+    channelName: z.string().trim().max(180).nullish(),
+    channelGroup: z.string().trim().max(120).nullish(),
+    previewUrl: z
+      .string()
+      .trim()
+      .max(500)
+      .refine((value) => /^https?:\/\//i.test(value) || value.startsWith("/"), "Invalid media URL.")
+      .nullish(),
+    videoUrl: z
+      .string()
+      .trim()
+      .max(500)
+      .refine((value) => /^https?:\/\//i.test(value) || value.startsWith("/"), "Invalid video URL.")
+      .nullish(),
+    streamUrl: z
+      .string()
+      .trim()
+      .url()
+      .max(500)
+      .refine((value) => /^https?:\/\//i.test(value), "Stream URL must be HTTP(S).")
+      .nullish(),
+    durationSec: z.number().int().min(1).max(60).nullish(),
   })
   .refine(
-    (data) => data.body.length > 0 || (data.kind === "image" && !!(data.imageKey || data.refId)),
-    { message: "Write something or attach an image before posting.", path: ["body"] },
+    (data) =>
+      data.body.length > 0 ||
+      (data.kind === "image" && !!(data.imageKey || data.refId)) ||
+      (data.kind === "channel_clip" && !!(data.channelId || data.streamUrl)),
+    { message: "Write something or attach content before posting.", path: ["body"] },
+  )
+  .refine(
+    (data) => data.kind !== "channel_clip" || !!data.streamUrl || !!data.videoUrl,
+    { message: "A channel preview needs a stream or video URL.", path: ["streamUrl"] },
   );
 
 function badRequest(message: string) {
@@ -49,6 +82,15 @@ export async function GET(request: NextRequest) {
     50,
     Math.max(1, parseInt(searchParams.get("limit") ?? "12", 10) || 12),
   );
+  const kindParam = searchParams.get("kind");
+  const kind =
+    kindParam === "channel_clip" ||
+    kindParam === "image" ||
+    kindParam === "wallpaper" ||
+    kindParam === "project" ||
+    kindParam === "text"
+      ? kindParam
+      : undefined;
 
   const session = await getAuthSession();
   const data = await listPosts({
@@ -57,6 +99,7 @@ export async function GET(request: NextRequest) {
     page,
     limit,
     viewerId: session?.user?.id ?? null,
+    kind,
   });
   return NextResponse.json({ data });
 }
@@ -117,10 +160,20 @@ export async function POST(request: NextRequest) {
   const post = await createPost({
     body: parsed.data.body,
     kind,
-    refId: kind === "image" ? imageKey : parsed.data.refId?.trim() || null,
+    refId:
+      kind === "image"
+        ? imageKey
+        : parsed.data.channelId?.trim() || parsed.data.refId?.trim() || null,
     repostOf,
     author,
     ownerId: userId,
+    channelId: parsed.data.channelId?.trim() || null,
+    channelName: parsed.data.channelName?.trim() || null,
+    channelGroup: parsed.data.channelGroup?.trim() || null,
+    streamUrl: parsed.data.streamUrl?.trim() || null,
+    previewUrl: parsed.data.previewUrl?.trim() || null,
+    videoUrl: parsed.data.videoUrl?.trim() || null,
+    durationSec: parsed.data.durationSec ?? null,
   });
 
   return NextResponse.json({ data: post }, { status: 201 });

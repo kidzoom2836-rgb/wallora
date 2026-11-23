@@ -9,7 +9,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useWaitlistDialog } from "@/stores/waitlist";
 import { EXAMPLE_PROMPTS } from "@/lib/landing-data";
-import { SparklesIcon, WandIcon, ImageIcon, ArrowRightIcon } from "@/components/icons/wallora-icons";
+import {
+  SparklesIcon,
+  WandIcon,
+  ImageIcon,
+  ArrowRightIcon,
+  SmartphoneIcon,
+} from "@/components/icons/wallora-icons";
 
 export function Hero() {
   const [prompt, setPrompt] = React.useState("");
@@ -160,6 +166,17 @@ export function Hero() {
                 <Link href="/discover">
                   Explore artwork
                   <ArrowRightIcon size={16} className="ml-2" />
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="ghost"
+                className="text-secondary-text hover:text-foreground"
+                asChild
+              >
+                <Link href="/get-app">
+                  <SmartphoneIcon size={16} className="mr-2" />
+                  Get Android app
                 </Link>
               </Button>
             </motion.div>

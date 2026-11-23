@@ -24,6 +24,7 @@ import {
   readDownloads,
   removeDownload,
 } from "../lib/downloads";
+import { WallpaperTarget, WallpaperTargetSheet } from "../components/ui/WallpaperTargetSheet";
 
 function formatBytes(bytes?: number) {
   if (!bytes) return "Local copy";
@@ -40,6 +41,7 @@ export default function DownloadsScreen() {
   const [selected, setSelected] = useState<DownloadedWallpaper | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [targetItem, setTargetItem] = useState<DownloadedWallpaper | null>(null);
 
   const load = useCallback(async () => {
     const downloads = await readDownloads();
@@ -65,15 +67,17 @@ export default function DownloadsScreen() {
     setNotice("Removed from WALLORA Downloads");
   };
 
-  const onAddAsWallpaper = async (item: DownloadedWallpaper) => {
+  const applyWallpaper = async (item: DownloadedWallpaper, target: WallpaperTarget) => {
     setBusy(true);
+    setTargetItem(null);
     try {
       await addAsWallpaper(item);
       const file = new File(item.localUri);
       if (await File.canPreview(file)) {
         await File.preview(file, { title: item.title, mimeType: "image/jpeg" });
       }
-      setNotice("Saved to WALLORA album. Use your device preview to set it as wallpaper.");
+      const label = target === "both" ? "home and lock screens" : `${target} screen`;
+      setNotice(`Saved to your WALLORA album. Choose ${label} in the wallpaper picker.`);
     } catch (e: any) {
       setNotice(e?.message ?? "Could not add as wallpaper");
     } finally {
@@ -186,7 +190,7 @@ export default function DownloadsScreen() {
                 {formatBytes(selected.bytes)}
               </Text>
               <Pressable
-                onPress={() => onAddAsWallpaper(selected)}
+                onPress={() => setTargetItem(selected)}
                 disabled={busy}
                 style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
               >
@@ -218,6 +222,13 @@ export default function DownloadsScreen() {
           </View>
         )}
       </Modal>
+
+      <WallpaperTargetSheet
+        visible={!!targetItem}
+        busy={busy}
+        onClose={() => setTargetItem(null)}
+        onSelect={(target) => targetItem && void applyWallpaper(targetItem, target)}
+      />
     </View>
   );
 }

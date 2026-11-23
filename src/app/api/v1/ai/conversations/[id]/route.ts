@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
+import { readMessageAttachments } from "@/lib/ai/attachments";
 
 /**
  * GET /api/v1/ai/conversations/[id]
@@ -33,6 +34,13 @@ export async function GET(
     );
   }
 
+  const messages = await Promise.all(
+    conversation.messages.map(async (message) => ({
+      ...message,
+      attachments: await readMessageAttachments(message.id),
+    })),
+  );
+
   return NextResponse.json({
     data: {
       id: conversation.id,
@@ -41,7 +49,7 @@ export async function GET(
       messageCount: conversation.messageCount,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
-      messages: conversation.messages,
+      messages,
     },
   });
 }

@@ -11,6 +11,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.wallora.app",
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -33,7 +35,49 @@
           "cameraPermission": "WALLORA uses the camera so you can take and share photos.",
           "microphonePermission": false
         }
-      ]
-    ]
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "WALLORA saves wallpapers to your gallery so you can set them on your device.",
+          "savePhotosPermission": "WALLORA saves wallpapers to your gallery so you can set them on your device.",
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#D7B879",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": true
+        }
+      ],
+      "./plugins/withCleartextTraffic.js",
+      "expo-asset"
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "99de0eeb-2250-4d01-89e1-c82f8987b500"
+      }
+    },
+    "owner": "skyjackson"
   }
 }

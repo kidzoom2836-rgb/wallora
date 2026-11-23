@@ -19,7 +19,11 @@ const INDEX_KEY = "wallora.downloads.v1";
 const ALBUM_NAME = "WALLORA";
 
 function safeFileName(title: string, id: string) {
-  const clean = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "wallpaper";
+  const clean =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "wallpaper";
   return `${clean}-${id.slice(0, 8)}.jpg`;
 }
 
@@ -55,7 +59,9 @@ export async function downloadWallpaper(input: {
   dir.create({ intermediates: true, idempotent: true });
 
   const destination = new File(dir, safeFileName(input.title, input.id));
-  const output = await File.downloadFileAsync(input.remoteUrl, destination, { idempotent: true });
+  const output = await File.downloadFileAsync(input.remoteUrl, destination, {
+    idempotent: true,
+  });
 
   const item: DownloadedWallpaper = {
     id: input.id,
@@ -90,11 +96,15 @@ export async function removeDownload(id: string) {
  * it as a wallpaper. Expo does not expose a cross-platform "set wallpaper" API.
  */
 export async function addAsWallpaper(item: DownloadedWallpaper) {
-  const { status } = await requestPermissionsAsync();
-  if (status !== "granted") throw new Error("Gallery permission is required to add a wallpaper.");
+  // Ask only for photo access. The default requests audio (and video) on
+  // Android 13+, which is unrelated to saving a wallpaper.
+  const { status } = await requestPermissionsAsync(false, ["photo"]);
+  if (status !== "granted")
+    throw new Error("Gallery permission is required to add a wallpaper.");
 
   const file = new File(item.localUri);
-  if (!file.exists) throw new Error("This download is missing from the device.");
+  if (!file.exists)
+    throw new Error("This download is missing from the device.");
 
   const asset = await Asset.create(file.uri);
   const album = await Album.get(ALBUM_NAME);

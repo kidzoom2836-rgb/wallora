@@ -156,6 +156,47 @@
   --sidebar-ring: #D7B879;
 }
 
+/* Web light theme. next-themes toggles .light on <html>; dark remains default. */
+html.light {
+  --background: #F7F7F5;
+  --foreground: #17181C;
+  --surface: #FFFFFF;
+  --raised: #F0F1F4;
+  --secondary-text: #5F6470;
+  --card: #FFFFFF;
+  --card-foreground: #17181C;
+  --popover: #FFFFFF;
+  --popover-foreground: #17181C;
+  --primary: #9A7226;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F0F1F4;
+  --secondary-foreground: #17181C;
+  --muted: #F0F1F4;
+  --muted-foreground: #666B76;
+  --accent: #F5EEDC;
+  --accent-foreground: #7A5B1E;
+  --destructive: #C44F56;
+  --success: #2E8B62;
+  --gold: #9A7226;
+  --gold-foreground: #FFFFFF;
+  --border: #DDE0E6;
+  --input: #D4D8DF;
+  --ring: #9A7226;
+  --chart-1: #9A7226;
+  --chart-2: #2E8B62;
+  --chart-3: #4C7DC4;
+  --chart-4: #C44F56;
+  --chart-5: #6B6F79;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #17181C;
+  --sidebar-primary: #9A7226;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0F1F4;
+  --sidebar-accent-foreground: #17181C;
+  --sidebar-border: #DDE0E6;
+  --sidebar-ring: #9A7226;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -272,4 +313,23 @@
   background: linear-gradient(90deg, #14161B 0%, #1C1F26 50%, #14161B 100%);
   background-size: 200% 100%;
   animation: wallora-shimmer 1.6s ease-in-out infinite;
+}
+
+/* Continuous horizontal marquee for the live trending ticker */
+@keyframes wallora-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: wallora-marquee 32s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-shimmer {
+    animation: none !important;
+  }
 }

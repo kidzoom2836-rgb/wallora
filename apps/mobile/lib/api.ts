@@ -1,4 +1,6 @@
 import * as SecureStore from "expo-secure-store";
+import { fetch as expoFetch } from "expo/fetch";
+
 import { API_BASE } from "./config";
 
 /**
@@ -99,7 +101,13 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}): Promise<R
   // Let the native layer keep its own cookie store too (iOS NSHTTPCookieStorage /
   // Android OkHttp). This is a fallback in case a platform strips our manual
   // Cookie header or does not expose Set-Cookie to JavaScript.
-  const res = await fetch(`${API_BASE}${path}`, { ...rest, headers: h, credentials: "include" });
+  // Expo's fetch keeps FormData/Blob semantics consistent on Android, where
+  // React Native's legacy fetch rejects expo-file-system File parts.
+  const res = await expoFetch(`${API_BASE}${path}`, {
+    ...rest,
+    headers: h,
+    credentials: "include",
+  });
   capture(res);
   return res;
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   Image,
@@ -12,16 +13,21 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { apiJson } from "../lib/api";
-import { API_BASE, assetUrl } from "../lib/config";
+import { API_BASE, assetUrl, isPlayableClipUri, normalizeMediaUrl } from "../lib/config";
+import { canDeletePost, deleteErrorMessage } from "../lib/communityPermissions";
 import { pickCommunityImage, uploadCommunityImage, type PickedImage } from "../lib/uploads";
 import { withVerification } from "../lib/verification";
 import { C, R, S } from "../lib/theme";
 import { useAuth } from "../lib/auth";
+import { loadPlaylist, uniqueChannelId, type IptvChannel } from "../lib/iptv";
+import { ChannelClipCard } from "../components/media/ChannelClipCard";
+import { ChannelRecommendComposer } from "../components/media/ChannelRecommendComposer";
+import { VideoShareComposer } from "../components/media/VideoShareComposer";
 
 type CommunityAuthor = {
   id?: string;
@@ -45,6 +51,13 @@ type CommunityPost = {
   liked?: boolean;
   reposted?: boolean;
   createdAt: string;
+  channelId?: string | null;
+  channelName?: string | null;
+  channelGroup?: string | null;
+  streamUrl?: string | null;
+  previewUrl?: string | null;
+  videoUrl?: string | null;
+  durationSec?: number | null;
 };
 
 type Pagination = {
@@ -64,6 +77,23 @@ type ActionResult = {
 };
 
 const PAGE_SIZE = 12;
+
+/** Legacy text posts from older backend deployments carry the clip URL in the body. */
+const LIVE_PREVIEW_MARKER = /9s live preview:\s*(https?:\/\/\S+)/i;
+
+/**
+ * Resolve the playable media for a post. Prefer the uploaded 9s clip over the
+ * live stream, and fall back to the body marker written by older deployments.
+ * Returns the body text with the raw marker stripped so it is not shown as a link.
+ */
+function resolvePostMedia(post: CommunityPost): { uri: string | null; body: string } {
+  const marker = post.body?.match(LIVE_PREVIEW_MARKER);
+  const uri = [post.videoUrl, post.streamUrl, marker?.[1]]
+    .map(normalizeMediaUrl)
+    .find(isPlayableClipUri) ?? null;
+  const body = (post.body ?? "").replace(LIVE_PREVIEW_MARKER, "").trim();
+  return { uri, body };
+}
 
 function countLabel(value: number | undefined) {
   const n = typeof value === "number" ? value : 0;
@@ -216,7 +246,15 @@ function CommunityComposer({ onPosted }: { onPosted: () => void }) {
 
 export default function CommunityScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ recommend?: string; video?: string }>();
   const { user } = useAuth();
+  const [recommendChannel, setRecommendChannel] = useState<IptvChannel | null>(null);
+  const [sharedVideo, setSharedVideo] = useState<{
+    id: string;
+    title: string;
+    uri: string;
+    source?: string;
+  } | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -235,6 +273,69 @@ export default function CommunityScreen() {
     const timer = setTimeout(() => setSearch(query.trim()), 350);
     return () => clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    const raw = params.recommend;
+    const channelId = Array.isArray(raw) ? raw[0] : raw;
+    if (!channelId) {
+      setRecommendChannel(null);
+      return;
+    }
+    let active = true;
+    loadPlaylist()
+      .then((result) => {
+        if (!active) return;
+        const found = (result.channels ?? []).find(
+          (channel) => uniqueChannelId(channel) === channelId,
+        );
+        setRecommendChannel(found ?? null);
+        if (!found) {
+          setNotice({
+            message: "That channel is not in the current guide. Pick another from Live TV.",
+            tone: "info",
+          });
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        setNotice({ message: "Could not load the channel guide right now.", tone: "info" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [params.recommend]);
+
+  useEffect(() => {
+    const raw = params.video;
+    if (!raw) {
+      setSharedVideo(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        id?: unknown;
+        title?: unknown;
+        uri?: unknown;
+        source?: unknown;
+      };
+      if (
+        typeof parsed.id === "string" &&
+        typeof parsed.title === "string" &&
+        typeof parsed.uri === "string"
+      ) {
+        setSharedVideo({
+          id: parsed.id,
+          title: parsed.title,
+          uri: parsed.uri,
+          source: typeof parsed.source === "string" ? parsed.source : undefined,
+        });
+      } else {
+        setSharedVideo(null);
+      }
+    } catch {
+      setSharedVideo(null);
+    }
+  }, [params.video]);
 
   const load = useCallback(
     async (nextPage: number, replace: boolean) => {
@@ -343,6 +444,37 @@ export default function CommunityScreen() {
     }
   };
 
+  const deletePost = (post: CommunityPost) => {
+    if (busyId) return;
+    Alert.alert(
+      "Delete post?",
+      "This post and its comments will be removed. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setBusyId(post.id);
+              setNotice(null);
+              try {
+                await apiJson(`/api/v1/community/posts/${post.id}`, { method: "DELETE" });
+                setPosts((prev) => prev.filter((p) => p.id !== post.id));
+                setTotal((prev) => Math.max(0, prev - 1));
+                setNotice({ message: "Post deleted.", tone: "success" });
+              } catch (e: any) {
+                setNotice({ message: deleteErrorMessage(e), tone: "error" });
+              } finally {
+                setBusyId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   const sharePost = async (post: CommunityPost) => {
     if (!requireAuth() || busyId) return;
     setBusyId(post.id);
@@ -438,6 +570,14 @@ export default function CommunityScreen() {
 
         <CommunityComposer onPosted={onRefresh} />
 
+        {recommendChannel ? (
+          <ChannelRecommendComposer channel={recommendChannel} onPosted={onRefresh} />
+        ) : null}
+
+        {sharedVideo ? (
+          <VideoShareComposer video={sharedVideo} onPosted={onRefresh} />
+        ) : null}
+
         {!user && (
           <Pressable style={styles.signInCard} onPress={() => router.push("/auth/login")}>
             <Ionicons name="lock-closed-outline" size={17} color={C.accent} />
@@ -448,7 +588,7 @@ export default function CommunityScreen() {
         <Banner message={notice?.message ?? null} tone={notice?.tone} />
       </View>
     ),
-    [notice, onRefresh, query, router, sort, total, user],
+    [notice, onRefresh, query, recommendChannel, router, sharedVideo, sort, total, user],
   );
 
   return (
@@ -457,9 +597,18 @@ export default function CommunityScreen() {
         title="Community"
         subtitle="Real conversations, real work"
         right={
-          <Pressable onPress={onRefresh} hitSlop={10} style={styles.refreshButton}>
-            <Ionicons name="refresh-outline" size={19} color={C.accent} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push("/reels")}
+              hitSlop={10}
+              style={styles.refreshButton}
+            >
+              <Ionicons name="play-circle-outline" size={19} color={C.accent} />
+            </Pressable>
+            <Pressable onPress={onRefresh} hitSlop={10} style={styles.refreshButton}>
+              <Ionicons name="refresh-outline" size={19} color={C.accent} />
+            </Pressable>
+          </View>
         }
       />
       <FlatList
@@ -518,6 +667,11 @@ export default function CommunityScreen() {
         }
         renderItem={({ item }) => {
           const image = assetUrl(item.imageUrl);
+          const media = resolvePostMedia(item);
+          const clipUri = media.uri;
+          // Render a playable video whenever a usable URL exists — older
+          // backends store these as `text` posts with the URL in the body.
+          const isClip = !!clipUri && !image;
           const busy = busyId === item.id;
           return (
             <View style={styles.postCard}>
@@ -553,10 +707,23 @@ export default function CommunityScreen() {
               </View>
 
               <Pressable onPress={() => router.push(`/community/${item.id}`)}>
-                <Text style={styles.body}>{item.body || (image ? "Image shared on WALLORA" : "")}</Text>
+                <Text style={styles.body}>
+                  {media.body || (image ? "Image shared on WALLORA" : isClip ? "Video shared on WALLORA" : "")}
+                </Text>
               </Pressable>
 
-              {image ? (
+              {isClip && clipUri ? (
+                <ChannelClipCard
+                  uri={clipUri}
+                  title={item.channelName ?? "WALLORA video"}
+                  subtitle={
+                    item.channelGroup ??
+                    (item.videoUrl ? "9s clip · WALLORA TV" : "Streaming on WALLORA")
+                  }
+                />
+              ) : null}
+
+              {image && !isClip ? (
                 <Image source={{ uri: image }} style={styles.postImage} resizeMode="cover" />
               ) : null}
 
@@ -598,6 +765,16 @@ export default function CommunityScreen() {
                   <Ionicons name="share-outline" size={16} color={C.textSoft} />
                   <Text style={styles.actionText}>Share</Text>
                 </Pressable>
+                {canDeletePost(user, item) ? (
+                  <Pressable
+                    onPress={() => deletePost(item)}
+                    disabled={busy}
+                    style={[styles.action, styles.deleteAction]}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={C.error} />
+                    <Text style={[styles.actionText, styles.deleteActionText]}>Delete</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </View>
           );
@@ -609,6 +786,7 @@ export default function CommunityScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   refreshButton: {
     width: 36,
     height: 36,
@@ -793,6 +971,8 @@ const styles = StyleSheet.create({
   },
   actionActive: { backgroundColor: C.raised },
   actionText: { fontSize: 12, fontWeight: "700", color: C.textSoft },
+  deleteAction: { backgroundColor: "rgba(255,90,90,0.08)" },
+  deleteActionText: { color: C.error },
   state: { alignItems: "center", paddingVertical: 64, gap: S.sm },
   stateText: { fontSize: 15, fontWeight: "700", color: C.text, textAlign: "center", marginTop: 6 },
   stateSub: { fontSize: 12, color: C.muted, textAlign: "center", paddingHorizontal: S.xl, lineHeight: 18 },

@@ -75,7 +75,6 @@ export async function PATCH(request: NextRequest) {
   for (const key of ALLOWED) {
     const value = (body as Record<string, unknown>)[key];
     if (value !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (patch as any)[key] = value;
     }
   }

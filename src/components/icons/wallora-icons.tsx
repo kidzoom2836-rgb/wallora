@@ -63,6 +63,15 @@ export function DownloadIcon({ className, size, strokeWidth }: IconProps) {
   );
 }
 
+export function SmartphoneIcon({ className, size, strokeWidth }: IconProps) {
+  return (
+    <svg {...base(size, strokeWidth)} className={className}>
+      <rect x="7" y="2" width="10" height="20" rx="2" />
+      <path d="M11 18h2" />
+    </svg>
+  );
+}
+
 export function ShareIcon({ className, size, strokeWidth }: IconProps) {
   return (
     <svg {...base(size, strokeWidth)} className={className}>

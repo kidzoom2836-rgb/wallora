@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireRole, ROLES } from "@/lib/auth-helpers";
 import { hasVerification } from "@/lib/verification/store";
+import { notifyNewWallpaper } from "@/lib/push/send";
 
 const ALLOWED_STATUSES = ["approved", "rejected", "flagged"] as const;
 type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
@@ -64,7 +65,18 @@ export async function PATCH(
   // audit log metadata.
   const existing = await db.wallpaper.findUnique({
     where: { id },
-    select: { id: true, status: true, title: true, slug: true, userId: true },
+    select: {
+      id: true,
+      status: true,
+      title: true,
+      slug: true,
+      userId: true,
+      creator: {
+        select: {
+          profile: { select: { displayName: true, username: true } },
+        },
+      },
+    },
   });
   if (!existing) {
     return NextResponse.json(
@@ -121,6 +133,19 @@ export async function PATCH(
       }),
     },
   });
+
+  // New public wallpapers are a push-worthy event. Keep the fan-out off the
+  // moderation response path so Expo outages never block publishing.
+  if (nextStatus === "approved" && existing.status !== "approved") {
+    void notifyNewWallpaper({
+      wallpaperId: existing.id,
+      title: existing.title,
+      slug: updated.slug,
+      creatorId: existing.userId,
+      creatorName:
+        existing.creator?.profile?.displayName ?? existing.creator?.profile?.username ?? null,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ data: updated });
 }

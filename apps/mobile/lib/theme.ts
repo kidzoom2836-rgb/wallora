@@ -3,7 +3,7 @@
  * Single source of truth for colors, tiers, spacing and typography.
  */
 
-export const C = {
+export const BASE_COLORS = {
   bg: "#0B0C0F",
   bgDeep: "#07080A",
   bgElevated: "#0F1116",
@@ -14,6 +14,7 @@ export const C = {
   textSoft: "#C9CCD3",
   muted: "#9296A1",
   mutedDark: "#646874",
+  mutedDim: "rgba(146,150,161,0.14)",
   accent: "#D7B879",
   accentBright: "#F0D9A8",
   accentDim: "rgba(215,184,121,0.14)",
@@ -35,6 +36,10 @@ export const C = {
   overlayLight: "rgba(0,0,0,0.42)",
 } as const;
 
+/** Mutable palette. Theme presets in lib/appThemes.ts update these values. */
+export type ThemeColors = { -readonly [K in keyof typeof BASE_COLORS]: string };
+export const C: ThemeColors = { ...BASE_COLORS };
+
 export type VerificationTier = "free" | "verified" | "premium" | "supreme";
 
 export const TIER_META: Record<
@@ -44,29 +49,45 @@ export const TIER_META: Record<
   free: {
     label: "Free verified",
     short: "FREE",
-    color: C.muted,
-    dim: "rgba(146,150,161,0.14)",
+    get color() {
+      return C.muted;
+    },
+    get dim() {
+      return C.mutedDim;
+    },
     rank: 0,
   },
   verified: {
     label: "Verified creator",
     short: "VERIFIED",
-    color: C.blue,
-    dim: C.blueDim,
+    get color() {
+      return C.blue;
+    },
+    get dim() {
+      return C.blueDim;
+    },
     rank: 1,
   },
   premium: {
     label: "Premium creator",
     short: "PREMIUM",
-    color: C.gold,
-    dim: C.goldDim,
+    get color() {
+      return C.gold;
+    },
+    get dim() {
+      return C.goldDim;
+    },
     rank: 2,
   },
   supreme: {
     label: "Supreme creator",
     short: "SUPREME",
-    color: C.supreme,
-    dim: C.supremeDim,
+    get color() {
+      return C.supreme;
+    },
+    get dim() {
+      return C.supremeDim;
+    },
     rank: 3,
   },
 };
@@ -110,7 +131,9 @@ export const SHADOW = {
     elevation: 12,
   },
   glowGold: {
-    shadowColor: C.accent,
+    get shadowColor() {
+      return C.accent;
+    },
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.28,
     shadowRadius: 16,

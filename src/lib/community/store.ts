@@ -28,7 +28,7 @@ export type AuthorSnapshot = {
 
 type StoredAuthor = Omit<AuthorSnapshot, "tier"> & { tier?: CommunityTier };
 
-export type PostKind = "text" | "wallpaper" | "project" | "image";
+export type PostKind = "text" | "wallpaper" | "project" | "image" | "channel_clip";
 
 export type RepostPreview = {
   id: string;
@@ -49,6 +49,13 @@ export type StoredPost = {
   kind: PostKind;
   refId: string | null;
   imageUrl: string | null;
+  channelId?: string | null;
+  channelName?: string | null;
+  channelGroup?: string | null;
+  streamUrl?: string | null;
+  previewUrl?: string | null;
+  videoUrl?: string | null;
+  durationSec?: number | null;
   repostOf: StoredRepostPreview | null;
   likeCount: number;
   commentCount: number;
@@ -64,6 +71,13 @@ export type CommunityPost = {
   kind: PostKind;
   refId: string | null;
   imageUrl: string | null;
+  channelId?: string | null;
+  channelName?: string | null;
+  channelGroup?: string | null;
+  streamUrl?: string | null;
+  previewUrl?: string | null;
+  videoUrl?: string | null;
+  durationSec?: number | null;
   repostOf: RepostPreview | null;
   likeCount: number;
   commentCount: number;
@@ -153,6 +167,13 @@ function hydratePost(
     kind: post.kind,
     refId: post.refId,
     imageUrl: post.imageUrl,
+    channelId: post.channelId ?? null,
+    channelName: post.channelName ?? null,
+    channelGroup: post.channelGroup ?? null,
+    streamUrl: post.streamUrl ?? null,
+    previewUrl: post.previewUrl ?? null,
+    videoUrl: post.videoUrl ?? null,
+    durationSec: post.durationSec ?? null,
     repostOf: post.repostOf
       ? {
           id: post.repostOf.id,
@@ -359,6 +380,10 @@ async function resolveRef(
 ): Promise<{ kind: PostKind; refId: string | null; imageUrl: string | null }> {
   if (!refId) return { kind: "text", refId: null, imageUrl: null };
 
+  if (kind === "channel_clip") {
+    return { kind, refId, imageUrl: null };
+  }
+
   if (kind === "image") {
     const key = ownerId ? normalizeUploadKey(refId, ownerId) : null;
     if (!key) return { kind: "text", refId: null, imageUrl: null };
@@ -454,7 +479,14 @@ async function liveRefKeys(posts: StoredPost[]): Promise<Set<string>> {
 function withoutDeadRef(post: StoredPost, liveKeys: Set<string>): StoredPost {
   // Direct image posts are validated against storage at creation time and do
   // not have a database row that can become "unlisted".
-  if (!post.refId || post.kind === "image" || liveKeys.has(`${post.kind}:${post.refId}`)) return post;
+  if (
+    !post.refId ||
+    post.kind === "image" ||
+    post.kind === "channel_clip" ||
+    liveKeys.has(`${post.kind}:${post.refId}`)
+  ) {
+    return post;
+  }
   return { ...post, kind: "text", refId: null, imageUrl: null };
 }
 
@@ -494,8 +526,14 @@ export async function listPosts(opts: {
   page: number;
   limit: number;
   viewerId: string | null;
+  kind?: PostKind;
 }): Promise<{ items: CommunityPost[]; pagination: FeedPagination }> {
-  const posts = await readPosts();
+  const allPosts = await readPosts();
+  // A client can ask for only video clips (WALLORA Reels). Applied before
+  // search/sort/pagination so totals describe the filtered feed.
+  const posts = opts.kind
+    ? allPosts.filter((post) => post.kind === opts.kind)
+    : allPosts;
   const [likes, reposts] = await Promise.all([
     readMemberships(LIKES_KEY),
     readMemberships(REPOSTS_KEY),
@@ -585,6 +623,13 @@ export async function createPost(input: {
   repostOf: string | null;
   author: AuthorSnapshot;
   ownerId: string;
+  channelId?: string | null;
+  channelName?: string | null;
+  channelGroup?: string | null;
+  streamUrl?: string | null;
+  previewUrl?: string | null;
+  videoUrl?: string | null;
+  durationSec?: number | null;
 }): Promise<CommunityPost> {
   const posts = await readPosts();
   const ref = await resolveRef(input.kind, input.refId, input.ownerId);
@@ -599,6 +644,13 @@ export async function createPost(input: {
     kind: ref.kind,
     refId: ref.refId,
     imageUrl: ref.imageUrl,
+    channelId: input.channelId ?? null,
+    channelName: input.channelName ?? null,
+    channelGroup: input.channelGroup ?? null,
+    streamUrl: input.streamUrl ?? null,
+    previewUrl: input.previewUrl ?? null,
+    videoUrl: input.videoUrl ?? null,
+    durationSec: input.durationSec ?? null,
     repostOf: source
       ? { id: source.id, author: source.author, body: source.body }
       : null,

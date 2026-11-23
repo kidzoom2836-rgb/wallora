@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import {
   Activity,
   BadgeCheck,
+  Bell,
   Bot,
   Check,
   ChevronLeft,
@@ -28,6 +29,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Tv,
   UploadCloud,
   Users,
   X,
@@ -44,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TvChannelsTab } from "@/components/admin/tv-channels-tab";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 
@@ -143,14 +146,24 @@ type AIConfig = {
   capabilityGroups?: { id: string; label: string; description: string }[];
 };
 
-type TabId = "overview" | "uploads" | "verification" | "people" | "ai" | "audit";
+type TabId =
+  | "overview"
+  | "uploads"
+  | "verification"
+  | "people"
+  | "tv"
+  | "ai"
+  | "notifications"
+  | "audit";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutDashboard; hint: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, hint: "Platform pulse" },
   { id: "uploads", label: "Uploads", icon: UploadCloud, hint: "Moderation queue" },
   { id: "verification", label: "Verification", icon: BadgeCheck, hint: "Badge applications" },
   { id: "people", label: "People & Roles", icon: Users, hint: "Roles & official tick" },
+  { id: "tv", label: "WALLORA TV", icon: Tv, hint: "Database channel guide" },
   { id: "ai", label: "AI & Models", icon: Cpu, hint: "NVIDIA / text / image" },
+  { id: "notifications", label: "Push Alerts", icon: Bell, hint: "Features & drops" },
   { id: "audit", label: "Audit Log", icon: FileClock, hint: "Admin actions" },
 ];
 
@@ -266,7 +279,9 @@ export function AdminKenyaPanel({ user }: { user: { name: string; email: string 
           {tab === "uploads" && <UploadsTab />}
           {tab === "verification" && <VerificationTab />}
           {tab === "people" && <PeopleTab />}
+          {tab === "tv" && <TvChannelsTab />}
           {tab === "ai" && <AITab />}
+          {tab === "notifications" && <NotificationsTab />}
           {tab === "audit" && <AuditTab />}
         </main>
       </div>
@@ -473,7 +488,6 @@ function UploadsTab() {
               <div key={w.id} className="overflow-hidden rounded-2xl border border-border bg-surface">
                 <div className="relative aspect-[4/3] bg-raised">
                   {w.asset?.objectKey ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={w.asset.objectKey} alt={w.title} className="size-full object-cover" />
                   ) : (
                     <div className="flex size-full items-center justify-center text-secondary-text">
@@ -1255,6 +1269,157 @@ function AuditTab() {
         total={pagination?.total ?? 0}
         onPage={setPage}
       />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Push alerts                                                                */
+/* -------------------------------------------------------------------------- */
+
+function NotificationsTab() {
+  const qc = useQueryClient();
+  const [title, setTitle] = useState("New WALLORA feature");
+  const [body, setBody] = useState("Something new is ready for you. Open WALLORA to see it.");
+  const [url, setUrl] = useState("/discover");
+
+  const status = useQuery<{
+    data: { eligibleUsers: number; accessTokenConfigured: boolean };
+  }>({
+    queryKey: ["ak-push-status"],
+    queryFn: () => jsonFetch("/api/v1/admin/push/broadcast"),
+    refetchInterval: 60000,
+  });
+
+  const send = useMutation({
+    mutationFn: () =>
+      jsonFetch<{
+        data: { audience: string; attempted: number; sent: number; errors: string[] };
+      }>("/api/v1/admin/push/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body, url, audience: "all" }),
+      }),
+    onSuccess: (payload) => {
+      toast.success(`Push sent to ${payload.data?.sent ?? 0} device(s)`, {
+        description:
+          payload.data?.errors?.length === 0
+            ? "Expo accepted every notification."
+            : payload.data?.errors?.[0],
+      });
+      qc.invalidateQueries({ queryKey: ["ak-audit"] });
+      qc.invalidateQueries({ queryKey: ["ak-push-status"] });
+    },
+    onError: (e: Error) => toast.error("Broadcast failed", { description: e.message }),
+  });
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle
+        title="Push alerts"
+        subtitle="Announce new features or drops to everyone who opted in on web or mobile."
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Panel title="Eligible devices">
+          <Metric
+            label="Opted-in accounts"
+            value={fmt(status.data?.data.eligibleUsers ?? 0)}
+          />
+        </Panel>
+        <Panel title="Push security">
+          <Metric
+            label="Expo access token"
+            value={status.data?.data.accessTokenConfigured ? "Configured" : "Default API"}
+          />
+        </Panel>
+        <Panel title="Automatic alerts">
+          <p className="text-sm text-secondary-text">
+            Approving a wallpaper already notifies its creator and followers. AI artworks notify the
+            creator when generation finishes.
+          </p>
+        </Panel>
+      </div>
+
+      <Panel
+        title="Compose announcement"
+        subtitle="Keep it short and useful. Tapping opens the deep link below inside the app."
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTitle("New WALLORA feature");
+                setBody("A fresh creative tool is live. Open WALLORA to try it now.");
+                setUrl("/discover");
+              }}
+            >
+              New feature preset
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTitle("New wallpaper drop");
+                setBody("Fresh square and portrait art just landed in Discover.");
+                setUrl("/discover?orientation=square");
+              }}
+            >
+              Wallpaper drop preset
+            </Button>
+          </div>
+          <div>
+            <label className="text-xs text-secondary-text">Title</label>
+            <Input
+              className="mt-1"
+              value={title}
+              maxLength={80}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-secondary-text">Message</label>
+            <textarea
+              className="mt-1 w-full rounded-md border border-border bg-background p-3 text-sm"
+              rows={3}
+              maxLength={240}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-secondary-text">In-app deep link</label>
+            <Input
+              className="mt-1"
+              value={url}
+              maxLength={180}
+              placeholder="/discover"
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => status.refetch()}
+              disabled={status.isFetching}
+            >
+              <RefreshCw className={cn("size-4", status.isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+            <Button
+              size="sm"
+              disabled={send.isPending || title.trim().length < 2 || body.trim().length < 2}
+              onClick={() => send.mutate()}
+            >
+              {send.isPending ? <Loader2 className="size-4 animate-spin" /> : <Bell className="size-4" />}
+              Send to all devices
+            </Button>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 }

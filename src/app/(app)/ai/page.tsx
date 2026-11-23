@@ -4,7 +4,7 @@ import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Paperclip, FileText, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,11 +47,21 @@ type Conversation = {
   createdAt: string;
 };
 
+type Attachment = {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  kind: "image" | "text" | "pdf";
+  url: string;
+};
+
 type Message = {
   id: string;
   role: string;
   content: string;
   createdAt: string;
+  attachments?: Attachment[];
 };
 
 type Suggestion = {
@@ -116,6 +126,9 @@ export default function AiChatPage() {
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [mode, setMode] = React.useState("creative-assistant");
   const [input, setInput] = React.useState("");
+  const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const [uploadingFiles, setUploadingFiles] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [sendingTo, setSendingTo] = React.useState<string | null>(null);
   const [stage, setStage] = React.useState(0);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -197,7 +210,15 @@ export default function AiChatPage() {
   const { guard } = useVerificationGate();
 
   const sendMutation = useMutation({
-    mutationFn: async ({ content, convId }: { content: string; convId: string }) => {
+    mutationFn: async ({
+      content,
+      convId,
+      attachmentIds,
+    }: {
+      content: string;
+      convId: string;
+      attachmentIds: string[];
+    }) => {
       const controller = new AbortController();
       abortRef.current = controller;
       const timeout = window.setTimeout(() => controller.abort(), 90000);
@@ -205,7 +226,7 @@ export default function AiChatPage() {
         const res = await fetch(`/api/v1/ai/conversations/${convId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, attachmentIds }),
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -263,11 +284,34 @@ export default function AiChatPage() {
     setActiveId(id);
   };
 
+  const uploadFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const selected = Array.from(fileList).slice(0, 4);
+    setUploadingFiles(true);
+    try {
+      const form = new FormData();
+      for (const file of selected) form.append("files", file);
+      const res = await fetch("/api/v1/ai/attachments", { method: "POST", body: form });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error?.message ?? "Upload failed");
+      const uploaded = (payload.data ?? []) as Attachment[];
+      setAttachments((prev) => [...prev, ...uploaded].slice(0, 4));
+      toast.success(`${uploaded.length} file${uploaded.length === 1 ? "" : "s"} ready for Aurora`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not attach that file");
+    } finally {
+      setUploadingFiles(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleSend = async (override?: string) => {
     const content = (override ?? input).trim();
-    if (!content || isBusy) return;
+    const attachmentIds = attachments.map((a) => a.id);
+    if ((!content && attachmentIds.length === 0) || isBusy || uploadingFiles) return;
     guard(async () => {
       setInput("");
+      setAttachments([]);
       try {
         let convId: string;
         if (activeId) {
@@ -277,9 +321,10 @@ export default function AiChatPage() {
           convId = String(created.data.id);
         }
         setSendingTo(convId);
-        sendMutation.mutate({ content, convId });
+        sendMutation.mutate({ content, convId, attachmentIds });
       } catch {
         setInput(content);
+        setAttachments((prev) => [...prev, ...attachments]);
       }
     }, { action: "chat with WALLORA AI" });
   };
@@ -428,12 +473,65 @@ export default function AiChatPage() {
         {/* Composer — stable bottom bar */}
         <div className="border-t border-border bg-surface/60 px-4 py-3">
           <div className="mx-auto max-w-2xl">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json,.log"
+              className="hidden"
+              onChange={(e) => void uploadFiles(e.target.files)}
+            />
+
+            {attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {attachments.map((a) => (
+                  <span
+                    key={a.id}
+                    className="inline-flex max-w-[220px] items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs text-foreground"
+                  >
+                    {a.kind === "image" ? (
+                      <img src={a.url} alt="" className="size-5 rounded object-cover" />
+                    ) : (
+                      <FileText className="size-4 shrink-0 text-primary" />
+                    )}
+                    <span className="truncate">{a.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((prev) => prev.filter((f) => f.id !== a.id))}
+                      className="text-secondary-text transition hover:text-destructive"
+                      aria-label={`Remove ${a.name}`}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="relative flex items-end gap-2 rounded-xl border border-border bg-raised p-2 focus-within:border-primary/40">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isBusy || uploadingFiles || attachments.length >= 4}
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg text-secondary-text transition hover:bg-surface hover:text-primary disabled:opacity-40"
+                title="Attach photos or documents for Aurora"
+                aria-label="Attach photos or documents"
+              >
+                {uploadingFiles ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Paperclip className="size-4" />
+                )}
+              </button>
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask WALLORA AI anything…"
+                placeholder={
+                  attachments.length > 0
+                    ? "Ask Aurora about these files…"
+                    : "Ask WALLORA AI anything…"
+                }
                 rows={1}
                 className="min-h-[40px] max-h-[120px] flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm focus-visible:ring-0"
                 disabled={isBusy}
@@ -442,7 +540,7 @@ export default function AiChatPage() {
                 size="icon"
                 className="h-9 w-9 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => void handleSend()}
-                disabled={!input.trim() || isBusy}
+                disabled={(!input.trim() && attachments.length === 0) || isBusy || uploadingFiles}
                 aria-label="Send"
               >
                 {isBusy ? (
@@ -453,7 +551,8 @@ export default function AiChatPage() {
               </Button>
             </div>
             <p className="mt-1.5 px-2 text-[11px] text-secondary-text">
-              Enter to send · Shift+Enter for newline
+              Attach images, PDF, TXT, MD, CSV or JSON (max 4 files, 10 MB each) · Enter to send ·
+              Shift+Enter for newline
             </p>
           </div>
         </div>
@@ -522,6 +621,26 @@ function MessageBubble({
         )}
       >
         <p className="whitespace-pre-wrap">{text}</p>
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {message.attachments.map((a) => (
+              <a
+                key={a.id}
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex max-w-[200px] items-center gap-2 rounded-lg border border-border bg-background/60 px-2 py-1.5 text-xs text-secondary-text transition hover:border-primary/40 hover:text-foreground"
+              >
+                {a.kind === "image" ? (
+                  <img src={a.url} alt="" className="size-5 rounded object-cover" />
+                ) : (
+                  <FileText className="size-4 shrink-0 text-primary" />
+                )}
+                <span className="truncate">{a.name}</span>
+              </a>
+            ))}
+          </div>
+        )}
         {suggestions.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {suggestions.map((s, i) => (

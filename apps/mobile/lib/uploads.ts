@@ -1,4 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
+import { fetch as expoFetch } from "expo/fetch";
+import { File as ExpoFile, Paths } from "expo-file-system";
+import { Platform } from "react-native";
 
 import { apiFetch, apiJson } from "./api";
 import { assetUrl } from "./config";
@@ -48,6 +51,81 @@ function mimeFromName(fileName: string): string {
   if (ext === "png") return "image/png";
   if (ext === "webp") return "image/webp";
   return "image/jpeg";
+}
+
+function extensionForMime(mimeType: string, fileName: string): string {
+  if (/png/i.test(mimeType)) return "png";
+  if (/webp/i.test(mimeType)) return "webp";
+  if (/quicktime/i.test(mimeType)) return "mov";
+  if (/webm/i.test(mimeType)) return "webm";
+  if (/m4v/i.test(mimeType)) return "m4v";
+  if (/mp4/i.test(mimeType)) return "mp4";
+  const existing = fileName.split(".").pop()?.toLowerCase();
+  return existing && /^[a-z0-9]{2,5}$/.test(existing) ? existing : "jpg";
+}
+
+function safeFileName(fileName: string, mimeType: string): string {
+  const base = fileName
+    .split(/[\\/]/)
+    .pop()
+    ?.replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || `wallora-${Date.now()}`;
+  const ext = extensionForMime(mimeType, base);
+  return base.toLowerCase().endsWith(`.${ext}`) ? base : `${base}.${ext}`;
+}
+
+export type FormUploadFile = {
+  blob: Blob;
+  fileName: string;
+  cleanup: () => void;
+};
+
+/**
+ * React Native's `{ uri, name, type }` FormData object is not a real Blob and
+ * Expo's SDK 58 fetch rejects it. Copy the picked asset into a typed
+ * expo-file-system File so it can be appended as a standards-compliant Blob.
+ */
+export async function toFormUploadFile(input: {
+  uri: string;
+  fileName: string;
+  mimeType: string;
+}): Promise<FormUploadFile> {
+  const fileName = safeFileName(input.fileName, input.mimeType);
+
+  if (Platform.OS === "web") {
+    const response = await fetch(input.uri);
+    const source = await response.blob();
+    return {
+      blob: source,
+      fileName,
+      cleanup: () => {},
+    };
+  }
+
+  const target = new ExpoFile(
+    Paths.cache,
+    `wallora-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${fileName}`,
+  );
+  try {
+    await new ExpoFile(input.uri).copy(target, { overwrite: true });
+  } catch {
+    // Some Android gallery URIs are content:// values that the modern File
+    // constructor cannot copy directly; the legacy subpath still accepts them.
+    const legacy = await import("expo-file-system/legacy");
+    await legacy.copyAsync({ from: input.uri, to: target.uri });
+  }
+
+  return {
+    blob: target as unknown as Blob,
+    fileName,
+    cleanup: () => {
+      try {
+        target.delete();
+      } catch {
+        /* temporary upload copies are safe to leave in the cache */
+      }
+    },
+  };
 }
 
 function normalizeAsset(asset: ImagePicker.ImagePickerAsset): PickedImage {
@@ -121,38 +199,39 @@ export async function pickCommunityImage(
 }
 
 async function uploadToPresigned(image: PickedImage, upload: PresignUpload): Promise<void> {
+  const file = await toFormUploadFile(image);
   const form = new FormData();
   Object.entries(upload.fields ?? {}).forEach(([key, value]) => form.append(key, String(value)));
-  form.append("file", {
-    uri: image.uri,
-    name: image.fileName,
-    type: image.mimeType,
-  } as unknown as Blob);
+  form.append("file", file.blob, file.fileName);
 
   const isAbsolute = /^https?:\/\//i.test(upload.uploadUrl);
-  const response = isAbsolute
-    ? await fetch(upload.uploadUrl, {
-        method: upload.method ?? "POST",
-        headers: upload.headers ?? {},
-        body: form,
-      })
-    : await apiFetch(upload.uploadUrl, {
-        method: upload.method ?? "POST",
-        headers: upload.headers ?? {},
-        body: form,
-        rawBody: true,
-      });
+  try {
+    const response = isAbsolute
+      ? await expoFetch(upload.uploadUrl, {
+          method: upload.method ?? "POST",
+          headers: upload.headers ?? {},
+          body: form,
+        })
+      : await apiFetch(upload.uploadUrl, {
+          method: upload.method ?? "POST",
+          headers: upload.headers ?? {},
+          body: form,
+          rawBody: true,
+        });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    let message = `Upload failed (${response.status}).`;
-    try {
-      const json = text ? JSON.parse(text) : null;
-      message = json?.error?.message ?? message;
-    } catch {
-      /* non-JSON error */
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      let message = `Upload failed (${response.status}).`;
+      try {
+        const json = text ? JSON.parse(text) : null;
+        message = json?.error?.message ?? message;
+      } catch {
+        /* non-JSON error */
+      }
+      throw new Error(message);
     }
-    throw new Error(message);
+  } finally {
+    file.cleanup();
   }
 }
 
@@ -242,4 +321,161 @@ export async function uploadWallpaperImages(images: PickedImage[]): Promise<Wall
 export async function uploadCommunityImage(image: PickedImage): Promise<UploadedImage> {
   const [uploaded] = await uploadImages([image]);
   return uploaded;
+}
+
+export const MAX_CLIP_BYTES = 12 * 1024 * 1024;
+const ALLOWED_CLIP_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v"];
+
+export type PickedClip = {
+  uri: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  durationMs?: number;
+};
+
+export type UploadedClip = {
+  key: string;
+  videoUrl: string;
+  contentType: string;
+  size: number;
+};
+
+/** Pick a short video from the gallery for a community channel preview. */
+export async function pickChannelClip(): Promise<PickedClip | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error("Photo library access is required to attach a preview clip.");
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["videos"],
+    videoMaxDuration: 9,
+    allowsEditing: false,
+    quality: 1,
+  });
+  if (result.canceled || !result.assets?.length) return null;
+
+  const asset = result.assets[0];
+  const fileName = asset.fileName || `wallora-clip-${Date.now()}.mp4`;
+  const mimeType = asset.mimeType || "video/mp4";
+  if (!ALLOWED_CLIP_TYPES.includes(mimeType)) {
+    throw new Error("Choose an MP4, WebM or MOV video.");
+  }
+  const fileSize = asset.fileSize ?? 0;
+  if (fileSize > MAX_CLIP_BYTES) {
+    throw new Error("Preview clips must be smaller than 12MB.");
+  }
+  const durationMs = asset.duration ?? undefined;
+  if (durationMs && durationMs > 10_500) {
+    throw new Error("Choose a clip that is 9 seconds or shorter.");
+  }
+  return { uri: asset.uri, fileName, mimeType, fileSize, durationMs };
+}
+
+export type CaptureChannelClipInput = {
+  channelId?: string;
+  streamUrl: string;
+  durationSec?: number;
+  userId?: string;
+};
+
+async function fetchHlsText(url: string): Promise<string> {
+  const response = await expoFetch(url, {
+    headers: { Accept: "application/vnd.apple.mpegurl,text/plain,*/*" },
+    // Cleartext is allowed by the WALLORA Android network plugin.
+  });
+  if (!response.ok) throw new Error(`Channel playlist failed (${response.status}).`);
+  return response.text();
+}
+
+/**
+ * Validate an HLS stream and share it directly. Older backends cannot remux
+ * captured TS segments into MP4, and raw TS is not playable by expo-video.
+ * Sharing the HLS URL keeps the community card playable instead of silently
+ * posting a dead video file.
+ */
+async function captureOnDevice(input: CaptureChannelClipInput): Promise<UploadedClip> {
+  if (!input.userId) throw new Error("Sign in to share a live preview.");
+  const playlist = await fetchHlsText(input.streamUrl);
+  if (!playlist.includes("#EXTM3U")) {
+    throw new Error("This channel does not provide a playable live stream.");
+  }
+  return {
+    key: `live:${input.channelId ?? "channel"}`,
+    videoUrl: input.streamUrl,
+    contentType: "application/vnd.apple.mpegurl",
+    size: 0,
+  };
+}
+
+/**
+ * Capture a short preview directly from a live channel — never from the
+ * user's gallery. The backend endpoint is preferred; older deployments fall
+ * back to an on-device HLS tail capture through the existing storage API.
+ */
+export async function captureChannelClip(
+  input: CaptureChannelClipInput,
+): Promise<UploadedClip> {
+  try {
+    const data = await apiJson<{
+      key?: string;
+      videoUrl?: string;
+      contentType?: string;
+      size?: number;
+    }>("/api/v1/community/clips/capture", {
+      method: "POST",
+      body: JSON.stringify({
+        channelId: input.channelId,
+        streamUrl: input.streamUrl,
+        durationSec: input.durationSec ?? 9,
+      }),
+    });
+    if (data?.videoUrl) {
+      return {
+        key: data.key ?? "",
+        videoUrl: assetUrl(data.videoUrl) ?? data.videoUrl,
+        contentType: data.contentType ?? "video/mp4",
+        size: data.size ?? 0,
+      };
+    }
+  } catch {
+    // Deployment without the capture route — try the on-device path.
+  }
+  return captureOnDevice(input);
+}
+
+/** Upload a channel preview clip to the WALLORA backend. */
+export async function uploadChannelClip(clip: PickedClip): Promise<UploadedClip> {
+  const file = await toFormUploadFile(clip);
+  const form = new FormData();
+  form.append("file", file.blob, file.fileName);
+
+  try {
+    const response = await apiFetch("/api/v1/community/clips", {
+      method: "POST",
+      body: form,
+      rawBody: true,
+    });
+    const text = await response.text();
+    let payload: any = {};
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      /* non-JSON error */
+    }
+    if (!response.ok) {
+      throw new Error(payload?.error?.message ?? `Upload failed (${response.status}).`);
+    }
+    const data = payload?.data;
+    if (!data?.videoUrl) throw new Error("The upload service returned an invalid response.");
+    return {
+      key: data.key,
+      videoUrl: assetUrl(data.videoUrl) ?? data.videoUrl,
+      contentType: data.contentType,
+      size: data.size,
+    };
+  } finally {
+    file.cleanup();
+  }
 }

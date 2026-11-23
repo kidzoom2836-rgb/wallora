@@ -45,6 +45,18 @@ interface Category {
   wallpaperCount: number;
 }
 
+interface CreatorResult {
+  id: string;
+  username: string;
+  displayName: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  verified?: boolean;
+  tier?: string;
+  wallpaperCount?: number;
+  followerCount?: number;
+}
+
 const SORTS = [
   { id: "newest", label: "Newest" },
   { id: "popular", label: "Popular" },
@@ -55,6 +67,7 @@ const SORTS = [
 export default function DiscoverScreen() {
   const router = useRouter();
   const [wallpapers, setWallpapers] = useState<Wallpaper[]>([]);
+  const [creators, setCreators] = useState<CreatorResult[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,18 +91,28 @@ export default function DiscoverScreen() {
 
   const load = useCallback(async () => {
     setError(null);
+    const plainQuery = debouncedQuery.replace(/^@+/, "").trim();
     const params = new URLSearchParams({ page: "1", limit: "24", sort });
     if (category) params.set("category", category);
-    if (debouncedQuery) params.set("q", debouncedQuery);
+    if (plainQuery) params.set("q", plainQuery);
     try {
-      const data = await apiJson<{ items: Wallpaper[]; pagination: { total: number } }>(
-        `/api/v1/wallpapers?${params.toString()}`,
-      );
-      setWallpapers(data.items ?? []);
-      setTotal(data.pagination?.total ?? data.items?.length ?? 0);
+      const [wallData, creatorData] = await Promise.all([
+        apiJson<{ items: Wallpaper[]; pagination: { total: number } }>(
+          `/api/v1/wallpapers?${params.toString()}`,
+        ),
+        plainQuery.length >= 2
+          ? apiJson<CreatorResult[]>(
+              `/api/v1/users/search?q=${encodeURIComponent(plainQuery)}&limit=6`,
+            ).catch(() => [] as CreatorResult[])
+          : Promise.resolve([] as CreatorResult[]),
+      ]);
+      setWallpapers(wallData.items ?? []);
+      setTotal(wallData.pagination?.total ?? wallData.items?.length ?? 0);
+      setCreators(creatorData ?? []);
     } catch (e: any) {
       setError(e?.message ?? "Could not load wallpapers.");
       setWallpapers([]);
+      setCreators([]);
     }
   }, [category, sort, debouncedQuery]);
 
@@ -132,7 +155,7 @@ export default function DiscoverScreen() {
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Search wallpapers, tags, creators…"
+                placeholder="Search wallpapers, moods or @creators…"
                 placeholderTextColor={C.muted}
                 style={styles.searchInput}
                 returnKeyType="search"
@@ -143,6 +166,44 @@ export default function DiscoverScreen() {
                 </Pressable>
               )}
             </View>
+
+            {creators.length > 0 && (
+              <View style={styles.creatorsBlock}>
+                <View style={styles.creatorHeading}>
+                  <Ionicons name="people-outline" size={15} color={C.accent} />
+                  <Text style={styles.creatorHeadingText}>
+                    {debouncedQuery.startsWith("@") ? "Creators" : "People on WALLORA"}
+                  </Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.creatorRow}>
+                  {creators.map((creator) => (
+                    <Pressable
+                      key={creator.id}
+                      style={({ pressed }) => [styles.creatorCard, pressed && styles.pressed]}
+                      onPress={() => router.push({ pathname: "/profile/[username]", params: { username: creator.username } })}
+                    >
+                      <View style={styles.creatorAvatarWrap}>
+                        {assetUrl(creator.avatarUrl) ? (
+                          <Image source={{ uri: assetUrl(creator.avatarUrl) }} style={styles.creatorAvatar} resizeMode="cover" />
+                        ) : (
+                          <Ionicons name="person-outline" size={18} color={C.accent} />
+                        )}
+                      </View>
+                      <Text style={styles.creatorName} numberOfLines={1}>
+                        {creator.displayName || creator.username}
+                      </Text>
+                      <View style={styles.creatorHandleRow}>
+                        <Text style={styles.creatorHandle} numberOfLines={1}>@{creator.username}</Text>
+                        {creator.verified ? <Ionicons name="checkmark-circle" size={12} color={C.accent} /> : null}
+                      </View>
+                      <Text style={styles.creatorMeta}>
+                        {creator.wallpaperCount ?? 0} walls · {creator.followerCount ?? 0} followers
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
               <Pressable onPress={() => setCategory("")} style={[styles.chip, !category && styles.chipActive]}>
@@ -241,6 +302,37 @@ const styles = StyleSheet.create({
   mark: { width: 44, height: 44, borderRadius: 14, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
   search: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1, borderColor: C.border, marginBottom: 14 },
   searchInput: { flex: 1, color: C.text, fontSize: 14 },
+  creatorsBlock: { marginBottom: 16 },
+  creatorHeading: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 9 },
+  creatorHeadingText: { color: C.accent, fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  creatorRow: { gap: 10 },
+  creatorCard: {
+    width: 148,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: "center",
+  },
+  creatorAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.raised,
+    borderWidth: 1,
+    borderColor: C.accent + "55",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  creatorAvatar: { width: 44, height: 44 },
+  creatorName: { color: C.text, fontSize: 12.5, fontWeight: "800", maxWidth: 124, textAlign: "center" },
+  creatorHandleRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  creatorHandle: { color: C.muted, fontSize: 10.5 },
+  creatorMeta: { color: C.muted, fontSize: 9.5, marginTop: 6, textAlign: "center" },
+  pressed: { opacity: 0.72 },
   chipRow: { gap: 8, marginBottom: 14 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
   chipActive: { backgroundColor: C.accent, borderColor: C.accent },
