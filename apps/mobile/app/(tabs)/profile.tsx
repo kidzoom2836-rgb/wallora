@@ -216,6 +216,9 @@ export default function ProfileScreen() {
             <MenuTile icon="code-slash-outline" label="Builder" onPress={() => router.push("/builder")} />
             <MenuTile icon="storefront-outline" label="Market" onPress={() => router.push("/marketplace")} />
             <MenuTile icon="people-outline" label="Community" onPress={() => router.push("/community")} />
+            {user?.role === "super_admin" ? (
+              <MenuTile icon="cloud-download-outline" label="Admin imports" onPress={() => router.push("/admin")} />
+            ) : null}
           </View>
 
           <SectionTitle title="Your wallpapers" subtitle="Artwork published from this account" />
