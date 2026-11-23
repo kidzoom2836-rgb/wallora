@@ -1,5 +1,8 @@
 // Production web app that powers the WALLORA mobile client.
-export const API_BASE = "https://wallora-inky.vercel.app";
+// Override at build time with EXPO_PUBLIC_API_BASE_URL when pointing the app
+// at a staging deployment or a local tunnel.
+export const API_BASE =
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? "https://wallora-inky.vercel.app";
 
 /**
  * The web API stores asset references as absolute site paths

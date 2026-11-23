@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Image,
+  Modal,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,11 +18,18 @@ import { useRouter } from "expo-router";
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
 import { apiFetch, apiJson } from "../lib/api";
+import { APP_THEMES, getActiveThemeId, selectAppTheme, type AppThemeId } from "../lib/appThemes";
 import { assetUrl } from "../lib/config";
 import { C, R, S, tierMeta } from "../lib/theme";
 import { useAuth } from "../lib/auth";
 import { pickImages, uploadImages, type PickedImage } from "../lib/uploads";
 import { withVerification } from "../lib/verification";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushPreference,
+  sendTestNotification,
+} from "../lib/pushNotifications";
 
 type AppSettings = {
   theme: string;
@@ -82,7 +90,7 @@ function Banner({ message, tone }: { message: string; tone: "success" | "error" 
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, loading: authLoading, refresh } = useAuth();
+  const { user, loading: authLoading, refresh, signOut } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -96,6 +104,10 @@ export default function SettingsScreen() {
   const [uploading, setUploading] = useState<MediaKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; tone: "success" | "error" | "info" } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [appThemeId, setAppThemeId] = useState<AppThemeId>(() => getActiveThemeId());
+  const [themeBusy, setThemeBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) {
@@ -109,7 +121,12 @@ export default function SettingsScreen() {
         apiJson<MeResponse>("/api/v1/auth/me"),
       ]);
       if (savedSettings && typeof savedSettings === "object") {
-        setSettings({ ...DEFAULT_SETTINGS, ...savedSettings });
+        const localPush = await getPushPreference();
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...savedSettings,
+          pushNotifications: localPush || !!savedSettings.pushNotifications,
+        });
       }
       setAccount(me);
       setDisplayName(me?.profile?.displayName ?? me?.name ?? "");
@@ -169,6 +186,19 @@ export default function SettingsScreen() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const changeTheme = async (id: AppThemeId) => {
+    if (themeBusy || id === appThemeId) return;
+    setThemeBusy(true);
+    setNotice(null);
+    const changed = await selectAppTheme(id);
+    setAppThemeId(id);
+    setNotice({
+      text: changed ? "Theme applied. Rebuilding WALLORA…" : "That theme is already active.",
+      tone: "success",
+    });
+    setThemeBusy(false);
   };
 
   const pickMedia = async (kind: MediaKind) => {
@@ -271,6 +301,61 @@ export default function SettingsScreen() {
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const togglePush = async (value: boolean) => {
+    update("pushNotifications", value);
+    if (value) {
+      const enabled = await enablePushNotifications();
+      setNotice({
+        text: enabled
+          ? "Push notifications are active on this device."
+          : "Allow notifications in your device settings to receive WALLORA alerts.",
+        tone: enabled ? "success" : "info",
+      });
+    } else {
+      await disablePushNotifications();
+      setNotice({ text: "Push notifications turned off on this device.", tone: "info" });
+    }
+  };
+
+  const testPush = async () => {
+    const result = await sendTestNotification();
+    setNotice({
+      text: result.ok
+        ? "Test notification sent."
+        : result.message ?? "Enable push notifications first.",
+      tone: result.ok ? "success" : "info",
+    });
+  };
+
+  const handleSignOut = async () => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    try {
+      await signOut();
+      router.replace("/auth/login");
+    } catch (e: any) {
+      setNotice({ text: e?.message ?? "Could not sign out.", tone: "error" });
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    setNotice(null);
+    try {
+      await apiJson("/api/v1/account", { method: "DELETE" });
+      setConfirmDelete(false);
+      await signOut();
+      router.replace("/auth/login");
+    } catch (e: any) {
+      setNotice({ text: e?.message ?? "Could not delete your account.", tone: "error" });
+    } finally {
+      setAccountBusy(false);
+    }
   };
 
   if (authLoading) {
@@ -485,16 +570,42 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={styles.rowIcon}>
-              <Ionicons name="moon-outline" size={18} color={C.accent} />
+              <Ionicons name="color-palette-outline" size={18} color={C.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>Theme</Text>
-              <Text style={styles.rowSub}>WALLORA mobile is dark-only in this release.</Text>
+              <Text style={styles.rowTitle}>App theme</Text>
+              <Text style={styles.rowSub}>Choose a look for WALLORA. The app refreshes once to apply it.</Text>
             </View>
-            <View style={styles.lockedBadge}>
-              <Ionicons name="lock-closed-outline" size={12} color={C.muted} />
-              <Text style={styles.lockedText}>Dark</Text>
-            </View>
+          </View>
+          <View style={styles.themeGrid}>
+            {APP_THEMES.map((theme) => {
+              const active = theme.id === appThemeId;
+              return (
+                <Pressable
+                  key={theme.id}
+                  onPress={() => void changeTheme(theme.id)}
+                  disabled={themeBusy}
+                  style={[styles.themeOption, active && styles.themeOptionActive]}
+                >
+                  <View style={styles.themeSwatches}>
+                    {theme.swatches.map((color, index) => (
+                      <View key={color + index} style={[styles.themeSwatch, { backgroundColor: color }]} />
+                    ))}
+                  </View>
+                  <Text style={[styles.themeLabel, active && styles.themeLabelActive]} numberOfLines={1}>
+                    {theme.label}
+                  </Text>
+                  <Text style={styles.themeTagline} numberOfLines={2}>
+                    {theme.tagline}
+                  </Text>
+                  {active ? (
+                    <View style={styles.themeCheck}>
+                      <Ionicons name="checkmark-circle-outline" size={14} color={C.accent} />
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -526,11 +637,31 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={!!settings.pushNotifications}
-              onValueChange={(value) => update("pushNotifications", value)}
+              onValueChange={(value) => void togglePush(value)}
               trackColor={{ false: C.raised, true: C.accent }}
               thumbColor={C.text}
             />
           </View>
+          <View style={styles.rowDivider} />
+          <Pressable
+            onPress={() => void testPush()}
+            disabled={!settings.pushNotifications}
+            style={[styles.testPushButton, !settings.pushNotifications && styles.buttonDisabled]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={15}
+              color={settings.pushNotifications ? C.accent : C.muted}
+            />
+            <Text
+              style={[
+                styles.testPushText,
+                !settings.pushNotifications && { color: C.muted },
+              ]}
+            >
+              Send a test notification
+            </Text>
+          </Pressable>
         </View>
 
         <Text style={styles.sectionLabel}>AI PREFERENCES</Text>
@@ -583,8 +714,84 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
 
+        <Text style={styles.sectionLabel}>ACCOUNT ACCESS</Text>
+        <View style={styles.card}>
+          <Pressable
+            onPress={() => void handleSignOut()}
+            disabled={accountBusy}
+            style={[styles.accountAction, accountBusy && styles.buttonDisabled]}
+          >
+            <View style={[styles.rowIcon, styles.actionIcon]}>
+              <Ionicons name="log-out-outline" size={18} color={C.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Sign out</Text>
+              <Text style={styles.rowSub}>End this WALLORA session on this device.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={C.muted} />
+          </Pressable>
+
+          <View style={styles.rowDivider} />
+
+          <Pressable
+            onPress={() => setConfirmDelete(true)}
+            disabled={accountBusy}
+            style={[styles.accountAction, accountBusy && styles.buttonDisabled]}
+          >
+            <View style={[styles.rowIcon, styles.dangerIcon]}>
+              <Ionicons name="trash-outline" size={18} color={C.error} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowTitle, { color: C.error }]}>Delete account</Text>
+              <Text style={styles.rowSub}>Remove your profile and block future sign-ins.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={C.muted} />
+          </Pressable>
+        </View>
+
         <Text style={styles.footerNote}>Preferences are stored by the WALLORA web API, not only on this device.</Text>
       </ScrollView>
+
+      <Modal
+        visible={confirmDelete}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!accountBusy) setConfirmDelete(false);
+        }}
+      >
+        <View style={styles.confirmBackdrop}>
+          <Pressable style={styles.confirmDismiss} onPress={() => setConfirmDelete(false)} disabled={accountBusy} />
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIcon}>
+              <Ionicons name="warning-outline" size={24} color={C.error} />
+            </View>
+            <Text style={styles.confirmTitle}>Delete your WALLORA account?</Text>
+            <Text style={styles.confirmBody}>
+              This signs you out everywhere, removes your profile details and hides you from creator
+              search. Your public wallpapers stay in the community library. This cannot be undone here.
+            </Text>
+            <Pressable
+              onPress={() => void handleDeleteAccount()}
+              disabled={accountBusy}
+              style={[styles.deleteButton, accountBusy && styles.buttonDisabled]}
+            >
+              {accountBusy ? (
+                <ActivityIndicator color={C.white} size="small" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Yes, delete my account</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => setConfirmDelete(false)}
+              disabled={accountBusy}
+              style={[styles.cancelButton, accountBusy && styles.buttonDisabled]}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -646,6 +853,8 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", alignItems: "center", gap: S.sm, paddingVertical: S.sm },
   rowDivider: { height: 1, backgroundColor: C.borderSoft },
+  testPushButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11 },
+  testPushText: { color: C.accent, fontSize: 12, fontWeight: "700" },
   mediaRow: { flexDirection: "row", alignItems: "center", gap: S.md, paddingVertical: S.sm },
   mediaPreview: {
     backgroundColor: C.raised,
@@ -703,6 +912,23 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   lockedText: { color: C.textSoft, fontSize: 11, fontWeight: "700" },
+  themeGrid: { flexDirection: "row", flexWrap: "wrap", gap: S.sm, marginTop: S.sm },
+  themeOption: {
+    width: "47%",
+    minHeight: 96,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.raised,
+    padding: S.sm,
+  },
+  themeOptionActive: { borderColor: C.accent, backgroundColor: C.accentDim },
+  themeSwatches: { flexDirection: "row", gap: 4, marginBottom: S.sm },
+  themeSwatch: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: C.border },
+  themeLabel: { color: C.text, fontSize: 12, fontWeight: "800" },
+  themeLabelActive: { color: C.accentBright },
+  themeTagline: { color: C.muted, fontSize: 10, lineHeight: 14, marginTop: 2 },
+  themeCheck: { position: "absolute", top: S.sm, right: S.sm },
   fieldLabel: { color: C.textSoft, fontSize: 12, fontWeight: "700", marginTop: S.md, marginBottom: S.sm },
   input: {
     backgroundColor: C.raised,
@@ -752,5 +978,27 @@ const styles = StyleSheet.create({
   stateTitle: { fontSize: 16, fontWeight: "800", color: C.text, textAlign: "center" },
   stateText: { fontSize: 12, color: C.muted, textAlign: "center" },
   stateSub: { fontSize: 12, color: C.muted, textAlign: "center", lineHeight: 18 },
+  accountAction: { flexDirection: "row", alignItems: "center", gap: S.sm, paddingVertical: S.sm },
+  actionIcon: { backgroundColor: C.accentDim },
+  dangerIcon: { backgroundColor: C.errorDim },
+  confirmBackdrop: { flex: 1, backgroundColor: C.overlay, alignItems: "center", justifyContent: "center", padding: S.xl },
+  confirmDismiss: { position: "absolute", inset: 0 },
+  confirmCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: C.bgElevated,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: R.lg,
+    padding: S.xl,
+    alignItems: "center",
+  },
+  confirmIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: C.errorDim, alignItems: "center", justifyContent: "center", marginBottom: S.md },
+  confirmTitle: { color: C.text, fontSize: 16, fontWeight: "800", textAlign: "center" },
+  confirmBody: { color: C.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: S.sm },
+  deleteButton: { backgroundColor: C.error, borderRadius: R.md, paddingVertical: 12, alignItems: "center", justifyContent: "center", width: "100%", marginTop: S.lg },
+  deleteButtonText: { color: C.white, fontSize: 13, fontWeight: "800" },
+  cancelButton: { paddingVertical: 11, alignItems: "center", width: "100%", marginTop: 4 },
+  cancelButtonText: { color: C.muted, fontSize: 13, fontWeight: "700" },
   footerNote: { color: C.mutedDark, fontSize: 11, lineHeight: 17, marginTop: S.xl, textAlign: "center" },
 });

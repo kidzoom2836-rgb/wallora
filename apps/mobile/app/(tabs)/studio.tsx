@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   Share,
@@ -15,9 +16,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as DocumentPicker from "expo-document-picker";
 
 import { apiJson } from "../../lib/api";
 import { assetUrl } from "../../lib/config";
+import { pickImages } from "../../lib/uploads";
+import {
+  AI_ATTACHMENT_MAX_FILES,
+  uploadAiAttachments,
+  validateAiFiles,
+  type LocalAiFile,
+} from "../../lib/aiAttachments";
 import { withVerification } from "../../lib/verification";
 import { addAsWallpaper, downloadWallpaper } from "../../lib/downloads";
 import { C, R } from "../../lib/theme";
@@ -80,6 +89,8 @@ export default function StudioScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [referenceFiles, setReferenceFiles] = useState<LocalAiFile[]>([]);
+  const [showReferencePicker, setShowReferencePicker] = useState(false);
 
   const selectResult = useCallback((gen: Generation | null) => {
     setResult(gen);
@@ -109,26 +120,91 @@ export default function StudioScreen() {
     loadHistory().catch(() => {});
   }, [loadHistory]);
 
+  const addReferenceFiles = (files: LocalAiFile[]) => {
+    if (!files.length) return;
+    try {
+      const next = [...referenceFiles, ...files].slice(0, AI_ATTACHMENT_MAX_FILES);
+      validateAiFiles(next);
+      setReferenceFiles(next);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message ?? "Could not add those references.");
+    } finally {
+      setShowReferencePicker(false);
+    }
+  };
+
+  const pickReferencePhotos = async (source: "library" | "camera") => {
+    setShowReferencePicker(false);
+    try {
+      const images = await pickImages(source, {
+        max: AI_ATTACHMENT_MAX_FILES - referenceFiles.length,
+        allowsEditing: false,
+        quality: 0.82,
+      });
+      addReferenceFiles(
+        images.map((image) => ({
+          uri: image.uri,
+          name: image.fileName,
+          type: image.mimeType,
+          size: image.fileSize,
+        })),
+      );
+    } catch (e: any) {
+      setError(e?.message ?? "Could not choose that photo.");
+    }
+  };
+
+  const pickReferenceDocuments = async () => {
+    setShowReferencePicker(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "text/plain", "text/markdown", "text/csv", "application/json"],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      addReferenceFiles(
+        result.assets.map((asset) => ({
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType,
+          size: asset.size,
+        })),
+      );
+    } catch (e: any) {
+      setError(e?.message ?? "Could not choose that document.");
+    }
+  };
+
   const generate = async () => {
     if (prompt.trim().length < 3 || loading) return;
+    const files = referenceFiles;
     setLoading(true);
     setError(null);
     try {
-      const data = await withVerification(() =>
-        apiJson<Generation>("/api/v1/ai/generations", {
+      const data = await withVerification(async () => {
+        const uploaded = await uploadAiAttachments(files);
+        return apiJson<Generation>("/api/v1/ai/generations", {
           method: "POST",
           body: JSON.stringify({
             prompt: prompt.trim(),
             stylePreset: style,
             aspectRatio: aspect,
             enhance,
+            attachmentIds: uploaded.map((attachment) => attachment.id),
           }),
-        }),
-      );
+        });
+      });
       if (!data) return;
+      setReferenceFiles([]);
       selectResult(data);
       setHistory((h) => [data, ...h.filter((item) => item.id !== data.id)].slice(0, 12));
-      setNotice("Artwork generated. Options are ready below.");
+      setNotice(
+        files.length
+          ? "Artwork generated from your references. Options are ready below."
+          : "Artwork generated. Options are ready below.",
+      );
     } catch (e: any) {
       const remaining = e?.payload?.error?.remaining;
       const msg = e?.message ?? "Generation failed.";
@@ -394,6 +470,38 @@ export default function StudioScreen() {
               multiline
               maxLength={2000}
             />
+            <Pressable
+              onPress={() => setShowReferencePicker(true)}
+              disabled={loading || referenceFiles.length >= AI_ATTACHMENT_MAX_FILES}
+              style={[styles.referenceButton, (loading || referenceFiles.length >= AI_ATTACHMENT_MAX_FILES) && styles.pressed]}
+            >
+              <Ionicons name="attach-outline" size={16} color={C.accent} />
+              <Text style={styles.referenceButtonText}>
+                {referenceFiles.length
+                  ? `${referenceFiles.length}/${AI_ATTACHMENT_MAX_FILES} references attached`
+                  : "Attach reference photos or documents"}
+              </Text>
+              <Ionicons name="chevron-forward" size={15} color={C.muted} />
+            </Pressable>
+            {referenceFiles.length > 0 && (
+              <View style={styles.referenceChips}>
+                {referenceFiles.map((file, index) => (
+                  <Pressable
+                    key={`${file.name}-${index}`}
+                    onPress={() => setReferenceFiles((prev) => prev.filter((_, i) => i !== index))}
+                    style={styles.referenceChip}
+                  >
+                    <Ionicons
+                      name={file.type?.startsWith("image/") ? "image-outline" : "document-outline"}
+                      size={13}
+                      color={C.accent}
+                    />
+                    <Text style={styles.referenceChipText} numberOfLines={1}>{file.name}</Text>
+                    <Ionicons name="close" size={12} color={C.muted} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestions}>
               {SUGGESTIONS.map((s) => (
                 <Pressable key={s} style={styles.suggestion} onPress={() => setPrompt(s)}>
@@ -496,6 +604,60 @@ export default function StudioScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showReferencePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReferencePicker(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowReferencePicker(false)}>
+          <Pressable style={styles.referenceSheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.referenceSheetHeader}>
+              <View>
+                <Text style={styles.referenceSheetTitle}>Add generation references</Text>
+                <Text style={styles.referenceSheetSub}>
+                  Aurora reads these as creative direction before it generates your image.
+                </Text>
+              </View>
+              <Pressable onPress={() => setShowReferencePicker(false)} hitSlop={10}>
+                <Ionicons name="close" size={20} color={C.muted} />
+              </Pressable>
+            </View>
+            <Pressable style={styles.referenceOption} onPress={() => void pickReferencePhotos("library")}>
+              <View style={styles.referenceOptionIcon}>
+                <Ionicons name="images-outline" size={18} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.referenceOptionTitle}>Photo library</Text>
+                <Text style={styles.referenceOptionSub}>Use existing images as visual direction</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={C.muted} />
+            </Pressable>
+            <Pressable style={styles.referenceOption} onPress={() => void pickReferencePhotos("camera")}>
+              <View style={styles.referenceOptionIcon}>
+                <Ionicons name="camera-outline" size={18} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.referenceOptionTitle}>Camera</Text>
+                <Text style={styles.referenceOptionSub}>Capture a real-world reference</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={C.muted} />
+            </Pressable>
+            <Pressable style={styles.referenceOption} onPress={() => void pickReferenceDocuments()}>
+              <View style={styles.referenceOptionIcon}>
+                <Ionicons name="document-attach-outline" size={18} color={C.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.referenceOptionTitle}>Documents</Text>
+                <Text style={styles.referenceOptionSub}>PDF, TXT, MD, CSV or JSON notes</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={C.muted} />
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -573,6 +735,21 @@ const styles = StyleSheet.create({
   card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.lg, padding: 14, marginBottom: 12 },
   label: { color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.4, marginBottom: 9 },
   promptInput: { color: C.text, fontSize: 14, lineHeight: 20, minHeight: 72, textAlignVertical: "top" },
+  referenceButton: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border, borderRadius: R.md, paddingHorizontal: 11, paddingVertical: 10, marginTop: 4 },
+  referenceButtonText: { color: C.accent, fontSize: 11.5, fontWeight: "700", flex: 1 },
+  referenceChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  referenceChip: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%", backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: R.pill, paddingHorizontal: 9, paddingVertical: 6 },
+  referenceChipText: { color: C.textSoft, fontSize: 10.5, flexShrink: 1 },
+  modalBackdrop: { flex: 1, backgroundColor: C.overlay, justifyContent: "flex-end" },
+  referenceSheet: { backgroundColor: C.bgElevated, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, borderTopWidth: 1, borderColor: C.border, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28 },
+  sheetHandle: { width: 38, height: 4, borderRadius: 2, backgroundColor: C.raisedHover, alignSelf: "center", marginBottom: 14 },
+  referenceSheetHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 16 },
+  referenceSheetTitle: { color: C.text, fontSize: 16, fontWeight: "800" },
+  referenceSheetSub: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 4, maxWidth: 290 },
+  referenceOption: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: R.md, padding: 13, marginBottom: 9 },
+  referenceOptionIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.accentDim, alignItems: "center", justifyContent: "center" },
+  referenceOptionTitle: { color: C.text, fontSize: 13, fontWeight: "800" },
+  referenceOptionSub: { color: C.muted, fontSize: 10.5, marginTop: 2 },
   suggestions: { gap: 7, marginTop: 10 },
   suggestion: { maxWidth: 190, backgroundColor: C.raised, borderRadius: R.sm, padding: 9, borderWidth: 1, borderColor: C.border },
   suggestionText: { color: C.muted, fontSize: 11, lineHeight: 15 },

@@ -12,7 +12,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { ScreenHeader } from "../components/ui/ScreenHeader";
 import { VerifiedBadge } from "../components/ui/VerifiedBadge";
@@ -22,6 +22,9 @@ import { pickCommunityImage, uploadCommunityImage, type PickedImage } from "../l
 import { withVerification } from "../lib/verification";
 import { C, R, S } from "../lib/theme";
 import { useAuth } from "../lib/auth";
+import { loadPlaylist, uniqueChannelId, type IptvChannel } from "../lib/iptv";
+import { ChannelClipCard } from "../components/media/ChannelClipCard";
+import { ChannelRecommendComposer } from "../components/media/ChannelRecommendComposer";
 
 type CommunityAuthor = {
   id?: string;
@@ -45,6 +48,13 @@ type CommunityPost = {
   liked?: boolean;
   reposted?: boolean;
   createdAt: string;
+  channelId?: string | null;
+  channelName?: string | null;
+  channelGroup?: string | null;
+  streamUrl?: string | null;
+  previewUrl?: string | null;
+  videoUrl?: string | null;
+  durationSec?: number | null;
 };
 
 type Pagination = {
@@ -216,7 +226,9 @@ function CommunityComposer({ onPosted }: { onPosted: () => void }) {
 
 export default function CommunityScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ recommend?: string }>();
   const { user } = useAuth();
+  const [recommendChannel, setRecommendChannel] = useState<IptvChannel | null>(null);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -235,6 +247,37 @@ export default function CommunityScreen() {
     const timer = setTimeout(() => setSearch(query.trim()), 350);
     return () => clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    const raw = params.recommend;
+    const channelId = Array.isArray(raw) ? raw[0] : raw;
+    if (!channelId) {
+      setRecommendChannel(null);
+      return;
+    }
+    let active = true;
+    loadPlaylist()
+      .then((result) => {
+        if (!active) return;
+        const found = (result.channels ?? []).find(
+          (channel) => uniqueChannelId(channel) === channelId,
+        );
+        setRecommendChannel(found ?? null);
+        if (!found) {
+          setNotice({
+            message: "That channel is not in the current guide. Pick another from Live TV.",
+            tone: "info",
+          });
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        setNotice({ message: "Could not load the channel guide right now.", tone: "info" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [params.recommend]);
 
   const load = useCallback(
     async (nextPage: number, replace: boolean) => {
@@ -438,6 +481,10 @@ export default function CommunityScreen() {
 
         <CommunityComposer onPosted={onRefresh} />
 
+        {recommendChannel ? (
+          <ChannelRecommendComposer channel={recommendChannel} onPosted={onRefresh} />
+        ) : null}
+
         {!user && (
           <Pressable style={styles.signInCard} onPress={() => router.push("/auth/login")}>
             <Ionicons name="lock-closed-outline" size={17} color={C.accent} />
@@ -448,7 +495,7 @@ export default function CommunityScreen() {
         <Banner message={notice?.message ?? null} tone={notice?.tone} />
       </View>
     ),
-    [notice, onRefresh, query, router, sort, total, user],
+    [notice, onRefresh, query, recommendChannel, router, sort, total, user],
   );
 
   return (
@@ -518,6 +565,8 @@ export default function CommunityScreen() {
         }
         renderItem={({ item }) => {
           const image = assetUrl(item.imageUrl);
+          const clipUri = item.streamUrl ?? item.videoUrl ?? null;
+          const isClip = item.kind === "channel_clip" && !!clipUri;
           const busy = busyId === item.id;
           return (
             <View style={styles.postCard}>
@@ -556,7 +605,21 @@ export default function CommunityScreen() {
                 <Text style={styles.body}>{item.body || (image ? "Image shared on WALLORA" : "")}</Text>
               </Pressable>
 
-              {image ? (
+              {isClip && clipUri ? (
+                <ChannelClipCard
+                  uri={clipUri}
+                  title={item.channelName ?? "WALLORA TV channel"}
+                  subtitle={item.channelGroup ?? "Live on WALLORA TV"}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/live-tv",
+                      params: item.channelId ? { channel: item.channelId } : {},
+                    })
+                  }
+                />
+              ) : null}
+
+              {image && !isClip ? (
                 <Image source={{ uri: image }} style={styles.postImage} resizeMode="cover" />
               ) : null}
 
