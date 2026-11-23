@@ -40,6 +40,14 @@ Prefer small, curated subsets (Kenya first, then News/Sports/Kids) over the full
 Hidden/dead channels cost database rows and make the guide noisy. Use the full index only when a
 specific catalog is needed.
 
+## On-device fallback (available now)
+
+While the backend is not deployed, `apps/mobile/lib/iptv.ts` loads the curated iptv-org playlists
+directly on the device as a fallback when `/api/v1/channels` returns no usable channels. It merges
+Kenya, News, Sports, Movies and Kids (roughly 2,800 channels), caches them for 6 hours, and labels
+the guide **WALLORA TV · iptv-org**. Once the backend guide has channels, it takes priority again.
+A custom M3U URL in Live TV → Settings still overrides everything.
+
 ## Import procedure
 
 1. Deploy the backend branch so `/api/v1/channels/sync` is current.
