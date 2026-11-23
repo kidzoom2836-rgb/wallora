@@ -1,3 +1,4 @@
+import { isRunningInExpoGo } from "expo";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
@@ -7,6 +8,25 @@ import { apiJson, isAuthenticated } from "./api";
 
 const ENABLED_KEY = "wallora.push.enabled";
 const TOKEN_KEY = "wallora.push.token";
+
+const EXPO_GO_ANDROID_MESSAGE =
+  "Remote push notifications are unavailable in Expo Go on Android. Use a development build or the installed app; local notifications still work here.";
+
+/**
+ * Expo Go on Android removed remote push notification support in SDK 53, and
+ * `expo-notifications` throws synchronously when push-token APIs are used
+ * there. Local notifications remain available, so only the token paths are
+ * disabled.
+ */
+export function isRemotePushAvailable(): boolean {
+  return Platform.OS !== "web" && !(Platform.OS === "android" && isRunningInExpoGo());
+}
+
+export function getRemotePushUnavailableMessage(): string | null {
+  if (isRemotePushAvailable()) return null;
+  if (Platform.OS === "android" && isRunningInExpoGo()) return EXPO_GO_ANDROID_MESSAGE;
+  return "Push notifications are not available in this environment.";
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -46,7 +66,7 @@ async function ensureChannel(): Promise<void> {
  * WALLORA web API. Safe to call repeatedly: the backend upserts by token.
  */
 export async function enablePushNotifications(): Promise<boolean> {
-  if (Platform.OS === "web") return false;
+  if (!isRemotePushAvailable()) return false;
   try {
     await ensureChannel();
     const current = await Notifications.getPermissionsAsync();
@@ -97,18 +117,22 @@ export async function disablePushNotifications(): Promise<void> {
 
 /** Re-register the device after a token roll or a new sign-in. */
 export async function syncPushRegistration(): Promise<void> {
+  if (!isRemotePushAvailable()) return;
   if (!(await getPushPreference()) || !isAuthenticated()) return;
   await enablePushNotifications();
 }
 
 /** Re-fetch the Expo token when the OS rolls it, as recommended by Expo. */
 export function watchPushTokenChanges(): { remove: () => void } {
+  if (!isRemotePushAvailable()) return { remove: () => undefined };
   return Notifications.addPushTokenListener(() => {
     void syncPushRegistration();
   });
 }
 
 export async function sendTestNotification(): Promise<{ ok: boolean; message?: string }> {
+  const unavailable = getRemotePushUnavailableMessage();
+  if (unavailable) return { ok: false, message: unavailable };
   if (!(await getPushPreference())) {
     return { ok: false, message: "Turn on push notifications first." };
   }
