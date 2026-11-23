@@ -27,7 +27,6 @@ import {
   getAutoAdvance,
   getReelInterests,
   getReelPosition,
-  getReelsApiKey,
   getReelsProvider,
   loadPersonalizedReels,
   loadStockReels,
@@ -37,7 +36,6 @@ import {
   setAutoAdvance,
   setReelInterests,
   setReelPosition,
-  setReelsApiKey,
   setReelsProvider,
   type ReelProvider,
   type StockReel,
@@ -331,23 +329,19 @@ function ModalShell({
 function SourceSettings({
   visible,
   provider,
-  apiKey,
   onProvider,
-  onKey,
   onClose,
 }: {
   visible: boolean;
   provider: ReelProvider;
-  apiKey: string;
   onProvider: (value: ReelProvider) => void;
-  onKey: (value: string) => void;
   onClose: () => void;
 }) {
   return (
     <ModalShell visible={visible} title="Reels source" onClose={onClose}>
       <Text style={styles.modalText}>
         YouTube powers your personal For You feed. Pixabay and Pexels provide royalty-free stock
-        clips. Keys are stored on this device.
+        clips. Provider keys stay on the WALLORA server — this device never stores them.
       </Text>
       <View style={styles.providerRow}>
         {(["youtube", "pixabay", "pexels"] as const).map((value) => (
@@ -362,29 +356,16 @@ function SourceSettings({
           </Pressable>
         ))}
       </View>
-      <TextInput
-        value={apiKey}
-        onChangeText={onKey}
-        placeholder={
-          provider === "youtube"
-            ? "YouTube Data API key"
+      <View style={styles.serverKeyNotice}>
+        <Ionicons name="lock-closed-outline" size={16} color={C.accent} />
+        <Text style={styles.serverKeyText}>
+          {provider === "youtube"
+            ? "YouTube shorts matched to your interests, searched securely on the server."
             : provider === "pexels"
-              ? "Pexels API key"
-              : "Pixabay API key"
-        }
-        placeholderTextColor={C.muted}
-        autoCapitalize="none"
-        autoCorrect={false}
-        secureTextEntry
-        style={styles.keyInput}
-      />
-      <Text style={styles.modalHint}>
-        {provider === "youtube"
-          ? "Uses short YouTube videos matched to your interests. Leave blank to use the local key."
-          : provider === "pexels"
-            ? "Get a free key at pexels.com/api — look for portrait orientation."
-            : "Get a free key at pixabay.com/api — WALLORA requests orientation=vertical."}
-      </Text>
+              ? "Portrait Pexels clips, fetched with the server's key."
+              : "Vertical Pixabay clips, cached for 24 hours on the server."}
+        </Text>
+      </View>
       <Pressable style={styles.modalButton} onPress={onClose}>
         <Text style={styles.modalButtonText}>Done</Text>
       </Pressable>
@@ -397,7 +378,6 @@ export default function ReelsScreen() {
   const { height: viewportHeight } = useWindowDimensions();
   const [tab, setTab] = useState<Tab>("foryou");
   const [source, setSource] = useState<ReelProvider>("youtube");
-  const [apiKey, setApiKey] = useState("");
   const [reels, setReels] = useState<StockReel[]>([]);
   const [searchResults, setSearchResults] = useState<StockReel[]>([]);
   const [showingSearch, setShowingSearch] = useState(false);
@@ -454,10 +434,8 @@ export default function ReelsScreen() {
         getReelInterests(),
         getAutoAdvance(),
       ]);
-      const key = await getReelsApiKey(savedSource);
       if (!alive) return;
       setSource(savedSource);
-      setApiKey(key);
       setAdvanceState(advance);
       if (!savedInterests.length) {
         setDraftInterests(DEFAULT_REEL_INTERESTS.slice(0, 4));
@@ -550,22 +528,10 @@ export default function ReelsScreen() {
       setShowingSearch(false);
       void (async () => {
         await setReelsProvider(value);
-        setApiKey(await getReelsApiKey(value));
         await loadFeed(value, true);
       })();
     },
     [loadFeed],
-  );
-
-  const changeKey = useCallback(
-    (value: string) => {
-      setApiKey(value);
-      void (async () => {
-        await setReelsApiKey(source, value);
-        await loadFeed(source, true);
-      })();
-    },
-    [loadFeed, source],
   );
 
   const saveInterests = useCallback(async () => {
@@ -574,7 +540,6 @@ export default function ReelsScreen() {
     setPrefsOpen(false);
     setSource("youtube");
     await setReelsProvider("youtube");
-    setApiKey(await getReelsApiKey("youtube"));
     setShowingSearch(false);
     setTab("foryou");
     await loadFeed("youtube", true);
@@ -852,9 +817,7 @@ export default function ReelsScreen() {
       <SourceSettings
         visible={settingsVisible}
         provider={source}
-        apiKey={apiKey}
         onProvider={changeProvider}
-        onKey={changeKey}
         onClose={() => setSettingsVisible(false)}
       />
       {refreshing && feed.length === 0 ? <ActivityIndicator color={C.accent} style={styles.refreshing} /> : null}
@@ -962,7 +925,18 @@ const styles = StyleSheet.create({
   providerChipActive: { backgroundColor: C.accentDim, borderColor: C.accent },
   providerText: { color: C.textSoft, fontSize: 11, fontWeight: "800" },
   providerTextActive: { color: C.accentBright },
-  keyInput: { marginTop: 14, height: 44, borderRadius: R.md, backgroundColor: C.raised, borderWidth: 1, borderColor: C.border, paddingHorizontal: 12, color: C.text, fontSize: 12 },
+  serverKeyNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 14,
+    padding: 12,
+    borderRadius: R.md,
+    backgroundColor: C.accentDim,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  serverKeyText: { flex: 1, color: C.textSoft, fontSize: 11, lineHeight: 16 },
   modalHint: { color: C.muted, fontSize: 10, lineHeight: 15, marginTop: 8 },
   modalButton: { marginTop: 16, borderRadius: R.md, backgroundColor: C.accent, paddingVertical: 12, alignItems: "center" },
   modalButtonText: { color: C.bg, fontSize: 12, fontWeight: "900" },
